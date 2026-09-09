@@ -56,11 +56,26 @@ public class ClienteApiGeoglows {
         return envoltorio;
     }
 
-    /** Pronóstico estadístico (min/25%/media/75%/max) del ensemble para un tramo. */
+    /**
+     * Pronóstico estadístico (min/25%/media/75%/max) del ensemble para un tramo.
+     *
+     * IMPORTANTE (API v2, verificado en vivo contra
+     * {@code /api/v2/forecaststats/{river_id}?format=json}):
+     *   - Ya NO viene envuelto en "time_series": el JSON trae "datetime" y las
+     *     series ("flow_avg", "flow_25p", "flow_75p", "flow_min", "flow_max",
+     *     "flow_med", "high_res", ...) directamente en el objeto raíz, junto a
+     *     un objeto "metadata" (river_id, gen_date, start_date, end_date, units).
+     *   - Las series NO tienen todas la misma cantidad de puntos "reales": los
+     *     pasos horarios que no corresponden al intervalo de 3h vienen como
+     *     string vacío "" en vez de un número. Hay que descartarlos (no tratarlos
+     *     como 0 ni dejarlos como NaN, porque NaN contamina cálculos de máximo).
+     */
     @SuppressWarnings("unchecked")
     public LectorDatosIngresados.PronosticoCaudal obtenerPronostico(long reachId)
             throws IOException, InterruptedException {
         Map<String, Object> raw = get("forecaststats/" + reachId, "format=json");
+        // Compatibilidad: si en algún momento GEOGloWS vuelve a envolver la
+        // respuesta en "time_series", lo seguimos soportando.
         Object ts = raw.get("time_series");
         Map<String, Object> serie = (ts instanceof Map) ? (Map<String, Object>) ts : raw;
 
@@ -68,17 +83,27 @@ public class ClienteApiGeoglows {
         pc.reachId = reachId;
         pc.fechaEmision = Instant.now();
 
+        Object metaObj = raw.get("metadata");
+        if (metaObj instanceof Map) {
+            Object genDate = ((Map<String, Object>) metaObj).get("gen_date");
+            if (genDate != null) {
+                pc.fechaEmision = parseFecha(String.valueOf(genDate));
+            }
+        }
+
         List<Object> fechas = asList(serie.get("datetime"));
         for (String clave : serie.keySet()) {
-            if ("datetime".equals(clave)) continue;
+            if ("datetime".equals(clave) || "metadata".equals(clave)) continue;
             List<Object> valores = asList(serie.get(clave));
             if (fechas == null || valores == null || fechas.size() != valores.size()) continue;
 
             List<LectorDatosIngresados.SerieTemporalPunto> puntos = new ArrayList<>();
             for (int idx = 0; idx < fechas.size(); idx++) {
+                Object crudo = valores.get(idx);
+                if (esVacio(crudo)) continue; // paso sin dato ("") -> se omite, no se agrega como 0/NaN
                 LectorDatosIngresados.SerieTemporalPunto p = new LectorDatosIngresados.SerieTemporalPunto();
                 p.fecha = parseFecha(String.valueOf(fechas.get(idx)));
-                p.valor = asDouble(valores.get(idx));
+                p.valor = asDouble(crudo);
                 puntos.add(p);
             }
             String claveMin = clave.toLowerCase();
@@ -134,11 +159,17 @@ public class ClienteApiGeoglows {
         return u;
     }
 
-    /** Simulación histórica de caudal (ERA5, ~40 años) para un tramo. */
+    /**
+     * Simulación retrospectiva de caudal (ERA5, desde 1940) para un tramo.
+     *
+     * En la API v1 esto se llamaba "historicsimulation". Ese endpoint ya no
+     * existe en v2: se reemplazó por retrospectivedaily/-monthly/-hourly.
+     * Usamos la variante diaria, que es la que corresponde 1:1 al uso anterior.
+     */
     @SuppressWarnings("unchecked")
     public List<LectorDatosIngresados.SerieTemporalPunto> obtenerHistorico(long reachId)
             throws IOException, InterruptedException {
-        Map<String, Object> raw = get("historicsimulation/" + reachId, "format=json");
+        Map<String, Object> raw = get("retrospectivedaily/" + reachId, "format=json");
         Object ts = raw.get("time_series");
         Map<String, Object> serie = (ts instanceof Map) ? (Map<String, Object>) ts : raw;
 
@@ -154,16 +185,48 @@ public class ClienteApiGeoglows {
         if (fechas != null && valores != null) {
             int n = Math.min(fechas.size(), valores.size());
             for (int idx = 0; idx < n; idx++) {
+                Object crudo = valores.get(idx);
+                if (esVacio(crudo)) continue;
                 LectorDatosIngresados.SerieTemporalPunto p = new LectorDatosIngresados.SerieTemporalPunto();
                 p.fecha = parseFecha(String.valueOf(fechas.get(idx)));
-                p.valor = asDouble(valores.get(idx));
+                p.valor = asDouble(crudo);
                 resultado.add(p);
             }
         }
         return resultado;
     }
 
-    /** Tramos de una región que GEOGloWS reporta actualmente por encima de algún periodo de retorno. */
+    /**
+     * Busca el reach_id/LINKNO más cercano a una coordenada (endpoint v2 "getriverid").
+     * Útil para asociar automáticamente estaciones/observaciones/elementos expuestos
+     * (que llegan con lat/lon) a un tramo de GEOGloWS.
+     */
+    @SuppressWarnings("unchecked")
+    public Long buscarReachIdCercano(double lat, double lon) throws IOException, InterruptedException {
+        Map<String, Object> raw = get("getriverid", "lat=" + lat + "&lon=" + lon + "&format=json");
+        for (String clave : new String[]{"river_id", "reach_id", "LINKNO", "linkno", "id"}) {
+            Object valor = raw.get(clave);
+            if (valor != null) {
+                try {
+                    return Long.parseLong(String.valueOf(valor));
+                } catch (NumberFormatException ignored) {
+                    // sigue probando otras claves
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Tramos de una región que GEOGloWS reporta actualmente por encima de algún periodo de retorno.
+     *
+     * NOTA: este endpoint ("forecastwarnings") pertenece a la API v1. No aparece en el
+     * listado actual de la documentación interactiva de v2 que se usó para revisar este
+     * cliente, así que su disponibilidad no está garantizada; si GEOGloWS lo retira,
+     * este método empezará a fallar con IOException (respuesta != 200) y conviene
+     * quitarlo o reemplazarlo (por ejemplo, iterando obtenerPronostico + obtenerUmbrales
+     * por tramo, que es exactamente lo que ya hace GeneradorAlertaFinal).
+     */
     @SuppressWarnings("unchecked")
     public List<Long> obtenerTramosEnAlerta(String region) throws IOException, InterruptedException {
         Map<String, Object> raw = get("forecastwarnings/", "region=" + region + "&format=json");
@@ -184,6 +247,11 @@ public class ClienteApiGeoglows {
     @SuppressWarnings("unchecked")
     private static List<Object> asList(Object o) {
         return (o instanceof List) ? (List<Object>) o : null;
+    }
+
+    /** true si el valor representa "sin dato" (null o string vacío/blanco, como en las series v2). */
+    private static boolean esVacio(Object o) {
+        return o == null || (o instanceof String && ((String) o).isBlank());
     }
 
     private static double asDouble(Object o) {

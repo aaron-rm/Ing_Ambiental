@@ -231,12 +231,28 @@ public class LectorDatosIngresados {
         t.cuencaId = cuencaId;
         t.direccionFlujo = direccionFlujo;
 
+        // Estos dos SÍ son necesarios para decidir el nivel de alerta: si fallan, la
+        // sincronización debe fallar (y el controller devuelve el error al front).
         pronosticos.put(reachId, geoglows.obtenerPronostico(reachId));
         umbrales.put(reachId, geoglows.obtenerUmbrales(reachId));
 
-        List<SerieTemporalPunto> hist = geoglows.obtenerHistorico(reachId);
-        double promedio = hist.stream().mapToDouble(p -> p.valor).average().orElse(0.0);
-        pronosticos.get(reachId).caudalHistoricoPromedio = promedio;
+        // El histórico solo alimenta un dato de contexto (caudalHistoricoPromedio), no
+        // decide la alerta. Se aísla a propósito: si GEOGloWS falla acá (endpoint caído,
+        // timeout, cambio de ruta, etc.) NO debe tirar abajo toda la sincronización ni
+        // dejar el tramo "a medias" (pronóstico/umbral ya guardados + una excepción que
+        // el controller convierte en 500). Eso es justamente lo que generaba el bug de
+        // "la primera consulta da error y recién la segunda muestra datos": el tramo
+        // quedaba parcialmente sincronizado antes de que la excepción llegara al front.
+        try {
+            List<SerieTemporalPunto> hist = geoglows.obtenerHistorico(reachId);
+            pronosticos.get(reachId).caudalHistoricoPromedio =
+                    hist.stream().mapToDouble(p -> p.valor).average().orElse(0.0);
+        } catch (IOException e) {
+            pronosticos.get(reachId).caudalHistoricoPromedio = 0.0;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            pronosticos.get(reachId).caudalHistoricoPromedio = 0.0;
+        }
     }
 
     /** Registra una observación de campo/sensor propio (dato que GEOGloWS no provee). */
