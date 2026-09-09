@@ -1,0 +1,332 @@
+package com.alerta.sistema_alerta_inundaciones.GEOGLOWS;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+
+/**
+ * =====================================================================================
+ *  CLIENTE DE LA API DE GEOGloWS
+ * =====================================================================================
+ *
+ * Responsabilidad única: hablar con la API pública de GEOGloWS
+ * (https://geoglows.ecmwf.int/api/) y devolver los datos ya convertidos a los
+ * objetos del modelo definidos en {@link LectorDatosIngresados}.
+ *
+ * No conoce umbrales, alertas ni nada de negocio: solo consulta y parsea.
+ * Si GEOGloWS cambia de versión (p.ej. V2 en data.geoglows.org) solo hay que
+ * tocar BASE_URL y las rutas de esta clase.
+ * =====================================================================================
+ */
+public class ClienteApiGeoglows {
+
+    private static final String BASE_URL = "https://geoglows.ecmwf.int/api/v2/";
+    private final HttpClient http = HttpClient.newHttpClient();
+
+    /** Llama un endpoint de GEOGloWS y devuelve el JSON ya parseado como Map. */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> get(String path, String query) throws IOException, InterruptedException {
+        String url = BASE_URL + path + (query.isEmpty() ? "" : "?" + query);
+        HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofSeconds(30))
+                .GET()
+                .build();
+        HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() != 200) {
+            throw new IOException("GEOGloWS respondió " + resp.statusCode() + " para " + url);
+        }
+        Object parsed = Json.parse(resp.body());
+        if (parsed instanceof Map) {
+            return (Map<String, Object>) parsed;
+        }
+        Map<String, Object> envoltorio = new LinkedHashMap<>();
+        envoltorio.put("data", parsed);
+        return envoltorio;
+    }
+
+    /** Pronóstico estadístico (min/25%/media/75%/max) del ensemble para un tramo. */
+    @SuppressWarnings("unchecked")
+    public LectorDatosIngresados.PronosticoCaudal obtenerPronostico(long reachId)
+            throws IOException, InterruptedException {
+        Map<String, Object> raw = get("forecaststats/" + reachId, "format=json");
+        Object ts = raw.get("time_series");
+        Map<String, Object> serie = (ts instanceof Map) ? (Map<String, Object>) ts : raw;
+
+        LectorDatosIngresados.PronosticoCaudal pc = new LectorDatosIngresados.PronosticoCaudal();
+        pc.reachId = reachId;
+        pc.fechaEmision = Instant.now();
+
+        List<Object> fechas = asList(serie.get("datetime"));
+        for (String clave : serie.keySet()) {
+            if ("datetime".equals(clave)) continue;
+            List<Object> valores = asList(serie.get(clave));
+            if (fechas == null || valores == null || fechas.size() != valores.size()) continue;
+
+            List<LectorDatosIngresados.SerieTemporalPunto> puntos = new ArrayList<>();
+            for (int idx = 0; idx < fechas.size(); idx++) {
+                LectorDatosIngresados.SerieTemporalPunto p = new LectorDatosIngresados.SerieTemporalPunto();
+                p.fecha = parseFecha(String.valueOf(fechas.get(idx)));
+                p.valor = asDouble(valores.get(idx));
+                puntos.add(p);
+            }
+            String claveMin = clave.toLowerCase();
+            if (claveMin.contains("avg") || claveMin.contains("mean")) {
+                pc.mediaSerie = puntos;
+            } else {
+                pc.percentiles.put(clave, puntos);
+            }
+        }
+        if (!pc.mediaSerie.isEmpty()) {
+            Instant inicio = pc.mediaSerie.get(0).fecha;
+            Instant fin = pc.mediaSerie.get(pc.mediaSerie.size() - 1).fecha;
+            pc.horizonteHoras = (int) Duration.between(inicio, fin).toHours();
+        }
+        return pc;
+    }
+
+    /** Periodos de retorno (años -> caudal en m3/s) calculados por GEOGloWS con su histórico. */
+    @SuppressWarnings("unchecked")
+    public Map<Integer, Double> obtenerPeriodosRetorno(long reachId) throws IOException, InterruptedException {
+        Map<String, Object> raw = get("returnperiods/" + reachId, "format=json");
+        Object rp = raw.containsKey("return_periods") ? raw.get("return_periods") : raw;
+        Map<String, Object> mapa = (rp instanceof Map) ? (Map<String, Object>) rp : raw;
+
+        Map<Integer, Double> resultado = new TreeMap<>();
+        for (Map.Entry<String, Object> e : mapa.entrySet()) {
+            String soloDigitos = e.getKey().replaceAll("[^0-9]", "");
+            if (soloDigitos.isEmpty()) continue;
+            try {
+                resultado.put(Integer.parseInt(soloDigitos), asDouble(e.getValue()));
+            } catch (NumberFormatException ignored) {
+                // clave no numérica (p.ej. "reach_id"): se ignora
+            }
+        }
+        return resultado;
+    }
+
+    /**
+     * Deriva umbrales de vigilancia/alerta/emergencia a partir de los periodos de
+     * retorno de GEOGloWS (convención habitual: 2/5/25 años). AJUSTAR con aforos
+     * locales, registros de desbordamiento o curvas caudal-nivel cuando existan.
+     */
+    public LectorDatosIngresados.UmbralAlerta obtenerUmbrales(long reachId)
+            throws IOException, InterruptedException {
+        Map<Integer, Double> periodos = obtenerPeriodosRetorno(reachId);
+        LectorDatosIngresados.UmbralAlerta u = new LectorDatosIngresados.UmbralAlerta();
+        u.reachId = reachId;
+        u.caudalVigilancia = periodos.getOrDefault(2, 0.0);
+        u.caudalAlerta = periodos.getOrDefault(5, 0.0);
+        u.caudalEmergencia = periodos.getOrDefault(25, 0.0);
+        u.fuenteCalibracion = "GEOGloWS - periodos de retorno (pendiente de calibrar con datos locales)";
+        u.fechaCalibracion = LocalDate.now();
+        return u;
+    }
+
+    /** Simulación histórica de caudal (ERA5, ~40 años) para un tramo. */
+    @SuppressWarnings("unchecked")
+    public List<LectorDatosIngresados.SerieTemporalPunto> obtenerHistorico(long reachId)
+            throws IOException, InterruptedException {
+        Map<String, Object> raw = get("historicsimulation/" + reachId, "format=json");
+        Object ts = raw.get("time_series");
+        Map<String, Object> serie = (ts instanceof Map) ? (Map<String, Object>) ts : raw;
+
+        List<Object> fechas = asList(serie.get("datetime"));
+        List<Object> valores = null;
+        for (String k : serie.keySet()) {
+            if (!"datetime".equals(k)) {
+                valores = asList(serie.get(k));
+                break;
+            }
+        }
+        List<LectorDatosIngresados.SerieTemporalPunto> resultado = new ArrayList<>();
+        if (fechas != null && valores != null) {
+            int n = Math.min(fechas.size(), valores.size());
+            for (int idx = 0; idx < n; idx++) {
+                LectorDatosIngresados.SerieTemporalPunto p = new LectorDatosIngresados.SerieTemporalPunto();
+                p.fecha = parseFecha(String.valueOf(fechas.get(idx)));
+                p.valor = asDouble(valores.get(idx));
+                resultado.add(p);
+            }
+        }
+        return resultado;
+    }
+
+    /** Tramos de una región que GEOGloWS reporta actualmente por encima de algún periodo de retorno. */
+    @SuppressWarnings("unchecked")
+    public List<Long> obtenerTramosEnAlerta(String region) throws IOException, InterruptedException {
+        Map<String, Object> raw = get("forecastwarnings/", "region=" + region + "&format=json");
+        Object contenido = raw.containsKey("warnings") ? raw.get("warnings") : raw.get("data");
+        List<Object> lista = asList(contenido);
+        List<Long> ids = new ArrayList<>();
+        if (lista != null) {
+            for (Object o : lista) {
+                if (o instanceof Map) {
+                    Object rid = ((Map<String, Object>) o).get("reach_id");
+                    if (rid != null) ids.add(Long.parseLong(String.valueOf(rid)));
+                }
+            }
+        }
+        return ids;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Object> asList(Object o) {
+        return (o instanceof List) ? (List<Object>) o : null;
+    }
+
+    private static double asDouble(Object o) {
+        if (o == null) return Double.NaN;
+        if (o instanceof Number) return ((Number) o).doubleValue();
+        try {
+            return Double.parseDouble(String.valueOf(o));
+        } catch (NumberFormatException e) {
+            return Double.NaN;
+        }
+    }
+
+    private static Instant parseFecha(String texto) {
+        try {
+            return Instant.parse(texto.endsWith("Z") ? texto : texto + "Z");
+        } catch (Exception e) {
+            try {
+                return LocalDateTime.parse(texto.replace(' ', 'T')).atZone(ZoneOffset.UTC).toInstant();
+            } catch (Exception e2) {
+                return Instant.now();
+            }
+        }
+    }
+
+    /**
+     * Parser JSON minimalista (sin dependencias externas), usado solo por este cliente
+     * para interpretar las respuestas de la API.
+     */
+    static final class Json {
+        private final String s;
+        private int i;
+
+        private Json(String s) {
+            this.s = s;
+        }
+
+        static Object parse(String texto) {
+            Json p = new Json(texto);
+            p.skipWs();
+            return p.parseValue();
+        }
+
+        private void skipWs() {
+            while (i < s.length() && Character.isWhitespace(s.charAt(i))) i++;
+        }
+
+        private Object parseValue() {
+            skipWs();
+            char c = s.charAt(i);
+            if (c == '{') return parseObject();
+            if (c == '[') return parseArray();
+            if (c == '"') return parseString();
+            if (c == 't') { i += 4; return Boolean.TRUE; }
+            if (c == 'f') { i += 5; return Boolean.FALSE; }
+            if (c == 'n') { i += 4; return null; }
+            return parseNumber();
+        }
+
+        private Map<String, Object> parseObject() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            i++; // '{'
+            skipWs();
+            if (s.charAt(i) == '}') { i++; return m; }
+            while (true) {
+                skipWs();
+                String clave = parseString();
+                skipWs();
+                i++; // ':'
+                Object valor = parseValue();
+                m.put(clave, valor);
+                skipWs();
+                char c = s.charAt(i);
+                if (c == ',') { i++; continue; }
+                if (c == '}') { i++; break; }
+            }
+            return m;
+        }
+
+        private List<Object> parseArray() {
+            List<Object> l = new ArrayList<>();
+            i++; // '['
+            skipWs();
+            if (s.charAt(i) == ']') { i++; return l; }
+            while (true) {
+                l.add(parseValue());
+                skipWs();
+                char c = s.charAt(i);
+                if (c == ',') { i++; continue; }
+                if (c == ']') { i++; break; }
+            }
+            return l;
+        }
+
+        private String parseString() {
+            StringBuilder sb = new StringBuilder();
+            i++; // '"'
+            while (s.charAt(i) != '"') {
+                char c = s.charAt(i);
+                if (c == '\\') {
+                    i++;
+                    char e = s.charAt(i);
+                    switch (e) {
+                        case 'n': sb.append('\n'); break;
+                        case 't': sb.append('\t'); break;
+                        case 'r': sb.append('\r'); break;
+                        case '"': sb.append('"'); break;
+                        case '\\': sb.append('\\'); break;
+                        case '/': sb.append('/'); break;
+                        case 'u':
+                            String hex = s.substring(i + 1, i + 5);
+                            sb.append((char) Integer.parseInt(hex, 16));
+                            i += 4;
+                            break;
+                        default: sb.append(e);
+                    }
+                } else {
+                    sb.append(c);
+                }
+                i++;
+            }
+            i++; // '"' de cierre
+            return sb.toString();
+        }
+
+        private Object parseNumber() {
+            int inicio = i;
+            while (i < s.length()) {
+                char c = s.charAt(i);
+                if (Character.isDigit(c) || c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E') {
+                    i++;
+                } else {
+                    break;
+                }
+            }
+            String num = s.substring(inicio, i);
+            if (num.contains(".") || num.toLowerCase().contains("e")) {
+                return Double.parseDouble(num);
+            }
+            try {
+                return Long.parseLong(num);
+            } catch (NumberFormatException ex) {
+                return Double.parseDouble(num);
+            }
+        }
+    }
+}
