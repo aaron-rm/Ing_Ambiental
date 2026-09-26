@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Alerta de inundaciones · Monitoreo de tramos</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+        <style>
+        :root{
+            --ink:#13232B;
+            --ink-soft:#4C6067;
+            --mist:#E7EEEC;
+            --panel:#FFFFFF;
+            --line:#C9D5D2;
+            --river-deep:#0E3A45;
+            --river:#2E7D8C;
+            --river-pale:#DCEAEA;
+            --normal:#3C8562;
+            --vigilancia:#B98B22;
+            --alerta:#C05A1E;
+            --emergencia:#AC3434;
+            --radius-panel: 4px 4px 22px 22px;
+            --font-ui: 'Space Grotesk', system-ui, sans-serif;
+            --font-data: 'IBM Plex Mono', ui-monospace, monospace;
+        }
+
+        *{box-sizing:border-box;}
+        html{color-scheme:light;}
+        body{
+            margin:0;
+            background:var(--mist);
+            color:var(--ink);
+            font-family:var(--font-ui);
+            line-height:1.45;
+        }
+
+        a{color:var(--river-deep);}
+
+        .marco{
+            max-width:1040px;
+            margin:0 auto;
+            padding:0 24px 64px;
+        }
+
+        header.cabecera{
+            padding:40px 24px 28px;
+            border-bottom:1px solid var(--line);
+            margin-bottom:32px;
+        }
+        header.cabecera .marco-cabecera{
+            max-width:1040px;
+            margin:0 auto;
+            display:flex;
+            align-items:flex-end;
+            justify-content:space-between;
+            gap:24px;
+            flex-wrap:wrap;
+        }
+        .marca{
+            display:flex;
+            align-items:center;
+            gap:14px;
+        }
+        .marca svg{flex:none;}
+        .marca h1{
+            font-size:1.5rem;
+            margin:0;
+            font-weight:700;
+            letter-spacing:-0.01em;
+        }
+        .marca p{
+            margin:2px 0 0;
+            color:var(--ink-soft);
+            font-size:0.95rem;
+        }
+        .fuente-nota{
+            font-size:0.85rem;
+            color:var(--ink-soft);
+            text-align:right;
+            max-width:280px;
+        }
+
+        /* ---------- Panel de consulta ---------- */
+        .panel-consulta{
+            background:var(--panel);
+            border:1px solid var(--line);
+            border-radius:14px;
+            padding:24px 28px;
+            margin-bottom:28px;
+        }
+        .panel-consulta h2{
+            margin:0 0 4px;
+            font-size:1.05rem;
+        }
+        .panel-consulta .ayuda{
+            margin:0 0 18px;
+            color:var(--ink-soft);
+            font-size:0.9rem;
+        }
+        form.consulta{
+            display:flex;
+            gap:16px;
+            flex-wrap:wrap;
+            align-items:flex-end;
+        }
+        .campo{
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+        }
+        .campo label{
+            font-size:0.82rem;
+            color:var(--ink-soft);
+        }
+        .campo input, .campo select{
+            font-family:var(--font-data);
+            font-size:0.95rem;
+            padding:10px 12px;
+            border:1px solid var(--line);
+            border-radius:8px;
+            background:#fff;
+            color:var(--ink);
+            min-width:220px;
+        }
+        .campo input:focus, .campo select:focus, button:focus-visible{
+            outline:3px solid var(--river);
+            outline-offset:1px;
+        }
+        #reachId{min-width:180px;}
+        #cuencaId{min-width:180px;}
+
+        button{
+            font-family:var(--font-ui);
+            font-weight:600;
+            font-size:0.95rem;
+            padding:11px 22px;
+            border-radius:8px;
+            border:none;
+            cursor:pointer;
+            transition:background 120ms ease;
+        }
+        button.primario{
+            background:var(--river-deep);
+            color:#fff;
+        }
+        button.primario:hover{background:var(--river);}
+        button.secundario{
+            background:transparent;
+            color:var(--river-deep);
+            border:1px solid var(--line);
+        }
+        button.secundario:hover{background:var(--river-pale);}
+        button:disabled{opacity:0.55; cursor:progress;}
+
+        .estado-linea{
+            margin-top:14px;
+            font-size:0.9rem;
+            min-height:1.2em;
+        }
+        .estado-linea.error{color:var(--emergencia);}
+        .estado-linea.cargando{color:var(--ink-soft);}
+
+        /* ---------- Resultado ---------- */
+        #resultado{display:none;}
+        #resultado.visible{display:grid; grid-template-columns: 260px 1fr; gap:24px;}
+        @media (max-width:760px){
+            #resultado.visible{grid-template-columns:1fr;}
+        }
+
+        .panel-nivel{
+            background:var(--river-deep);
+            color:#fff;
+            border-radius: var(--radius-panel);
+            padding:26px 22px 22px;
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            gap:18px;
+        }
+        .panel-nivel .tramo-id{
+            font-family:var(--font-data);
+            font-size:0.85rem;
+            color:#BFE0DF;
+            letter-spacing:0.02em;
+        }
+        .tubo-wrap{
+            position:relative;
+            width:64px;
+            height:230px;
+        }
+        .tubo-wrap svg{width:100%;height:100%;display:block;}
+        .etiqueta-nivel{
+            font-size:1.5rem;
+            font-weight:700;
+            text-align:center;
+            letter-spacing:-0.01em;
+        }
+        .etiqueta-nivel small{
+            display:block;
+            font-family:var(--font-ui);
+            font-weight:500;
+            font-size:0.78rem;
+            color:#BFE0DF;
+            margin-bottom:4px;
+            letter-spacing:0.02em;
+        }
+        .caudal-actual{
+            font-family:var(--font-data);
+            font-size:0.95rem;
+            color:#DDEFEE;
+            text-align:center;
+        }
+
+        .panel-detalle{
+            background:var(--panel);
+            border:1px solid var(--line);
+            border-radius:14px;
+            padding:6px 0;
+        }
+        .bloque{
+            padding:20px 26px;
+        }
+        .bloque + .bloque{border-top:1px solid var(--line);}
+        .bloque h3{
+            margin:0 0 12px;
+            font-size:0.95rem;
+        }
+        .fila-dato{
+            display:flex;
+            justify-content:space-between;
+            align-items:baseline;
+            padding:6px 0;
+            font-size:0.92rem;
+            gap:16px;
+        }
+        .fila-dato span:first-child{color:var(--ink-soft);}
+        .fila-dato span:last-child{
+            font-family:var(--font-data);
+            text-align:right;
+        }
+        .umbral-linea{border-left:4px solid var(--line); padding-left:10px;}
+        .umbral-linea.vigilancia{border-color:var(--vigilancia);}
+        .umbral-linea.alerta{border-color:var(--alerta);}
+        .umbral-linea.emergencia{border-color:var(--emergencia);}
+
+        .lista-observaciones{list-style:none; margin:0; padding:0;}
+        .lista-observaciones li{
+            padding:10px 0;
+            border-top:1px solid var(--line);
+            font-size:0.9rem;
+            display:flex;
+            justify-content:space-between;
+            gap:12px;
+            flex-wrap:wrap;
+        }
+        .lista-observaciones li:first-child{border-top:none;}
+        .lista-observaciones .valor{font-family:var(--font-data); color:var(--river-deep);}
+        .vacio{color:var(--ink-soft); font-size:0.88rem; font-style:italic;}
+
+        form.observacion{
+            display:flex;
+            flex-wrap:wrap;
+            gap:12px;
+            align-items:flex-end;
+            margin-top:14px;
+        }
+        form.observacion .campo{min-width:0;}
+        form.observacion input, form.observacion select{min-width:140px;}
+
+        .fuente-cita{
+            margin-top:8px;
+            font-size:0.8rem;
+            color:var(--ink-soft);
+        }
+
+        @media (prefers-reduced-motion: no-preference){
+            .nivel-fill, .marcador-actual{transition: all 700ms cubic-bezier(.4,0,.2,1);}
+        }
+        </style>
+    </head>
+    <body>
+
+    <header class="cabecera">
+    <div class="marco-cabecera">
+        <div class="marca">
+        <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+            <path d="M4 26c4 0 4-6 8-6s4 6 8 6 4-6 8-6 4 6 8 6" fill="none" stroke="#2E7D8C" stroke-width="2.4" stroke-linecap="round"/>
+            <path d="M4 33c4 0 4-6 8-6s4 6 8 6 4-6 8-6 4 6 8 6" fill="none" stroke="#0E3A45" stroke-width="2.4" stroke-linecap="round"/>
+        </svg>
+        <div>
+            <h1>Alerta de inundaciones</h1>
+            <p>Monitoreo de tramos · datos de pronóstico GEOGloWS</p>
+        </div>
+        </div>
+        <p class="fuente-nota">Caudal y periodos de retorno desde GEOGloWS. Observaciones locales, propias del sistema.</p>
+    </div>
+    </header>
+
+    <div class="marco">
+
+    <section class="panel-consulta">
+        <h2>Consultar un tramo</h2>
+        <p class="ayuda">Ingresa el reach_id (LINKNO) de GEOGloWS. Si no se ha sincronizado antes, el sistema lo hará automáticamente.</p>
+        <form class="consulta" id="formConsulta">
+        <div class="campo">
+            <label for="reachId">Reach ID</label>
+            <input type="number" id="reachId" name="reachId" placeholder="750036461" required inputmode="numeric">
+        </div>
+        <div class="campo">
+            <label for="cuencaId">Cuenca (opcional)</label>
+            <input type="text" id="cuencaId" name="cuencaId" placeholder="cuenca-demo">
+        </div>
+        <button type="submit" class="primario" id="btnConsultar">Consultar</button>
+        </form>
+        <p class="estado-linea" id="estadoConsulta" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="resultado" aria-live="polite">
+
+        <div class="panel-nivel">
+        <span class="tramo-id" id="outTramoId">TRAMO —</span>
+        <div class="tubo-wrap">
+            <svg viewBox="0 0 64 230" id="svgGauge">
+            <rect x="18" y="6" width="28" height="218" rx="14" fill="rgba(255,255,255,0.12)"/>
+            <rect id="nivelFill" class="nivel-fill" x="18" y="224" width="28" height="0" rx="14" fill="#3C8562"/>
+            <g id="ticks"></g>
+            <circle id="marcadorActual" class="marcador-actual" cx="32" cy="224" r="5" fill="#fff" stroke="#0E3A45" stroke-width="2"/>
+            </svg>
+        </div>
+        <div class="etiqueta-nivel">
+            <small>Nivel de alerta</small>
+            <span id="outNivel">—</span>
+        </div>
+        <div class="caudal-actual" id="outCaudalActual">Caudal máx. previsto: — m³/s</div>
+        </div>
+
+        <div class="panel-detalle">
+
+        <div class="bloque">
+            <h3>Pronóstico</h3>
+            <div class="fila-dato"><span>Caudal máximo previsto</span><span id="dCaudalMax">—</span></div>
+            <div class="fila-dato"><span>Emitido</span><span id="dFechaEmision">—</span></div>
+            <div class="fila-dato"><span>Horizonte</span><span id="dHorizonte">—</span></div>
+            <div class="fila-dato"><span>Promedio histórico (ERA5)</span><span id="dHistorico">—</span></div>
+        </div>
+
+        <div class="bloque">
+            <h3>Umbrales (m³/s)</h3>
+            <div class="fila-dato umbral-linea vigilancia"><span>Vigilancia</span><span id="uVigilancia">—</span></div>
+            <div class="fila-dato umbral-linea alerta"><span>Alerta</span><span id="uAlerta">—</span></div>
+            <div class="fila-dato umbral-linea emergencia"><span>Emergencia</span><span id="uEmergencia">—</span></div>
+            <p class="fuente-cita" id="uFuente"></p>
+        </div>
+
+        <div class="bloque">
+            <h3>Observaciones locales</h3>
+            <ul class="lista-observaciones" id="listaObs">
+            <li class="vacio">Sin observaciones registradas para este tramo.</li>
+            </ul>
+
+            <form class="observacion" id="formObs">
+            <div class="campo">
+                <label for="obsEstacion">Estación</label>
+                <input type="text" id="obsEstacion" placeholder="EST-001" required>
+            </div>
+            <div class="campo">
+                <label for="obsTipo">Tipo</label>
+                <select id="obsTipo">
+                <option value="NIVEL">Nivel</option>
+                <option value="CAUDAL">Caudal</option>
+                <option value="PLUVIOMETRO">Pluviómetro</option>
+                <option value="SENSOR_PROPIO">Sensor propio</option>
+                </select>
+            </div>
+            <div class="campo">
+                <label for="obsValor">Valor</label>
+                <input type="number" step="0.01" id="obsValor" placeholder="2.35" required>
+            </div>
+            <div class="campo">
+                <label for="obsUnidad">Unidad</label>
+                <input type="text" id="obsUnidad" placeholder="m" style="min-width:70px;">
+            </div>
+            <button type="submit" class="secundario">Agregar observación</button>
+            </form>
+        </div>
+
+        </div>
+    </section>
+
+    </div>
+
+        <script>
+        /* =====================================================================
+        CONFIGURACIÓN DEL BACKEND
+        Ajusta estas rutas para que coincidan con tu @RestController de
+        Spring Boot (construido sobre LectorDatosIngresados / GeneradorAlertaFinal).
+
+        GET  {baseUrl}/tramos/{reachId}/reporte
+                -> si el tramo no existe aún, responde 404 y el front intentará
+                sincronizarlo antes de reintentar.
+        POST {baseUrl}/tramos/{reachId}/sincronizar?cuencaId=...
+                -> body vacío; dispara LectorDatosIngresados.sincronizarTramo(...)
+        POST {baseUrl}/tramos/{reachId}/observaciones
+                -> body JSON: { estacionId, tipo, valor, unidad }
+
+        JSON esperado de /reporte:
+        {
+            "reachId": 750036461,
+            "nivelAlerta": "NORMAL|VIGILANCIA|ALERTA|EMERGENCIA",
+            "caudalMaximoPrevisto": 128.4,
+            "fechaEmision": "2026-09-08T12:00:00Z",
+            "horizonteHoras": 360,
+            "caudalHistoricoPromedio": 54.2,
+            "umbral": {
+                "caudalVigilancia": 40.2,
+                "caudalAlerta": 85.0,
+                "caudalEmergencia": 150.0,
+                "fuenteCalibracion": "GEOGloWS - periodos de retorno",
+                "fechaCalibracion": "2026-09-08"
+            },
+            "observaciones": [
+                { "estacionId":"EST-001","tipo":"NIVEL","valor":2.35,"unidad":"m","fecha":"2026-09-08T12:03:00Z" }
+            ]
+        }
+        ===================================================================== */
+        const CONFIG = {
+        baseUrl: '/api',
+        reportePath: (id) => `${CONFIG.baseUrl}/tramos/${id}/reporte`,
+        sincronizarPath: (id, cuencaId) => `${CONFIG.baseUrl}/tramos/${id}/sincronizar${cuencaId ? '?cuencaId=' + encodeURIComponent(cuencaId) : ''}`,
+        observacionesPath: (id) => `${CONFIG.baseUrl}/tramos/${id}/observaciones`,
+        };
+
+        const NIVEL_COLOR = {
+        NORMAL: '#3C8562',
+        VIGILANCIA: '#B98B22',
+        ALERTA: '#C05A1E',
+        EMERGENCIA: '#AC3434',
+        };
+        const NIVEL_ETIQUETA = {
+        NORMAL: 'Normal',
+        VIGILANCIA: 'Vigilancia',
+        ALERTA: 'Alerta',
+        EMERGENCIA: 'Emergencia',
+        };
+
+        const formConsulta = document.getElementById('formConsulta');
+        const btnConsultar = document.getElementById('btnConsultar');
+        const estadoConsulta = document.getElementById('estadoConsulta');
+        const resultado = document.getElementById('resultado');
+        const formObs = document.getElementById('formObs');
+
+        let tramoActual = null;
+
+        formConsulta.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const reachId = document.getElementById('reachId').value.trim();
+        const cuencaId = document.getElementById('cuencaId').value.trim();
+        if (!reachId) return;
+
+        tramoActual = reachId;
+        await consultarTramo(reachId, cuencaId);
+        });
+
+        formObs.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        if (!tramoActual) return;
+        const cuerpo = {
+            estacionId: document.getElementById('obsEstacion').value.trim(),
+            tipo: document.getElementById('obsTipo').value,
+            valor: parseFloat(document.getElementById('obsValor').value),
+            unidad: document.getElementById('obsUnidad').value.trim() || null,
+        };
+        try {
+            const resp = await fetch(CONFIG.observacionesPath(tramoActual), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cuerpo),
+            });
+            if (!resp.ok) throw new Error('El servidor rechazó la observación (' + resp.status + ')');
+            formObs.reset();
+            await consultarTramo(tramoActual, null, { silencioso: true });
+        } catch (err) {
+            mostrarEstado('No se pudo guardar la observación: ' + err.message, 'error');
+        }
+        });
+
+        async function consultarTramo(reachId, cuencaId, opts = {}) {
+        if (!opts.silencioso) {
+            ponerCargando(true);
+            mostrarEstado('Consultando GEOGloWS…', 'cargando');
+        }
+        try {
+            let datos = await pedirReporte(reachId);
+            if (datos === 'no-encontrado') {
+            mostrarEstado('Tramo no sincronizado. Descargando pronóstico desde GEOGloWS…', 'cargando');
+            const syncResp = await fetch(CONFIG.sincronizarPath(reachId, cuencaId), { method: 'POST' });
+            if (!syncResp.ok) throw new Error('No se pudo sincronizar con GEOGloWS (' + syncResp.status + ')');
+            datos = await pedirReporte(reachId);
+            if (datos === 'no-encontrado') throw new Error('El tramo sigue sin datos tras sincronizar');
+            }
+            pintarResultado(datos);
+            if (!opts.silencioso) mostrarEstado('', '');
+        } catch (err) {
+            if (!opts.silencioso) mostrarEstado('No se pudo obtener el estado del tramo: ' + err.message, 'error');
+        } finally {
+            if (!opts.silencioso) ponerCargando(false);
+        }
+        }
+
+        async function pedirReporte(reachId) {
+        const resp = await fetch(CONFIG.reportePath(reachId));
+        if (resp.status === 404) return 'no-encontrado';
+        if (!resp.ok) throw new Error('Respuesta ' + resp.status + ' del servidor');
+        return resp.json();
+        }
+
+        function ponerCargando(activo){
+        btnConsultar.disabled = activo;
+        btnConsultar.textContent = activo ? 'Consultando…' : 'Consultar';
+        }
+
+        function mostrarEstado(texto, tipo){
+        estadoConsulta.textContent = texto;
+        estadoConsulta.className = 'estado-linea' + (tipo ? ' ' + tipo : '');
+        }
+
+        function pintarResultado(d){
+        resultado.classList.add('visible');
+
+        const nivel = d.nivelAlerta || 'NORMAL';
+        const color = NIVEL_COLOR[nivel] || NIVEL_COLOR.NORMAL;
+
+        document.getElementById('outTramoId').textContent = 'TRAMO ' + d.reachId;
+        document.getElementById('outNivel').textContent = NIVEL_ETIQUETA[nivel] || nivel;
+        document.getElementById('outNivel').style.color = color;
+        document.getElementById('outCaudalActual').textContent =
+            'Caudal máx. previsto: ' + formatoNumero(d.caudalMaximoPrevisto) + ' m³/s';
+
+        document.getElementById('dCaudalMax').textContent = formatoNumero(d.caudalMaximoPrevisto) + ' m³/s';
+        document.getElementById('dFechaEmision').textContent = formatoFecha(d.fechaEmision);
+        document.getElementById('dHorizonte').textContent = d.horizonteHoras ? d.horizonteHoras + ' h' : '—';
+        document.getElementById('dHistorico').textContent = formatoNumero(d.caudalHistoricoPromedio) + ' m³/s';
+
+        const u = d.umbral || {};
+        document.getElementById('uVigilancia').textContent = formatoNumero(u.caudalVigilancia);
+        document.getElementById('uAlerta').textContent = formatoNumero(u.caudalAlerta);
+        document.getElementById('uEmergencia').textContent = formatoNumero(u.caudalEmergencia);
+        document.getElementById('uFuente').textContent = u.fuenteCalibracion
+            ? 'Fuente: ' + u.fuenteCalibracion + (u.fechaCalibracion ? ' · ' + u.fechaCalibracion : '')
+            : '';
+
+        pintarGauge(d.caudalMaximoPrevisto || 0, u, color);
+        pintarObservaciones(d.observaciones || []);
+        }
+
+        function pintarGauge(valorActual, u, color){
+        const tope = Math.max(u.caudalEmergencia || 0, valorActual, 1) * 1.15;
+        const alto = 218;
+        const yBase = 224;
+
+        const nivelFill = document.getElementById('nivelFill');
+        const alturaFill = Math.min(alto, (valorActual / tope) * alto);
+        nivelFill.setAttribute('y', yBase - alturaFill);
+        nivelFill.setAttribute('height', alturaFill);
+        nivelFill.setAttribute('fill', color);
+
+        const marcador = document.getElementById('marcadorActual');
+        marcador.setAttribute('cy', yBase - alturaFill);
+
+        const ticksGroup = document.getElementById('ticks');
+        ticksGroup.innerHTML = '';
+        const ticks = [
+            { valor: u.caudalVigilancia, color: '#B98B22' },
+            { valor: u.caudalAlerta, color: '#C05A1E' },
+            { valor: u.caudalEmergencia, color: '#AC3434' },
+        ];
+        ticks.forEach(t => {
+            if (!t.valor) return;
+            const y = yBase - (t.valor / tope) * alto;
+            const linea = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            linea.setAttribute('x1', 12); linea.setAttribute('x2', 52);
+            linea.setAttribute('y1', y); linea.setAttribute('y2', y);
+            linea.setAttribute('stroke', t.color);
+            linea.setAttribute('stroke-width', '2');
+            ticksGroup.appendChild(linea);
+        });
+        }
+
+        function pintarObservaciones(obs){
+        const lista = document.getElementById('listaObs');
+        lista.innerHTML = '';
+        if (!obs.length){
+            lista.innerHTML = '<li class="vacio">Sin observaciones registradas para este tramo.</li>';
+            return;
+        }
+        obs
+            .slice()
+            .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+            .forEach(o => {
+            const li = document.createElement('li');
+            li.innerHTML = `<span>${o.estacionId} · ${o.tipo.toLowerCase()}</span>
+                            <span class="valor">${formatoNumero(o.valor)} ${o.unidad || ''}</span>`;
+            lista.appendChild(li);
+            });
+        }
+
+        function formatoNumero(n){
+        if (n === null || n === undefined || Number.isNaN(n)) return '—';
+        return Number(n).toLocaleString('es', { maximumFractionDigits: 1 });
+        }
+
+        function formatoFecha(iso){
+        if (!iso) return '—';
+        try {
+            return new Date(iso).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' });
+        } catch { return iso; }
+        }
+        </script>
+    </body>
+</html>
