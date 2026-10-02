@@ -7,15 +7,17 @@ public class PronosticoDiaDTO {
     private int diaNumero;
     private LocalDate fecha;
     private double caudalMedio;
+    private double caudalMinimo;
     private double caudalMaximo;
     private String estado;
 
     public PronosticoDiaDTO() {}
 
-    public PronosticoDiaDTO(int diaNumero, LocalDate fecha, double caudalMedio, double caudalMaximo, String estado) {
+    public PronosticoDiaDTO(int diaNumero, LocalDate fecha, double caudalMedio, double caudalMinimo, double caudalMaximo, String estado) {
         this.diaNumero = diaNumero;
         this.fecha = fecha;
         this.caudalMedio = caudalMedio;
+        this.caudalMinimo = caudalMinimo;
         this.caudalMaximo = caudalMaximo;
         this.estado = estado;
     }
@@ -42,6 +44,14 @@ public class PronosticoDiaDTO {
 
     public void setCaudalMedio(double caudalMedio) {
         this.caudalMedio = caudalMedio;
+    }
+
+    public double getCaudalMinimo() {
+        return caudalMinimo;
+    }
+
+    public void setCaudalMinimo(double caudalMinimo) {
+        this.caudalMinimo = caudalMinimo;
     }
 
     public double getCaudalMaximo() {

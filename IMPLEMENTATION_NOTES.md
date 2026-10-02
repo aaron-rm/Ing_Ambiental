@@ -188,7 +188,45 @@ Endpoints disponibles para el frontend:
 
 ---
 
-## 10. Pendientes para avances posteriores
+## 10. Ajustes finales y estabilización (Sesión 3)
+
+### 10.1 Umbrales y estados de riesgo (Inclusión de VIGILANCIA)
+- **Umbrales unificados**:
+  - `VIGILANCIA`: 15.00 m³/s (Periodo de retorno T=2 años de GEOGLOWS)
+  - `ALERTA`: 30.00 m³/s (Periodo de retorno T=5 años de GEOGLOWS)
+  - `EMERGENCIA`: 60.00 m³/s (Periodo de retorno T=25 años de GEOGLOWS)
+- **Escala de estados**:
+  - `0 - 14.99 m³/s`: **NORMAL**
+  - `15.00 - 29.99 m³/s`: **VIGILANCIA**
+  - `30.00 - 59.99 m³/s`: **RIESGO DE INUNDACION**
+  - `>= 60.00 m³/s`: **PELIGRO DE INUNDACION**
+- Se hace visible el umbral de vigilancia en el banner informativo de la consola y en las evaluaciones del pronóstico diario.
+
+### 10.2 Corrección en el despacho de notificaciones
+- **Comportamiento corregido**: Las alertas a suscriptores únicamente se disparan cuando el caudal entra en `RIESGO DE INUNDACION` o `PELIGRO DE INUNDACION`.
+- Para los estados `NORMAL` y `VIGILANCIA`, el sistema indica explícitamente que no se envían alertas de emergencia, evitando notificaciones innecesarias en caudales habituales.
+
+### 10.3 Validaciones estrictas de contacto (`ValidadorContacto`)
+- Se implementó la clase [`ValidadorContacto`](file:///src/main/java/com/alerta/sistema_alerta_inundaciones/service/ValidadorContacto.java):
+  - **Nombre**: Debe contener al menos una letra válida y no consistir únicamente de números o símbolos. Fallback: `Usuario Demo`.
+  - **Teléfono**: Formato móvil de Panamá (8 dígitos iniciando con 6, tolerando prefijo opcional `+507` y guiones).
+  - **Correo electrónico**: Formato estándar de email. Fallback: `usuario@demo.com`.
+- Se aplican tanto en consola interactiva como en el endpoint REST `POST /api/alertas/suscribir` (responde con HTTP 400 Bad Request si los datos son inválidos).
+
+### 10.4 Caudal mínimo en el pronóstico diario
+- La clase `PronosticoDiaDTO` y la agregación diaria en [`AlertaService`](file:///src/main/java/com/alerta/sistema_alerta_inundaciones/service/AlertaService.java) ahora calculan e incluyen:
+  - `caudalMinimo`: Caudal mínimo esperado para cada día (m³/s).
+  - `caudalMedio`: Promedio diario (m³/s).
+  - `caudalMaximo`: Pico máximo diario (m³/s).
+
+### 10.5 Desacoplamiento de simulación vs estado real
+- La simulación de crecida se mantiene estrictamente en memoria como escenario de prueba.
+- No sobreescribe ni contamina la consulta del estado real de GEOGLOWS (Opción 1).
+- El menú de la consola despliega dinámicamente la opción `Consultar estado simulado` únicamente tras haber ejecutado una simulación.
+
+---
+
+## 11. Pendientes para avances posteriores
 - Desarrollo de la interfaz gráfica web en React / PWA.
 - Envío real de correos electrónicos (JavaMailSender) o notificaciones por SMS/WhatsApp.
 - Selección dinámica de tramos mediante mapa geográfico.

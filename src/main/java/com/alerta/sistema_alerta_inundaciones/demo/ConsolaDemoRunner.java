@@ -4,6 +4,7 @@ import com.alerta.sistema_alerta_inundaciones.alerta.AlertaRioDTO;
 import com.alerta.sistema_alerta_inundaciones.alerta.AlertaService;
 import com.alerta.sistema_alerta_inundaciones.alerta.PronosticoDiaDTO;
 import com.alerta.sistema_alerta_inundaciones.alerta.SuscripcionAlerta;
+import com.alerta.sistema_alerta_inundaciones.alerta.ValidadorContacto;
 import com.alerta.sistema_alerta_inundaciones.rio.Rio;
 import com.alerta.sistema_alerta_inundaciones.rio.RioRepository;
 import org.springframework.boot.CommandLineRunner;
@@ -13,24 +14,29 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Scanner;
-import java.util.regex.Pattern;
 
 @Component
 public class ConsolaDemoRunner implements CommandLineRunner {
 
     private final AlertaService alertaService;
     private final RioRepository rioRepository;
+    private final org.springframework.core.env.Environment environment;
 
-    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
-    private static final Pattern PHONE_PATTERN = Pattern.compile("^\\+?[0-9\\s\\-]{7,15}$");
+    // Estado simulado en memoria para la consola (separado del estado real)
+    private AlertaRioDTO ultimaSimulacion = null;
 
-    public ConsolaDemoRunner(AlertaService alertaService, RioRepository rioRepository) {
+    public ConsolaDemoRunner(AlertaService alertaService, RioRepository rioRepository, org.springframework.core.env.Environment environment) {
         this.alertaService = alertaService;
         this.rioRepository = rioRepository;
+        this.environment = environment;
     }
 
     @Override
     public void run(String... args) {
+        if ("true".equalsIgnoreCase(System.getProperty("skip.demo.console"))
+                || (environment != null && java.util.Arrays.asList(environment.getActiveProfiles()).contains("test"))) {
+            return;
+        }
         Thread demoThread = new Thread(this::iniciarConsolaInteractiva);
         demoThread.setDaemon(true);
         demoThread.start();
@@ -82,6 +88,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         }
 
         System.out.println("\nConfiguracion del sistema (Umbrales de referencia):");
+        System.out.println("  Umbral de Vigilancia:  15.00 m3/s");
         System.out.println("  Umbral de Alerta:      30.00 m3/s");
         System.out.println("  Umbral de Emergencia:  60.00 m3/s");
         System.out.println("------------------------------------------------------------");
@@ -92,8 +99,14 @@ public class ConsolaDemoRunner implements CommandLineRunner {
             System.out.println("  1. Consultar estado y pronostico real (GEOGLOWS)");
             System.out.println("  2. Suscribirse a alertas de este rio");
             System.out.println("  3. Simular crecida / inundacion (Deteccion de riesgo)");
-            System.out.println("  4. Ver suscriptores registrados");
-            System.out.println("  5. Salir");
+            if (ultimaSimulacion != null) {
+                System.out.println("  4. Consultar estado simulado");
+                System.out.println("  5. Ver suscriptores registrados");
+                System.out.println("  6. Salir");
+            } else {
+                System.out.println("  4. Ver suscriptores registrados");
+                System.out.println("  5. Salir");
+            }
             System.out.print("\n> ");
 
             String input = "";
@@ -103,25 +116,51 @@ public class ConsolaDemoRunner implements CommandLineRunner {
                 break;
             }
 
-            switch (input) {
-                case "1":
-                    mostrarPronosticoReal(rioDemo);
-                    break;
-                case "2":
-                    registrarSuscripcion(scanner, rioDemo);
-                    break;
-                case "3":
-                    ejecutarSimulacion(scanner, rioDemo);
-                    break;
-                case "4":
-                    mostrarSuscripciones(rioDemo);
-                    break;
-                case "5":
-                    System.out.println("\nCerrando interfaz de consola. El servidor backend sigue activo.");
-                    continuar = false;
-                    break;
-                default:
-                    System.out.println("Opcion no valida. Ingrese un numero del 1 al 5.");
+            if (ultimaSimulacion != null) {
+                switch (input) {
+                    case "1":
+                        mostrarPronosticoReal(rioDemo);
+                        break;
+                    case "2":
+                        registrarSuscripcion(scanner, rioDemo);
+                        break;
+                    case "3":
+                        ejecutarSimulacion(scanner, rioDemo);
+                        break;
+                    case "4":
+                        mostrarEstadoSimulado(rioDemo);
+                        break;
+                    case "5":
+                        mostrarSuscripciones(rioDemo);
+                        break;
+                    case "6":
+                        System.out.println("\nCerrando interfaz de consola. El servidor backend sigue activo.");
+                        continuar = false;
+                        break;
+                    default:
+                        System.out.println("Opcion no valida. Ingrese un numero del 1 al 6.");
+                }
+            } else {
+                switch (input) {
+                    case "1":
+                        mostrarPronosticoReal(rioDemo);
+                        break;
+                    case "2":
+                        registrarSuscripcion(scanner, rioDemo);
+                        break;
+                    case "3":
+                        ejecutarSimulacion(scanner, rioDemo);
+                        break;
+                    case "4":
+                        mostrarSuscripciones(rioDemo);
+                        break;
+                    case "5":
+                        System.out.println("\nCerrando interfaz de consola. El servidor backend sigue activo.");
+                        continuar = false;
+                        break;
+                    default:
+                        System.out.println("Opcion no valida. Ingrese un numero del 1 al 5.");
+                }
             }
         }
     }
@@ -150,10 +189,11 @@ public class ConsolaDemoRunner implements CommandLineRunner {
                 DateTimeFormatter df = DateTimeFormatter.ofPattern("dd/MM");
                 for (PronosticoDiaDTO dia : dias) {
                     System.out.printf(Locale.US,
-                            "Dia %d - %s | Caudal medio: %6.2f m3/s | Caudal maximo: %6.2f m3/s | Estado: %s%n",
+                            "Dia %2d - %s | Medio: %5.2f | Min: %5.2f | Max: %5.2f m3/s | Estado: %s%n",
                             dia.getDiaNumero(),
                             dia.getFecha().format(df),
                             dia.getCaudalMedio(),
+                            dia.getCaudalMinimo(),
                             dia.getCaudalMaximo(),
                             dia.getEstado()
                     );
@@ -177,47 +217,44 @@ public class ConsolaDemoRunner implements CommandLineRunner {
                 nombre = "Usuario Demo";
                 break;
             }
-            if (nombre.length() >= 2 && nombre.matches("^[a-zA-ZáéíóúÁÉÍÓÚñÑ0-9\\s._-]+$")) {
+            if (ValidadorContacto.esNombreValido(nombre)) {
                 break;
             }
-            System.out.println("[!] Nombre no valido. Ingrese un texto razonable.");
+            System.out.println("[!] Nombre no valido. Debe contener letras y un formato valido (sin solo numeros).");
         }
 
         String contacto;
         while (true) {
-            System.out.print("Contacto (Email o WhatsApp, Enter para 'usuario@demo.com'): ");
+            System.out.print("Contacto (Email o WhatsApp de Panama, Enter para 'usuario@demo.com'): ");
             contacto = scanner.nextLine().trim();
             if (contacto.isEmpty()) {
                 contacto = "usuario@demo.com";
                 break;
             }
-            if (validarContacto(contacto)) {
+            if (ValidadorContacto.esContactoValido(contacto)) {
                 break;
             }
-            System.out.println("[!] Formato invalido. Ingrese un correo valido (ej: persona@correo.com) o telefono/WhatsApp (ej: +507 61234567).");
+            System.out.println("[!] Formato invalido. Ingrese un correo valido (ej: persona@correo.com) o celular de Panama de 8 digitos iniciando con 6 (ej: 6123-4567).");
         }
 
-        SuscripcionAlerta s = alertaService.suscribirUsuario(rio.getGeoglowsId(), nombre, contacto);
-        System.out.println("\n[OK] Suscripcion registrada en base de datos PostgreSQL.");
-        System.out.println("  ID Registro: " + s.getId());
-        System.out.println("  Nombre:      " + s.getNombreContacto());
-        System.out.println("  Contacto:    " + s.getContacto());
-        System.out.println("  Tramo:       " + s.getReachId());
-        System.out.println("  Se notificara a este contacto si se detecta riesgo de desbordamiento.");
-    }
-
-    private boolean validarContacto(String contacto) {
-        if (EMAIL_PATTERN.matcher(contacto).matches()) {
-            return true;
+        try {
+            SuscripcionAlerta s = alertaService.suscribirUsuario(rio.getGeoglowsId(), nombre, contacto);
+            System.out.println("\n[OK] Suscripcion registrada en base de datos PostgreSQL.");
+            System.out.println("  ID Registro: " + s.getId());
+            System.out.println("  Nombre:      " + s.getNombreContacto());
+            System.out.println("  Contacto:    " + s.getContacto());
+            System.out.println("  Tramo:       " + s.getReachId());
+            System.out.println("  Se notificara a este contacto si se detecta riesgo o peligro de inundacion.");
+        } catch (Exception e) {
+            System.out.println("[!] Error al registrar suscripcion: " + e.getMessage());
         }
-        return PHONE_PATTERN.matcher(contacto).matches();
     }
 
     private void ejecutarSimulacion(Scanner scanner, Rio rio) {
         System.out.println("\n============================================================");
         System.out.println("                 SIMULACION DE INUNDACION");
         System.out.println("============================================================");
-        System.out.println("Ingrese un caudal hipotetico para simular crecida (ej. 45.0 para Riesgo, 75.0 para Peligro):");
+        System.out.println("Ingrese un caudal hipotetico para simular crecida (ej. 25.0 Vigilancia, 45.0 Riesgo, 75.0 Peligro):");
         System.out.print("Caudal simulado (m3/s) [Enter para usar 75.0]: ");
         String valStr = scanner.nextLine().trim();
         double caudal = 75.0;
@@ -232,29 +269,62 @@ public class ConsolaDemoRunner implements CommandLineRunner {
 
         try {
             AlertaRioDTO sim = alertaService.simularInundacion(rio.getGeoglowsId(), caudal);
+            this.ultimaSimulacion = sim;
+
             System.out.println("\n--- RESULTADO DE LA SIMULACION ---");
             System.out.printf(Locale.US, "Caudal simulado: %.2f m3/s%n", caudal);
-            System.out.println("Estado resultante: " + formatearEstado(sim.getNivelAlerta()));
+            String estadoFormateado = formatearEstado(sim.getNivelAlerta());
+            System.out.println("Estado resultante: " + estadoFormateado);
 
-            if (!"NORMAL".equalsIgnoreCase(sim.getNivelAlerta())) {
+            boolean requiereNotificacion = "ALERTA".equalsIgnoreCase(sim.getNivelAlerta()) ||
+                                           "EMERGENCIA".equalsIgnoreCase(sim.getNivelAlerta());
+
+            if (requiereNotificacion) {
                 System.out.println("\n[ALERTA] Se ha detectado un caudal por encima del nivel de riesgo.");
-            } else {
-                System.out.println("\nEl caudal simulado se encuentra dentro de valores normales.");
-            }
-
-            List<SuscripcionAlerta> subs = alertaService.obtenerSuscripcionesPorTramo(rio.getGeoglowsId());
-            System.out.println("\nNOTIFICACIONES A CONTACTOS REGISTRADOS (" + subs.size() + "):");
-            if (subs.isEmpty()) {
-                System.out.println("  (No hay contactos suscritos aun. Use la opcion 2 para registrarse)");
-            } else {
-                for (SuscripcionAlerta s : subs) {
-                    System.out.printf("  - Notificacion enviada a: %s (%s)%n", s.getNombreContacto(), s.getContacto());
+                List<SuscripcionAlerta> subs = alertaService.obtenerSuscripcionesPorTramo(rio.getGeoglowsId());
+                System.out.println("\nNOTIFICACIONES A CONTACTOS REGISTRADOS (" + subs.size() + "):");
+                if (subs.isEmpty()) {
+                    System.out.println("  (No hay contactos suscritos aun. Use la opcion 2 para registrarse)");
+                } else {
+                    for (SuscripcionAlerta s : subs) {
+                        System.out.printf("  - Notificacion enviada a: %s (%s)%n", s.getNombreContacto(), s.getContacto());
+                    }
                 }
+            } else if ("VIGILANCIA".equalsIgnoreCase(sim.getNivelAlerta())) {
+                System.out.println("\n[AVISO] El caudal simulado se encuentra dentro del nivel de VIGILANCIA (preventivo, sin notificacion).");
+            } else {
+                System.out.println("\nEl caudal simulado se encuentra dentro de condiciones NORMALES (sin notificacion).");
             }
             System.out.println("------------------------------------------------------------");
         } catch (Exception e) {
             System.out.println("Error en la simulacion: " + e.getMessage());
         }
+    }
+
+    private void mostrarEstadoSimulado(Rio rio) {
+        if (ultimaSimulacion == null) {
+            System.out.println("\nNo hay una simulacion activa en este momento.");
+            return;
+        }
+
+        System.out.println("\n============================================================");
+        System.out.println("                    ESTADO SIMULADO");
+        System.out.println("============================================================");
+        System.out.println("Rio: " + rio.getNombre());
+        System.out.printf(Locale.US, "Caudal simulado: %.2f m3/s%n", ultimaSimulacion.getCaudalMaximoPronosticado());
+        String estado = formatearEstado(ultimaSimulacion.getNivelAlerta());
+        System.out.println("Estado: " + estado);
+
+        if ("PELIGRO DE INUNDACION".equalsIgnoreCase(estado)) {
+            System.out.println("El caudal simulado supera el umbral de emergencia. Peligro inminente de desbordamiento.");
+        } else if ("RIESGO DE INUNDACION".equalsIgnoreCase(estado)) {
+            System.out.println("El caudal simulado supera el umbral de alerta. Posible afectacion ribereña.");
+        } else if ("VIGILANCIA".equalsIgnoreCase(estado)) {
+            System.out.println("El caudal simulado se encuentra dentro del nivel de vigilancia.");
+        } else {
+            System.out.println("El caudal simulado se encuentra dentro de los valores normales.");
+        }
+        System.out.println("------------------------------------------------------------");
     }
 
     private void mostrarSuscripciones(Rio rio) {

@@ -48,9 +48,13 @@ public class AlertaController {
      * Suscribe un contacto (correo o teléfono) para recibir avisos de alerta de un río.
      */
     @PostMapping("/suscribir")
-    public ResponseEntity<SuscripcionAlerta> suscribir(@RequestBody SuscripcionAlerta req) {
-        SuscripcionAlerta guardada = alertaService.suscribirUsuario(req.getReachId(), req.getNombreContacto(), req.getContacto());
-        return ResponseEntity.ok(guardada);
+    public ResponseEntity<?> suscribir(@RequestBody SuscripcionAlerta req) {
+        try {
+            SuscripcionAlerta guardada = alertaService.suscribirUsuario(req.getReachId(), req.getNombreContacto(), req.getContacto());
+            return ResponseEntity.ok(guardada);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 
     /**
