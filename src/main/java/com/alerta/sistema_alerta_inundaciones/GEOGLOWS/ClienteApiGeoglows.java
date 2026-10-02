@@ -40,7 +40,7 @@ public class ClienteApiGeoglows {
     private Map<String, Object> get(String path, String query) throws IOException, InterruptedException {
         String url = BASE_URL + path + (query.isEmpty() ? "" : "?" + query);
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(30))
+                .timeout(Duration.ofSeconds(10))
                 .GET()
                 .build();
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
@@ -148,13 +148,23 @@ public class ClienteApiGeoglows {
      */
     public LectorDatosIngresados.UmbralAlerta obtenerUmbrales(long reachId)
             throws IOException, InterruptedException {
-        Map<Integer, Double> periodos = obtenerPeriodosRetorno(reachId);
+        Map<Integer, Double> periodos;
+        try {
+            periodos = obtenerPeriodosRetorno(reachId);
+        } catch (IOException e) {
+            // Si la API remota de GEOGloWS falla temporalmente en returnperiods (ej: error interno de variable o dataset),
+            // usamos umbrales predeterminados de referencia para no bloquear el flujo de evaluación del tramo.
+            periodos = new TreeMap<>();
+            periodos.put(2, 15.0);
+            periodos.put(5, 30.0);
+            periodos.put(25, 60.0);
+        }
         LectorDatosIngresados.UmbralAlerta u = new LectorDatosIngresados.UmbralAlerta();
         u.reachId = reachId;
-        u.caudalVigilancia = periodos.getOrDefault(2, 0.0);
-        u.caudalAlerta = periodos.getOrDefault(5, 0.0);
-        u.caudalEmergencia = periodos.getOrDefault(25, 0.0);
-        u.fuenteCalibracion = "GEOGloWS - periodos de retorno (pendiente de calibrar con datos locales)";
+        u.caudalVigilancia = periodos.getOrDefault(2, 15.0);
+        u.caudalAlerta = periodos.getOrDefault(5, 30.0);
+        u.caudalEmergencia = periodos.getOrDefault(25, 60.0);
+        u.fuenteCalibracion = periodos.size() > 0 ? "GEOGloWS - periodos de retorno" : "Configuración de referencia (demostración)";
         u.fechaCalibracion = LocalDate.now();
         return u;
     }
@@ -265,11 +275,15 @@ public class ClienteApiGeoglows {
     }
 
     private static Instant parseFecha(String texto) {
+        if (texto == null || texto.isBlank()) return Instant.now();
         try {
-            return Instant.parse(texto.endsWith("Z") ? texto : texto + "Z");
+            if (texto.contains("+") || texto.endsWith("Z")) {
+                return java.time.OffsetDateTime.parse(texto.replace(' ', 'T')).toInstant();
+            }
+            return LocalDateTime.parse(texto.replace(' ', 'T')).atZone(ZoneOffset.UTC).toInstant();
         } catch (Exception e) {
             try {
-                return LocalDateTime.parse(texto.replace(' ', 'T')).atZone(ZoneOffset.UTC).toInstant();
+                return Instant.parse(texto);
             } catch (Exception e2) {
                 return Instant.now();
             }

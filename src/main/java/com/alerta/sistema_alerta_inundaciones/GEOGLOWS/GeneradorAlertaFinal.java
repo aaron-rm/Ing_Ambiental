@@ -54,7 +54,7 @@ public class GeneradorAlertaFinal {
         GeneradorAlertaFinal generador = new GeneradorAlertaFinal();
 
         // Reemplazar por el reach_id/LINKNO real del tramo que se quiere monitorear.
-        long reachId = 750036461L;
+        long reachId = 710039498L;
 
         try {
             repo.sincronizarTramo(reachId, "cuenca-demo", "N/D");
