@@ -33,14 +33,16 @@ import java.util.TreeMap;
 public class ClienteApiGeoglows {
 
     private static final String BASE_URL = "https://geoglows.ecmwf.int/api/v2/";
-    private final HttpClient http = HttpClient.newHttpClient();
+    private final HttpClient http = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(4))
+            .build();
 
     /** Llama un endpoint de GEOGloWS y devuelve el JSON ya parseado como Map. */
     @SuppressWarnings("unchecked")
     private Map<String, Object> get(String path, String query) throws IOException, InterruptedException {
         String url = BASE_URL + path + (query.isEmpty() ? "" : "?" + query);
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(10))
+                .timeout(Duration.ofSeconds(4))
                 .GET()
                 .build();
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());

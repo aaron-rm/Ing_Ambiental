@@ -67,6 +67,7 @@ public class AlertaService {
             for (java.util.Map.Entry<java.time.LocalDate, List<Double>> entry : valoresPorDia.entrySet()) {
                 List<Double> vals = entry.getValue();
                 double avg = vals.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+                double min = vals.stream().mapToDouble(Double::doubleValue).min().orElse(0.0);
                 double max = vals.stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
                 String estadoDia = "NORMAL";
                 if (u != null) {
@@ -74,7 +75,7 @@ public class AlertaService {
                     else if (max >= u.caudalAlerta) estadoDia = "RIESGO DE INUNDACION";
                     else if (max >= u.caudalVigilancia) estadoDia = "VIGILANCIA";
                 }
-                dias.add(new PronosticoDiaDTO(numDia++, entry.getKey(), avg, max, estadoDia));
+                dias.add(new PronosticoDiaDTO(numDia++, entry.getKey(), avg, min, max, estadoDia));
             }
             dto.setPronosticoDiario(dias);
         }
@@ -97,35 +98,57 @@ public class AlertaService {
 
     /**
      * Simula un caudal alto para demostrar el flujo de detección y disparo de alerta de inundación.
+     * Evalúa el caudal simulado contra los umbrales del tramo sin alterar el estado real.
      */
     public AlertaRioDTO simularInundacion(long reachId, double caudalSimulado) throws IOException, InterruptedException {
-        AlertaRioDTO alertaBase = consultarAlertaTramo(reachId, "Simulación - Tramo " + reachId);
-        alertaBase.setCaudalMaximoPronosticado(caudalSimulado);
-        alertaBase.setCaudalActualOInicial(caudalSimulado);
+        LectorDatosIngresados repo = new LectorDatosIngresados();
+        LectorDatosIngresados.UmbralAlerta u = repo.geoglows.obtenerUmbrales(reachId);
 
-        if (caudalSimulado >= alertaBase.getUmbralEmergencia()) {
-            alertaBase.setNivelAlerta(LectorDatosIngresados.NivelAlerta.EMERGENCIA.name());
-        } else if (caudalSimulado >= alertaBase.getUmbralAlerta()) {
-            alertaBase.setNivelAlerta(LectorDatosIngresados.NivelAlerta.ALERTA.name());
-        } else if (caudalSimulado >= alertaBase.getUmbralVigilancia()) {
-            alertaBase.setNivelAlerta(LectorDatosIngresados.NivelAlerta.VIGILANCIA.name());
+        AlertaRioDTO sim = new AlertaRioDTO();
+        sim.setReachId(reachId);
+        sim.setNombreRio("Simulacion - Tramo " + reachId);
+        sim.setCaudalActualOInicial(caudalSimulado);
+        sim.setCaudalMaximoPronosticado(caudalSimulado);
+
+        double uVig = (u != null) ? u.caudalVigilancia : 15.0;
+        double uAlt = (u != null) ? u.caudalAlerta : 30.0;
+        double uEmg = (u != null) ? u.caudalEmergencia : 60.0;
+
+        sim.setUmbralVigilancia(uVig);
+        sim.setUmbralAlerta(uAlt);
+        sim.setUmbralEmergencia(uEmg);
+
+        LectorDatosIngresados.NivelAlerta nivel;
+        if (caudalSimulado >= uEmg) {
+            nivel = LectorDatosIngresados.NivelAlerta.EMERGENCIA;
+        } else if (caudalSimulado >= uAlt) {
+            nivel = LectorDatosIngresados.NivelAlerta.ALERTA;
+        } else if (caudalSimulado >= uVig) {
+            nivel = LectorDatosIngresados.NivelAlerta.VIGILANCIA;
         } else {
-            alertaBase.setNivelAlerta(LectorDatosIngresados.NivelAlerta.NORMAL.name());
+            nivel = LectorDatosIngresados.NivelAlerta.NORMAL;
         }
 
-        alertaBase.setMensaje("[SIMULACIÓN] " + generarMensajeAlerta(
-                LectorDatosIngresados.NivelAlerta.valueOf(alertaBase.getNivelAlerta()),
-                caudalSimulado,
-                alertaBase.getUmbralVigilancia()
-        ));
-        return alertaBase;
+        sim.setNivelAlerta(nivel.name());
+        sim.setMensaje(generarMensajeAlerta(nivel, caudalSimulado, uVig));
+        return sim;
     }
 
     /**
      * Registra una suscripción para recibir alertas cuando se detecte riesgo.
      */
     public SuscripcionAlerta suscribirUsuario(Long reachId, String nombreContacto, String contacto) {
-        SuscripcionAlerta suscripcion = new SuscripcionAlerta(reachId, nombreContacto, contacto);
+        String nombreFinal = (nombreContacto == null || nombreContacto.isBlank()) ? "Usuario Demo" : nombreContacto.trim();
+        String contactoFinal = (contacto == null || contacto.isBlank()) ? "usuario@demo.com" : contacto.trim();
+
+        if (!"Usuario Demo".equalsIgnoreCase(nombreFinal) && !ValidadorContacto.esNombreValido(nombreFinal)) {
+            throw new IllegalArgumentException("Nombre de contacto invalido. Debe contener letras y un formato valido.");
+        }
+        if (!"usuario@demo.com".equalsIgnoreCase(contactoFinal) && !ValidadorContacto.esContactoValido(contactoFinal)) {
+            throw new IllegalArgumentException("Contacto invalido. Debe ser un correo electronico valido o celular de Panama (8 digitos iniciando con 6, ej: 6123-4567).");
+        }
+
+        SuscripcionAlerta suscripcion = new SuscripcionAlerta(reachId, nombreFinal, contactoFinal);
         return suscripcionRepository.save(suscripcion);
     }
 
