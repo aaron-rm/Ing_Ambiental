@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.springframework.stereotype.Component;
+
 /**
  * =====================================================================================
  *  CLIENTE DE LA API DE GEOGloWS
@@ -30,6 +32,7 @@ import java.util.TreeMap;
  * tocar BASE_URL y las rutas de esta clase.
  * =====================================================================================
  */
+@Component
 public class ClienteApiGeoglows {
 
     private static final String BASE_URL = "https://geoglows.ecmwf.int/api/v2/";
@@ -151,6 +154,7 @@ public class ClienteApiGeoglows {
     public LectorDatosIngresados.UmbralAlerta obtenerUmbrales(long reachId)
             throws IOException, InterruptedException {
         Map<Integer, Double> periodos;
+        boolean usandoReferencia = false;
         try {
             periodos = obtenerPeriodosRetorno(reachId);
         } catch (IOException e) {
@@ -160,13 +164,16 @@ public class ClienteApiGeoglows {
             periodos.put(2, 15.0);
             periodos.put(5, 30.0);
             periodos.put(25, 60.0);
+            usandoReferencia = true;
         }
         LectorDatosIngresados.UmbralAlerta u = new LectorDatosIngresados.UmbralAlerta();
         u.reachId = reachId;
         u.caudalVigilancia = periodos.getOrDefault(2, 15.0);
         u.caudalAlerta = periodos.getOrDefault(5, 30.0);
         u.caudalEmergencia = periodos.getOrDefault(25, 60.0);
-        u.fuenteCalibracion = periodos.size() > 0 ? "GEOGloWS - periodos de retorno" : "Configuración de referencia (demostración)";
+        u.fuenteCalibracion = usandoReferencia
+                ? "Configuración de referencia (demostración, no oficial)"
+                : "GEOGloWS - periodos de retorno";
         u.fechaCalibracion = LocalDate.now();
         return u;
     }

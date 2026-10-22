@@ -1,5 +1,25 @@
 # Registro de Implementación (Avance 50 % — Backend y Demo GEOGLOWS)
 
+> **Actualización 22/10/2026 (refactorización de clientes):** este documento
+> conserva la historia del avance del 50 %. Sobre esa base se agregaron monitoreo
+> periódico, evaluación de lluvia, eventos persistentes, notificaciones FCM, PWA
+> de pruebas y una consola cliente de la API. En la refactorización actual:
+>
+> - `ConsolaDemoRunner` dejó de acceder a repositorios y servicios internos; usa
+>   `BackendApiClient` contra la API REST (`ALERTA_API_BASE_URL`).
+> - La consola es opcional (`ALERTA_DEMO_CONSOLA_HABILITADA`) y añade la opción
+>   `0` para enviar la notificación push de demostración.
+> - La PWA dejó de ser un panel de monitoreo; ahora es una página mínima para
+>   activar y verificar notificaciones.
+> - El frontend definitivo será construido por otro equipo desde cero y no debe
+>   basarse obligatoriamente en la PWA de pruebas.
+>
+> Las reglas de arquitectura vigentes están en
+> `docs/ARQUITECTURA.md`. El estado actual, las pruebas y los pendientes están en
+> `INFORME_ALERTAS_INUNDACION.md`. El contrato para frontend está en
+> `docs/INTEGRACION_FRONTEND.md`; la configuración operativa, en
+> `docs/CONFIGURACION_PUSH.md`.
+
 ## 1. Resumen
 Se completó la integración funcional del backend en Spring Boot para el avance del 50 % del sistema de alerta temprana de inundaciones con GEOGLOWS. 
 Se implementó un flujo completo de detección, evaluación de riesgo de caudales, simulación interactiva de inundación, persistencia en base de datos PostgreSQL y una consola interactiva lista para demostración ante docentes y compañeros, además de endpoints REST correspondientes.

@@ -2,8 +2,11 @@ package com.alerta.sistema_alerta_inundaciones.rio;
 
 import java.util.List;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,5 +29,14 @@ public class RioController {
     @GetMapping
     public List<Rio> obtenerRios() {
         return rioService.obtenerTodos();
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<?> actualizarRio(@PathVariable Long id, @RequestBody Rio rio) {
+        try {
+            return ResponseEntity.ok(rioService.actualizarRio(id, rio));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(e.getMessage());
+        }
     }
 }

@@ -9,14 +9,42 @@ Stack principal:
 
 - Backend: Java + Spring Boot
 - Base de datos: PostgreSQL
-- Frontend: React / PWA
-- Fuente de datos: GEOGLOWS API
+- Frontend definitivo: lo desarrollará otro equipo; no forma parte de este repositorio
+- PWA de pruebas: página estática mínima servida por Spring Boot, solo para verificar notificaciones
+- Fuente de datos: GEOGLOWS API + Open-Meteo (precipitación)
+- Notificaciones: Firebase Cloud Messaging (FCM)
 
 El proyecto es académico y actualmente existe una fecha de entrega cercana.
 
+> **Estado actual (22/10/2026):** el backend, el monitoreo y las notificaciones
+> push están implementados. La PWA actual es solo una herramienta mínima de
+> prueba de notificaciones; el frontend definitivo lo construirá otro equipo
+> desde cero. Antes de modificar algo, leer `docs/ARQUITECTURA.md`,
+> `docs/GUIA_PRUEBA_NOTIFICACIONES.md`,
+> `INFORME_ALERTAS_INUNDACION.md`, `docs/CONFIGURACION_PUSH.md` y
+> `docs/INTEGRACION_FRONTEND.md`.
+
+## 1.1 Directrices permanentes (resumen)
+
+El detalle está en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md). En resumen:
+
+1. El backend es independiente de la consola y del frontend.
+2. La lógica de negocio, las integraciones y la persistencia pertenecen al backend.
+3. `ConsolaDemoRunner` consume la API pública mediante `BackendApiClient`; no accede a repositorios ni replica reglas.
+4. La consola no es el lugar para implementar funcionalidades nuevas del sistema.
+5. La PWA de pruebas solo verifica notificaciones; no es el frontend definitivo.
+6. El backend debe mantener contratos HTTP claros para el frontend futuro.
+7. Las credenciales se gestionan por variables de entorno, nunca en el repositorio.
+8. Los cambios deben preservar funcionalidades, compilar y pasar las pruebas.
+9. La documentación se actualiza cuando cambian contratos, configuración o decisiones.
+
+**Alcance:** estas reglas aplican al backend y a sus clientes de apoyo. No imponen
+diseño visual, tecnología ni estructura al equipo que desarrollará el frontend
+definitivo; ese equipo solo debe respetar los contratos públicos de la API.
+
 ## 2. Objetivo actual
 
-El objetivo inmediato es dejar listo un **avance funcional equivalente aproximadamente al 50 % del proyecto**.
+El objetivo inmediato es dejar listo un **avance funcional equivalente aproximadamente al 75 % del proyecto**, con la integración de frontend preparada y documentada.
 
 La prioridad actual es:
 
@@ -189,21 +217,25 @@ No implementar todavía un sistema avanzado de observabilidad, logging distribui
 
 ---
 
-# 11. Frontend
+# 11. Frontend y PWA de pruebas
 
-El frontend NO es la prioridad principal para este avance.
+La PWA ubicada en `src/main/resources/static/` es **solo una página mínima de
+prueba de notificaciones**. No es el frontend definitivo ni una referencia
+obligatoria de diseño.
 
-No invertir una gran cantidad de tiempo en:
+- No mostrar en ella caudales, lluvia, pronósticos, mapas, riesgo, historial ni
+  paneles de monitoreo.
+- Su único objetivo es activar notificaciones y confirmar su recepción.
+- La prueba push controlada se lanza desde la consola (opción `0`) o mediante
+  `POST /api/push/demo` con `X-Admin-Token`.
 
-- diseño visual avanzado,
-- animaciones,
-- responsive perfecto,
-- componentes complejos,
-- optimización avanzada.
+El **frontend definitivo** lo desarrollará otro equipo desde cero. Es libre de
+elegir diseño, tecnología, estructura y forma de presentar los datos, siempre
+que consuma la API pública del backend y respete sus contratos. No se debe
+reutilizar la PWA mínima como base obligatoria ni extraer lógica desde
+`ConsolaDemoRunner`.
 
-Solamente crear o mantener el frontend necesario para demostrar que el backend funciona.
-
-La prioridad es que exista un flujo demostrable.
+La prioridad del backend es que exista un flujo demostrable y contratos claros.
 
 ---
 
@@ -282,8 +314,7 @@ Para este avance, prioriza:
 - Mejor manejo de errores.
 
 ### NO prioritario
-- Diseño avanzado del frontend.
-- Notificaciones push completas.
+- Construir el frontend definitivo: es responsabilidad de otro equipo.
 - Autenticación avanzada.
 - Roles complejos.
 - Analytics.
@@ -292,7 +323,7 @@ Para este avance, prioriza:
 - CI/CD.
 - Refactorizaciones grandes.
 
-Si una funcionalidad no contribuye al 50 % de avance actual, no la implementes.
+Si una funcionalidad no contribuye al avance actual, no la implementes.
 
 ---
 
@@ -369,7 +400,7 @@ En caso de duda:
 
 **SOLUCIÓN SIMPLE > ARQUITECTURA ELEGANTE**
 
-**50 % FUNCIONAL > 100 % INCOMPLETO**
+**AVANCE ACTUAL FUNCIONAL > 100 % INCOMPLETO**
 
 El objetivo es producir un avance funcional y demostrable del proyecto sin sobreingeniería ni consumo innecesario de tiempo o tokens.
 ```

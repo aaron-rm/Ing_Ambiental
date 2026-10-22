@@ -1,33 +1,38 @@
 package com.alerta.sistema_alerta_inundaciones.demo;
 
 import com.alerta.sistema_alerta_inundaciones.alerta.AlertaRioDTO;
-import com.alerta.sistema_alerta_inundaciones.alerta.AlertaService;
 import com.alerta.sistema_alerta_inundaciones.alerta.PronosticoDiaDTO;
-import com.alerta.sistema_alerta_inundaciones.alerta.SuscripcionAlerta;
 import com.alerta.sistema_alerta_inundaciones.alerta.ValidadorContacto;
-import com.alerta.sistema_alerta_inundaciones.rio.Rio;
-import com.alerta.sistema_alerta_inundaciones.rio.RioRepository;
+import com.alerta.sistema_alerta_inundaciones.push.ResultadoDemoPush;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Scanner;
 
+/**
+ * Cliente de demostracion. Consume la API REST del backend mediante
+ * {@link BackendApiClient}; no accede a repositorios ni ejecuta reglas de
+ * negocio propias.
+ */
 @Component
+@ConditionalOnProperty(name = "alerta.demo.consola.habilitada",
+        havingValue = "true", matchIfMissing = true)
 public class ConsolaDemoRunner implements CommandLineRunner {
 
-    private final AlertaService alertaService;
-    private final RioRepository rioRepository;
-    private final org.springframework.core.env.Environment environment;
+    private final BackendApiClient backend;
+    private final Environment environment;
 
     // Estado simulado en memoria para la consola (separado del estado real)
     private AlertaRioDTO ultimaSimulacion = null;
 
-    public ConsolaDemoRunner(AlertaService alertaService, RioRepository rioRepository, org.springframework.core.env.Environment environment) {
-        this.alertaService = alertaService;
-        this.rioRepository = rioRepository;
+    public ConsolaDemoRunner(BackendApiClient backend, Environment environment) {
+        this.backend = backend;
         this.environment = environment;
     }
 
@@ -45,29 +50,23 @@ public class ConsolaDemoRunner implements CommandLineRunner {
     private void iniciarConsolaInteractiva() {
         try {
             Thread.sleep(1500);
-        } catch (InterruptedException ignored) {}
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        }
 
-        List<Rio> rios = rioRepository.findAll();
-        Rio rioDemo;
-        if (rios.isEmpty()) {
-            rioDemo = new Rio("Rio Pacora (Panama)", 710039498L, 9.08, -79.28);
-            rioDemo = rioRepository.save(rioDemo);
-        } else {
-            rioDemo = rios.get(0);
-            boolean modificado = false;
-            if (rioDemo.getGeoglowsId() == null || rioDemo.getGeoglowsId() == 123456789L) {
-                rioDemo.setGeoglowsId(710039498L);
-                rioDemo.setNombre("Rio Pacora (Panama)");
-                modificado = true;
-            }
-            if (rioDemo.getLatitud() == null || rioDemo.getLatitud() == 0.0) {
-                rioDemo.setLatitud(9.08);
-                rioDemo.setLongitud(-79.28);
-                modificado = true;
-            }
-            if (modificado) {
-                rioDemo = rioRepository.save(rioDemo);
-            }
+        BackendApiClient.RioApi rioDemo;
+        try {
+            rioDemo = asegurarRioDemo();
+        } catch (BackendApiClient.ApiException e) {
+            System.out.println();
+            System.out.println("[!] No se pudo conectar con la API del backend en " + backend.getBaseUrl());
+            System.out.println("    Detalle: " + e.getMessage());
+            System.out.println("    Verifique que el servidor siga activo o ajuste ALERTA_API_BASE_URL.");
+            return;
+        } catch (Exception e) {
+            System.out.println();
+            System.out.println("[!] No se pudo preparar el rio de demostracion: " + e.getMessage());
+            return;
         }
 
         Scanner scanner = new Scanner(System.in);
@@ -77,12 +76,13 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         System.out.println("      SISTEMA DE ALERTA TEMPRANA DE INUNDACIONES");
         System.out.println("                       GEOGLOWS");
         System.out.println("============================================================");
-        System.out.println("Rio seleccionado: " + rioDemo.getNombre());
-        System.out.println("ID GEOGLOWS (reach_id): " + rioDemo.getGeoglowsId());
+        System.out.println("Rio seleccionado: " + rioDemo.nombre());
+        System.out.println("ID GEOGLOWS (reach_id): " + rioDemo.geoglowsId());
 
-        if (rioDemo.getLatitud() != null && rioDemo.getLongitud() != null
-                && (rioDemo.getLatitud() != 0.0 || rioDemo.getLongitud() != 0.0)) {
-            System.out.printf(Locale.US, "Coordenadas: Lat %.4f, Lon %.4f%n", rioDemo.getLatitud(), rioDemo.getLongitud());
+        if (rioDemo.latitud() != null && rioDemo.longitud() != null
+                && (rioDemo.latitud() != 0.0 || rioDemo.longitud() != 0.0)) {
+            System.out.printf(Locale.US, "Coordenadas: Lat %.4f, Lon %.4f%n",
+                    rioDemo.latitud(), rioDemo.longitud());
         } else {
             System.out.println("Coordenadas: No disponibles");
         }
@@ -102,9 +102,11 @@ public class ConsolaDemoRunner implements CommandLineRunner {
             if (ultimaSimulacion != null) {
                 System.out.println("  4. Consultar estado simulado");
                 System.out.println("  5. Ver suscriptores registrados");
+                System.out.println("  0. Enviar notificacion push de demostracion a todos");
                 System.out.println("  6. Salir");
             } else {
                 System.out.println("  4. Ver suscriptores registrados");
+                System.out.println("  0. Enviar notificacion push de demostracion a todos");
                 System.out.println("  5. Salir");
             }
             System.out.print("\n> ");
@@ -133,12 +135,15 @@ public class ConsolaDemoRunner implements CommandLineRunner {
                     case "5":
                         mostrarSuscripciones(rioDemo);
                         break;
+                    case "0":
+                        enviarPushDemo();
+                        break;
                     case "6":
                         System.out.println("\nCerrando interfaz de consola. El servidor backend sigue activo.");
                         continuar = false;
                         break;
                     default:
-                        System.out.println("Opcion no valida. Ingrese un numero del 1 al 6.");
+                        System.out.println("Opcion no valida. Ingrese un numero del 1 al 6, o 0 para push.");
                 }
             } else {
                 switch (input) {
@@ -154,21 +159,84 @@ public class ConsolaDemoRunner implements CommandLineRunner {
                     case "4":
                         mostrarSuscripciones(rioDemo);
                         break;
+                    case "0":
+                        enviarPushDemo();
+                        break;
                     case "5":
                         System.out.println("\nCerrando interfaz de consola. El servidor backend sigue activo.");
                         continuar = false;
                         break;
                     default:
-                        System.out.println("Opcion no valida. Ingrese un numero del 1 al 5.");
+                        System.out.println("Opcion no valida. Ingrese un numero del 1 al 5, o 0 para push.");
                 }
             }
         }
     }
 
-    private void mostrarPronosticoReal(Rio rio) {
+    /**
+     * Reutiliza el rio inicial del backend o lo crea mediante la API publica.
+     * Conserva el comportamiento de la consola anterior sin tocar la BD.
+     */
+    private BackendApiClient.RioApi asegurarRioDemo() {
+        List<BackendApiClient.RioApi> rios = null;
+        Exception ultimoError = null;
+        for (int intento = 0; intento < 10; intento++) {
+            try {
+                rios = backend.listarRios();
+                ultimoError = null;
+                break;
+            } catch (BackendApiClient.ApiException e) {
+                ultimoError = e;
+                if (e.getEstado() > 0) {
+                    throw e;
+                }
+            } catch (Exception e) {
+                ultimoError = e;
+            }
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        if (ultimoError != null) {
+            throw new IllegalStateException(ultimoError.getMessage(), ultimoError);
+        }
+        if (rios == null || rios.isEmpty()) {
+            return backend.crearRio("Rio Pacora (Panama)", 710039498L, 9.08, -79.28);
+        }
+
+        BackendApiClient.RioApi rioDemo = rios.get(0);
+        boolean modificado = false;
+        Long reachId = rioDemo.geoglowsId();
+        String nombre = rioDemo.nombre();
+        Double latitud = rioDemo.latitud();
+        Double longitud = rioDemo.longitud();
+
+        if (reachId == null || reachId == 123456789L) {
+            reachId = 710039498L;
+            nombre = "Rio Pacora (Panama)";
+            modificado = true;
+        }
+        if (latitud == null || latitud == 0.0) {
+            latitud = 9.08;
+            longitud = -79.28;
+            modificado = true;
+        }
+        if (modificado) {
+            rioDemo = backend.actualizarRio(new BackendApiClient.RioApi(
+                    rioDemo.id(), nombre, reachId, latitud, longitud));
+        }
+        return rioDemo;
+    }
+
+    private void mostrarPronosticoReal(BackendApiClient.RioApi rio) {
         System.out.println("\n[1/3] Consultando datos de GEOGLOWS API v2...");
         try {
-            AlertaRioDTO alerta = alertaService.consultarAlertaTramo(rio.getGeoglowsId(), rio.getNombre());
+            AlertaRioDTO alerta = rio.id() != null
+                    ? backend.consultarEstadoPorRio(rio.id())
+                    : backend.consultarEstado(rio.geoglowsId());
 
             System.out.println("[2/3] Procesando pronostico extendido...");
             Thread.sleep(300);
@@ -201,12 +269,43 @@ public class ConsolaDemoRunner implements CommandLineRunner {
             } else {
                 System.out.println("No se recibieron series temporales detalladas.");
             }
+
+            mostrarPrecipitacion(alerta);
         } catch (Exception e) {
-            System.out.println("Error al comunicarse con GEOGLOWS: " + e.getMessage());
+            System.out.println("Error al consultar el backend: " + e.getMessage());
         }
     }
 
-    private void registrarSuscripcion(Scanner scanner, Rio rio) {
+    private void mostrarPrecipitacion(AlertaRioDTO alerta) {
+        System.out.println("\n--- PRECIPITACION (Open-Meteo) ---");
+        if (alerta.getLluvia24hMm() == null
+                && alerta.getLluvia72hMm() == null
+                && alerta.getMaxLluviaHorariaMm() == null) {
+            System.out.println("Sin datos de precipitacion disponibles.");
+            return;
+        }
+        if (alerta.getLluvia24hMm() != null) {
+            System.out.printf(Locale.US, "Lluvia acumulada 24 h:  %.2f mm%n", alerta.getLluvia24hMm());
+        }
+        if (alerta.getLluvia72hMm() != null) {
+            System.out.printf(Locale.US, "Lluvia acumulada 72 h:  %.2f mm%n", alerta.getLluvia72hMm());
+        }
+        if (alerta.getMaxLluviaHorariaMm() != null) {
+            System.out.printf(Locale.US, "Lluvia maxima horaria:  %.2f mm%n", alerta.getMaxLluviaHorariaMm());
+        }
+        if (alerta.getNivelRiesgoLluvia() != null) {
+            System.out.println("Nivel de riesgo por lluvia: " + alerta.getNivelRiesgoLluvia());
+        }
+        if (alerta.getFuentePrecipitacion() != null) {
+            System.out.println("Fuente: " + alerta.getFuentePrecipitacion());
+        }
+        if (alerta.getFechaActualizacionPrecipitacion() != null) {
+            System.out.println("Actualizada: " + formatearFecha(alerta.getFechaActualizacionPrecipitacion()));
+        }
+        System.out.println("Aviso: los umbrales de lluvia son experimentales y no oficiales.");
+    }
+
+    private void registrarSuscripcion(Scanner scanner, BackendApiClient.RioApi rio) {
         System.out.println("\n--- REGISTRO DE SUSCRIPCION PARA ALERTAS ---");
 
         String nombre;
@@ -238,19 +337,19 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         }
 
         try {
-            SuscripcionAlerta s = alertaService.suscribirUsuario(rio.getGeoglowsId(), nombre, contacto);
+            BackendApiClient.SuscripcionApi s = backend.suscribir(rio.geoglowsId(), nombre, contacto);
             System.out.println("\n[OK] Suscripcion registrada en base de datos PostgreSQL.");
-            System.out.println("  ID Registro: " + s.getId());
-            System.out.println("  Nombre:      " + s.getNombreContacto());
-            System.out.println("  Contacto:    " + s.getContacto());
-            System.out.println("  Tramo:       " + s.getReachId());
+            System.out.println("  ID Registro: " + s.id());
+            System.out.println("  Nombre:      " + s.nombreContacto());
+            System.out.println("  Contacto:    " + s.contacto());
+            System.out.println("  Tramo:       " + s.reachId());
             System.out.println("  Se notificara a este contacto si se detecta riesgo o peligro de inundacion.");
         } catch (Exception e) {
             System.out.println("[!] Error al registrar suscripcion: " + e.getMessage());
         }
     }
 
-    private void ejecutarSimulacion(Scanner scanner, Rio rio) {
+    private void ejecutarSimulacion(Scanner scanner, BackendApiClient.RioApi rio) {
         System.out.println("\n============================================================");
         System.out.println("                 SIMULACION DE INUNDACION");
         System.out.println("============================================================");
@@ -268,7 +367,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         }
 
         try {
-            AlertaRioDTO sim = alertaService.simularInundacion(rio.getGeoglowsId(), caudal);
+            AlertaRioDTO sim = backend.simular(rio.geoglowsId(), caudal);
             this.ultimaSimulacion = sim;
 
             System.out.println("\n--- RESULTADO DE LA SIMULACION ---");
@@ -276,18 +375,26 @@ public class ConsolaDemoRunner implements CommandLineRunner {
             String estadoFormateado = formatearEstado(sim.getNivelAlerta());
             System.out.println("Estado resultante: " + estadoFormateado);
 
-            boolean requiereNotificacion = "ALERTA".equalsIgnoreCase(sim.getNivelAlerta()) ||
-                                           "EMERGENCIA".equalsIgnoreCase(sim.getNivelAlerta());
+            boolean requiereNotificacion = "ALERTA".equalsIgnoreCase(sim.getNivelAlerta())
+                    || "EMERGENCIA".equalsIgnoreCase(sim.getNivelAlerta());
 
             if (requiereNotificacion) {
                 System.out.println("\n[ALERTA] Se ha detectado un caudal por encima del nivel de riesgo.");
-                List<SuscripcionAlerta> subs = alertaService.obtenerSuscripcionesPorTramo(rio.getGeoglowsId());
+                List<BackendApiClient.SuscripcionApi> subs = List.of();
+                String errorContactos = null;
+                try {
+                    subs = backend.listarSuscripciones(rio.geoglowsId());
+                } catch (Exception e) {
+                    errorContactos = e.getMessage();
+                }
                 System.out.println("\nNOTIFICACIONES A CONTACTOS REGISTRADOS (" + subs.size() + "):");
-                if (subs.isEmpty()) {
+                if (errorContactos != null) {
+                    System.out.println("  (No se pudo obtener la lista: " + errorContactos + ")");
+                } else if (subs.isEmpty()) {
                     System.out.println("  (No hay contactos suscritos aun. Use la opcion 2 para registrarse)");
                 } else {
-                    for (SuscripcionAlerta s : subs) {
-                        System.out.printf("  - Notificacion enviada a: %s (%s)%n", s.getNombreContacto(), s.getContacto());
+                    for (BackendApiClient.SuscripcionApi s : subs) {
+                        System.out.printf("  - Notificacion enviada a: %s (%s)%n", s.nombreContacto(), s.contacto());
                     }
                 }
             } else if ("VIGILANCIA".equalsIgnoreCase(sim.getNivelAlerta())) {
@@ -301,7 +408,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         }
     }
 
-    private void mostrarEstadoSimulado(Rio rio) {
+    private void mostrarEstadoSimulado(BackendApiClient.RioApi rio) {
         if (ultimaSimulacion == null) {
             System.out.println("\nNo hay una simulacion activa en este momento.");
             return;
@@ -310,7 +417,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         System.out.println("\n============================================================");
         System.out.println("                    ESTADO SIMULADO");
         System.out.println("============================================================");
-        System.out.println("Rio: " + rio.getNombre());
+        System.out.println("Rio: " + rio.nombre());
         System.out.printf(Locale.US, "Caudal simulado: %.2f m3/s%n", ultimaSimulacion.getCaudalMaximoPronosticado());
         String estado = formatearEstado(ultimaSimulacion.getNivelAlerta());
         System.out.println("Estado: " + estado);
@@ -327,16 +434,57 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         System.out.println("------------------------------------------------------------");
     }
 
-    private void mostrarSuscripciones(Rio rio) {
+    private void mostrarSuscripciones(BackendApiClient.RioApi rio) {
         System.out.println("\n--- SUSCRIPTORES ACTIVOS EN BASE DE DATOS ---");
-        List<SuscripcionAlerta> subs = alertaService.obtenerSuscripcionesPorTramo(rio.getGeoglowsId());
-        if (subs.isEmpty()) {
-            System.out.println("No hay suscriptores registrados aun.");
-        } else {
-            for (SuscripcionAlerta s : subs) {
-                System.out.printf("  #%d | %s | %s | Tramo: %d | Registrado: %s%n",
-                        s.getId(), s.getNombreContacto(), s.getContacto(), s.getReachId(), s.getFechaRegistro());
+        try {
+            List<BackendApiClient.SuscripcionApi> subs = backend.listarSuscripciones(rio.geoglowsId());
+            if (subs.isEmpty()) {
+                System.out.println("No hay suscriptores registrados aun.");
+            } else {
+                for (BackendApiClient.SuscripcionApi s : subs) {
+                    System.out.printf("  #%d | %s | %s | Tramo: %d | Registrado: %s%n",
+                            s.id(), s.nombreContacto(), s.contacto(), s.reachId(), s.fechaRegistro());
+                }
             }
+        } catch (BackendApiClient.ApiException e) {
+            System.out.println("[!] No se pudo consultar la lista: " + e.getMessage());
+            if (e.getEstado() == 403) {
+                System.out.println("    Configure ALERTA_ADMIN_TOKEN para acceder a este endpoint administrativo.");
+            }
+        } catch (Exception e) {
+            System.out.println("[!] No se pudo consultar la lista: " + e.getMessage());
+        }
+    }
+
+    private void enviarPushDemo() {
+        System.out.println("\n--- NOTIFICACION PUSH DE DEMOSTRACION ---");
+        if (!backend.tieneTokenAdmin()) {
+            System.out.println("[!] Configure ALERTA_ADMIN_TOKEN en el entorno del backend.");
+            System.out.println("    El endpoint /api/push/demo esta protegido con X-Admin-Token.");
+            return;
+        }
+        try {
+            ResultadoDemoPush resultado = backend.enviarDemoPush();
+            System.out.println("Dispositivos activos: " + resultado.dispositivos());
+            System.out.println("Enviados:             " + resultado.enviados());
+            System.out.println("Fallidos:             " + resultado.fallidos());
+            if (resultado.dispositivos() == 0) {
+                System.out.println("\nNo hay dispositivos suscritos.");
+                System.out.println("Abra la PWA de prueba en el PC o celular y pulse 'Activar notificaciones'.");
+            } else {
+                System.out.println("\nLa notificacion debe aparecer en los dispositivos suscritos.");
+            }
+        } catch (BackendApiClient.ApiException e) {
+            if (e.getEstado() == 403) {
+                System.out.println("[!] Token administrativo rechazado o no configurado.");
+                System.out.println("    Defina ALERTA_ADMIN_TOKEN con el mismo valor usado por el backend.");
+            } else if (e.getEstado() == 409) {
+                System.out.println("[!] " + e.getMessage());
+            } else {
+                System.out.println("[!] No se pudo enviar la demostracion: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            System.out.println("[!] No se pudo enviar la demostracion: " + e.getMessage());
         }
     }
 
@@ -350,5 +498,11 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         } else {
             return "NORMAL";
         }
+    }
+
+    private String formatearFecha(java.time.Instant fecha) {
+        return DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
+                .withZone(ZoneId.systemDefault())
+                .format(fecha);
     }
 }

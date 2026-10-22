@@ -206,7 +206,15 @@ public class LectorDatosIngresados {
     // ALMACENAMIENTO / LECTURA DE DATOS
     // =================================================================================
 
-    public final ClienteApiGeoglows geoglows = new ClienteApiGeoglows();
+    public final ClienteApiGeoglows geoglows;
+
+    public LectorDatosIngresados() {
+        this(new ClienteApiGeoglows());
+    }
+
+    public LectorDatosIngresados(ClienteApiGeoglows geoglows) {
+        this.geoglows = geoglows;
+    }
 
     // Datos que sí llegan (parcial o totalmente) desde GEOGloWS
     public final Map<Long, TramoRio> tramos = new LinkedHashMap<>();

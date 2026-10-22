@@ -19,4 +19,14 @@ public class RioService {
     public List<Rio> obtenerTodos() {
         return rioRepository.findAll();
     }
+
+    public Rio actualizarRio(Long id, Rio datos) {
+        Rio existente = rioRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("No existe un rio con el ID " + id + "."));
+        existente.setNombre(datos.getNombre());
+        existente.setGeoglowsId(datos.getGeoglowsId());
+        existente.setLatitud(datos.getLatitud());
+        existente.setLongitud(datos.getLongitud());
+        return rioRepository.save(existente);
+    }
 }

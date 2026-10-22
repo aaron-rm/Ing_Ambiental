@@ -35,4 +35,11 @@ build/
 ### App data ###
 /data/
 
+### Credenciales locales de demostracion ###
+.env.demo
+
+### Credenciales de Firebase ###
+*firebase-adminsdk*.json
+service-account*.json
+
 ### Others ###

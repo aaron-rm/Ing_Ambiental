@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0f766e">
+    <meta name="description" content="Página de prueba para verificar la recepción de notificaciones push del sistema de alertas.">
+    <title>Prueba de notificaciones</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <main class="card" aria-labelledby="titulo">
+        <div class="brand" aria-hidden="true">
+            <svg viewBox="0 0 24 24" role="img" focusable="false">
+                <path d="M12 3a6 6 0 0 0-6 6v3.2l-1.6 3.1A1 1 0 0 0 5.3 17h13.4a1 1 0 0 0 .9-1.7L18 12.2V9a6 6 0 0 0-6-6Z"
+                      fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+                <path d="M9.5 20a2.8 2.8 0 0 0 5 0" fill="none" stroke="currentColor"
+                      stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+        </div>
+
+        <p class="eyebrow">Sistema de alertas</p>
+        <h1 id="titulo">Prueba de notificaciones</h1>
+        <p class="lead">
+            Activa las notificaciones en este dispositivo para comprobar que puedes recibir
+            los avisos del sistema. Esta página solo se usa para verificar el canal de
+            notificaciones.
+        </p>
+
+        <div id="estado" class="status" role="status" aria-live="polite">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="estadoTexto">Comprobando…</span>
+        </div>
+
+        <button id="activarBoton" class="button" type="button" disabled>
+            Activar notificaciones
+        </button>
+
+        <p id="mensaje" class="message" role="status" aria-live="polite" hidden></p>
+
+        <p class="footnote">
+            Android: usa Chrome. iPhone/iPad: requiere iOS 16.4 o superior y agregar esta
+            página a la pantalla de inicio.
+        </p>
+    </main>
+
+    <script src="/app.js" defer></script>
+</body>
+</html>
