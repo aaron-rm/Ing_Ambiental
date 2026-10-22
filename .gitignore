@@ -36,10 +36,24 @@ build/
 /data/
 
 ### Credenciales locales de demostracion ###
+.env
+.env.*
+!.env.example
+!.env.demo.example
 .env.demo
+application-local.properties
+application-*.local.properties
 
-### Credenciales de Firebase ###
+### Credenciales de Firebase y certificados ###
 *firebase-adminsdk*.json
+firebase-credentials*.json
 service-account*.json
+credentials*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
 
 ### Others ###
