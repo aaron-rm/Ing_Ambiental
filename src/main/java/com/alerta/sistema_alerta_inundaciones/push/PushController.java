@@ -1,8 +1,11 @@
 package com.alerta.sistema_alerta_inundaciones.push;
 
+import com.alerta.sistema_alerta_inundaciones.usuario.Usuario;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
@@ -28,9 +31,13 @@ public class PushController {
     }
 
     @PostMapping("/registrar")
-    public ResponseEntity<?> registrar(@Valid @RequestBody RegistroPushRequest solicitud) {
+    public ResponseEntity<?> registrar(@AuthenticationPrincipal Usuario usuario,
+                                       @Valid @RequestBody RegistroPushRequest solicitud) {
+        if (usuario == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         try {
-            return ResponseEntity.ok(pushService.registrar(solicitud));
+            return ResponseEntity.ok(pushService.registrar(usuario, solicitud));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (IllegalStateException e) {
@@ -39,9 +46,13 @@ public class PushController {
     }
 
     @DeleteMapping("/registrar")
-    public ResponseEntity<?> desactivar(@Valid @RequestBody PruebaPushRequest solicitud) {
+    public ResponseEntity<?> desactivar(@AuthenticationPrincipal Usuario usuario,
+                                        @Valid @RequestBody PruebaPushRequest solicitud) {
+        if (usuario == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         try {
-            pushService.desactivar(solicitud.getToken().trim(), solicitud.getDeviceId().trim());
+            pushService.desactivar(usuario, solicitud.getToken().trim(), solicitud.getDeviceId().trim());
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
@@ -50,27 +61,14 @@ public class PushController {
         }
     }
 
-    /**
-     * Envía una alerta de simulacro a todos los dispositivos activos. Requiere
-     * token administrativo para evitar que cualquiera dispare notificaciones.
-     */
-    @PostMapping("/demo")
-    public ResponseEntity<?> enviarDemo(@RequestHeader(value = "X-Admin-Token", required = false) String token) {
-        if (!adminAutorizado(token)) {
-            return ResponseEntity.status(403).body(
-                    "Acceso restringido. Configure ALERTA_ADMIN_TOKEN y envíelo en X-Admin-Token.");
-        }
-        try {
-            return ResponseEntity.ok(pushService.enviarDemoATodos());
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(409).body(e.getMessage());
-        }
-    }
-
     @PostMapping("/prueba")
-    public ResponseEntity<?> enviarPrueba(@Valid @RequestBody PruebaPushRequest solicitud) {
+    public ResponseEntity<?> enviarPrueba(@AuthenticationPrincipal Usuario usuario,
+                                          @Valid @RequestBody PruebaPushRequest solicitud) {
+        if (usuario == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         try {
-            ResultadoEnvioPush resultado = pushService.enviarPrueba(solicitud);
+            ResultadoEnvioPush resultado = pushService.enviarPrueba(usuario, solicitud);
             if (resultado.exito()) {
                 return ResponseEntity.ok(resultado);
             }
@@ -82,6 +80,24 @@ public class PushController {
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (LimitePruebaExcedidoException e) {
             return ResponseEntity.status(429).body(e.getMessage());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(409).body(e.getMessage());
+        }
+    }
+
+    /**
+     * Compatibilidad temporal con la consola antigua. Se retirará cuando la
+     * consola termine de migrar a JWT; el frontend debe usar
+     * {@code POST /api/admin/push/demo}.
+     */
+    @PostMapping("/demo")
+    public ResponseEntity<?> enviarDemo(@RequestHeader(value = "X-Admin-Token", required = false) String token) {
+        if (!adminAutorizado(token)) {
+            return ResponseEntity.status(403).body(
+                    "Acceso restringido. Configure ALERTA_ADMIN_TOKEN y envíelo en X-Admin-Token.");
+        }
+        try {
+            return ResponseEntity.ok(pushService.enviarDemoATodos());
         } catch (IllegalStateException e) {
             return ResponseEntity.status(409).body(e.getMessage());
         }

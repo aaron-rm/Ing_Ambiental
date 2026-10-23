@@ -4,10 +4,12 @@ import com.alerta.sistema_alerta_inundaciones.alerta.AlertaEvento;
 import com.alerta.sistema_alerta_inundaciones.alerta.AlertaEventoRepository;
 import com.alerta.sistema_alerta_inundaciones.alerta.EstadoEnvio;
 import com.alerta.sistema_alerta_inundaciones.config.PropiedadesFirebase;
+import com.alerta.sistema_alerta_inundaciones.rio.Rio;
 import com.alerta.sistema_alerta_inundaciones.rio.RioRepository;
+import com.alerta.sistema_alerta_inundaciones.usuario.Usuario;
+import com.alerta.sistema_alerta_inundaciones.usuario.UsuarioRioRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +17,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -22,27 +25,28 @@ public class PushService {
 
     private static final Logger log = LoggerFactory.getLogger(PushService.class);
     private static final Duration ESPERA_PRUEBA = Duration.ofSeconds(60);
+    private static final long REACH_ID_HEREDADO = 0L;
 
     private final DispositivoPushRepository dispositivoRepository;
     private final RioRepository rioRepository;
+    private final UsuarioRioRepository seleccionRepository;
     private final AlertaEventoRepository eventoRepository;
     private final PushSender pushSender;
     private final PropiedadesFirebase propiedadesFirebase;
-    private final Long reachIdPredeterminado;
     private final Map<String, Instant> ultimaPruebaPorToken = new ConcurrentHashMap<>();
 
     public PushService(DispositivoPushRepository dispositivoRepository,
                        RioRepository rioRepository,
+                       UsuarioRioRepository seleccionRepository,
                        AlertaEventoRepository eventoRepository,
                        PushSender pushSender,
-                       PropiedadesFirebase propiedadesFirebase,
-                       @Value("${alerta.demo.reach-id-inicial:710039498}") Long reachIdPredeterminado) {
+                       PropiedadesFirebase propiedadesFirebase) {
         this.dispositivoRepository = dispositivoRepository;
         this.rioRepository = rioRepository;
+        this.seleccionRepository = seleccionRepository;
         this.eventoRepository = eventoRepository;
         this.pushSender = pushSender;
         this.propiedadesFirebase = propiedadesFirebase;
-        this.reachIdPredeterminado = reachIdPredeterminado;
     }
 
     public ConfigPushDTO configuracion() {
@@ -70,20 +74,14 @@ public class PushService {
                 publica.getProjectId(),
                 publica.getMessagingSenderId(),
                 publica.getAppId(),
-                publica.getVapidKey(),
-                reachIdPredeterminado
+                publica.getVapidKey()
         );
     }
 
     @Transactional
-    public RegistroPushResponse registrar(RegistroPushRequest solicitud) {
+    public RegistroPushResponse registrar(Usuario usuario, RegistroPushRequest solicitud) {
         String token = solicitud.getToken().trim();
         String deviceId = solicitud.getDeviceId().trim();
-
-        if (rioRepository.findFirstByGeoglowsId(solicitud.getReachId()).isEmpty()) {
-            throw new IllegalArgumentException(
-                    "No hay un río configurado con el reachId " + solicitud.getReachId() + ".");
-        }
 
         var existente = dispositivoRepository.findByToken(token);
         if (existente.isPresent()) {
@@ -91,11 +89,12 @@ public class PushService {
             if (!deviceId.equals(dispositivo.getDeviceId())) {
                 throw new IllegalStateException("El token FCM ya está asociado a otro dispositivo.");
             }
-            dispositivo.setReachId(solicitud.getReachId());
+            dispositivo.setUsuario(usuario);
+            dispositivo.setReachId(REACH_ID_HEREDADO);
             dispositivo.setPlataforma(limpiarPlataforma(solicitud.getPlataforma()));
             dispositivo.setActivo(true);
             dispositivoRepository.save(dispositivo);
-            return respuesta(dispositivo, "Suscripción actualizada.");
+            return respuesta(dispositivo, "Dispositivo actualizado y asociado a tu cuenta.");
         }
 
         // Si la misma instalación obtiene un token nuevo (rotación), el anterior
@@ -108,30 +107,40 @@ public class PushService {
         DispositivoPush dispositivo = new DispositivoPush();
         dispositivo.setToken(token);
         dispositivo.setDeviceId(deviceId);
-        dispositivo.setReachId(solicitud.getReachId());
+        dispositivo.setUsuario(usuario);
+        dispositivo.setReachId(REACH_ID_HEREDADO);
         dispositivo.setPlataforma(limpiarPlataforma(solicitud.getPlataforma()));
         dispositivo.setActivo(true);
         dispositivoRepository.save(dispositivo);
-        return respuesta(dispositivo, "Dispositivo registrado para recibir alertas de este tramo.");
+        return respuesta(dispositivo, "Dispositivo registrado para recibir alertas de tus ríos.");
     }
 
     @Transactional
-    public void desactivar(String token, String deviceId) {
+    public void desactivar(Usuario usuario, String token, String deviceId) {
         DispositivoPush dispositivo = dispositivoRepository.findByToken(token)
                 .orElseThrow(() -> new IllegalArgumentException("No existe una suscripción con ese token."));
         if (!dispositivo.getDeviceId().equals(deviceId)) {
             throw new IllegalStateException("El token no pertenece al dispositivo indicado.");
         }
+        if (dispositivo.getUsuario() != null
+                && !dispositivo.getUsuario().getId().equals(usuario.getId())) {
+            throw new IllegalStateException("El token no pertenece al usuario autenticado.");
+        }
         dispositivo.setActivo(false);
         dispositivoRepository.save(dispositivo);
-        log.info("Suscripción push desactivada para el tramo {}", dispositivo.getReachId());
+        log.info("Suscripción push desactivada para el usuario {}.", usuario.getIdentificador());
     }
 
-    public ResultadoEnvioPush enviarPrueba(PruebaPushRequest solicitud) {
+    @Transactional
+    public ResultadoEnvioPush enviarPrueba(Usuario usuario, PruebaPushRequest solicitud) {
         DispositivoPush dispositivo = dispositivoRepository.findByToken(solicitud.getToken().trim())
                 .orElseThrow(() -> new IllegalArgumentException("No hay un dispositivo registrado con ese token."));
         if (!dispositivo.getDeviceId().equals(solicitud.getDeviceId().trim())) {
             throw new IllegalStateException("El token no pertenece al dispositivo indicado.");
+        }
+        if (dispositivo.getUsuario() != null
+                && !dispositivo.getUsuario().getId().equals(usuario.getId())) {
+            throw new IllegalStateException("El token no pertenece al usuario autenticado.");
         }
         if (!dispositivo.isActivo()) {
             throw new IllegalStateException("La suscripción está inactiva. Vuelva a activar las notificaciones.");
@@ -223,19 +232,19 @@ public class PushService {
     }
 
     /**
-     * Envía la notificación de un evento. Los errores se registran en el evento
+     * Envía la notificación de un evento solo a los dispositivos activos de los
+     * usuarios que siguen el río afectado. Los errores se registran en el evento
      * y nunca se propagan al ciclo de monitoreo.
      */
     public void enviarParaEvento(AlertaEvento evento) {
-        List<DispositivoPush> dispositivos = dispositivoRepository
-                .findByReachIdAndActivoTrue(evento.getReachId());
+        List<DispositivoPush> dispositivos = dispositivosQueSiguen(evento.getReachId());
 
         if (dispositivos.isEmpty()) {
             evento.setEstadoEnvio(EstadoEnvio.SIN_DISPOSITIVOS);
             evento.setDispositivosObjetivo(0);
             evento.setFechaIntentoEnvio(Instant.now());
             eventoRepository.save(evento);
-            log.info("Alerta {} del tramo {} sin dispositivos push activos.",
+            log.info("Alerta {} del tramo {} sin usuarios seguidores con push activo.",
                     evento.getId(), evento.getReachId());
             return;
         }
@@ -306,10 +315,23 @@ public class PushService {
         }
     }
 
+    private List<DispositivoPush> dispositivosQueSiguen(Long reachId) {
+        Optional<Rio> rio = rioRepository.findFirstByGeoglowsId(reachId);
+        if (rio.isEmpty()) {
+            return List.of();
+        }
+        List<Long> usuarioIds = seleccionRepository.findUsuarioIdsByRioId(rio.get().getId()).stream()
+                .distinct()
+                .toList();
+        if (usuarioIds.isEmpty()) {
+            return List.of();
+        }
+        return dispositivoRepository.findByUsuarioIdInAndActivoTrue(usuarioIds);
+    }
+
     private static RegistroPushResponse respuesta(DispositivoPush dispositivo, String mensaje) {
         return new RegistroPushResponse(
                 dispositivo.getId(),
-                dispositivo.getReachId(),
                 dispositivo.isActivo(),
                 mensaje,
                 dispositivo.getFechaActualizacion()

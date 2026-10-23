@@ -1,18 +1,19 @@
 package com.alerta.sistema_alerta_inundaciones.push;
 
+import com.alerta.sistema_alerta_inundaciones.usuario.Usuario;
 import jakarta.persistence.*;
 
 import java.time.Instant;
 
 /**
- * Token de registro FCM asociado a una instalación (deviceId) y a un tramo.
+ * Token de registro FCM asociado a una instalación (deviceId) y a un usuario.
  * No se expone en las respuestas de la API.
  */
 @Entity
 @Table(name = "dispositivos_push",
         uniqueConstraints = @UniqueConstraint(name = "uk_dispositivo_push_token", columnNames = "token"),
         indexes = {
-                @Index(name = "idx_dispositivo_push_reach", columnList = "reach_id,activo"),
+                @Index(name = "idx_dispositivo_push_usuario", columnList = "usuario_id,activo"),
                 @Index(name = "idx_dispositivo_push_device", columnList = "device_id")
         })
 public class DispositivoPush {
@@ -27,8 +28,16 @@ public class DispositivoPush {
     @Column(name = "device_id", nullable = false, length = 64)
     private String deviceId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    private Usuario usuario;
+
+    /**
+     * Columna heredada de la versión anterior. Ya no define el enrutamiento del
+     * push; se conserva con valor 0 para no romper bases de datos existentes.
+     */
     @Column(name = "reach_id", nullable = false)
-    private Long reachId;
+    private Long reachId = 0L;
 
     @Column(length = 30)
     private String plataforma;
@@ -78,6 +87,14 @@ public class DispositivoPush {
 
     public void setDeviceId(String deviceId) {
         this.deviceId = deviceId;
+    }
+
+    public Usuario getUsuario() {
+        return usuario;
+    }
+
+    public void setUsuario(Usuario usuario) {
+        this.usuario = usuario;
     }
 
     public Long getReachId() {

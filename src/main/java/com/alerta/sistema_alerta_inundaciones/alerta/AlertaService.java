@@ -55,12 +55,14 @@ public class AlertaService {
     public AlertaRioDTO consultarAlertaTramo(long reachId, String nombreRio)
             throws IOException, InterruptedException {
         Optional<Rio> rio = rioRepository.findFirstByGeoglowsId(reachId);
-        return consultarInterno(
+        AlertaRioDTO dto = consultarInterno(
                 reachId,
                 nombreRio != null ? nombreRio : rio.map(Rio::getNombre).orElse("Tramo " + reachId),
                 rio.map(Rio::getLatitud).orElse(null),
                 rio.map(Rio::getLongitud).orElse(null)
         );
+        rio.ifPresent(value -> dto.setRioId(value.getId()));
+        return dto;
     }
 
     /** Consulta la alerta utilizando el id de un Río guardado en PostgreSQL. */
@@ -70,7 +72,9 @@ public class AlertaService {
         if (rio.getGeoglowsId() == null) {
             throw new IllegalArgumentException("El río no tiene un reachId de GEOGloWS configurado.");
         }
-        return consultarInterno(rio.getGeoglowsId(), rio.getNombre(), rio.getLatitud(), rio.getLongitud());
+        AlertaRioDTO dto = consultarInterno(rio.getGeoglowsId(), rio.getNombre(), rio.getLatitud(), rio.getLongitud());
+        dto.setRioId(rioId);
+        return dto;
     }
 
     private AlertaRioDTO consultarInterno(long reachId, String nombreRio, Double latitud, Double longitud)
@@ -108,7 +112,7 @@ public class AlertaService {
         dto.setLluvia72hMm(evaluacion.lluvia72hMm());
         dto.setFactoresRiesgo(evaluacion.factores());
         dto.setAdvertencias(evaluacion.advertencias());
-        dto.setRecomendaciones(List.of());
+        dto.setRecomendaciones(recomendaciones(evaluacion));
         dto.setSimulacion(false);
 
         if (datos.precipitacion() != null && datos.precipitacion().disponible()) {
@@ -148,6 +152,38 @@ public class AlertaService {
         }
         dto.setPronosticoDiario(dias);
         return dto;
+    }
+
+    private List<String> recomendaciones(EvaluacionRiesgo evaluacion) {
+        List<String> recomendaciones = new ArrayList<>(recomendacionesPorNivel(evaluacion.nivel()));
+        if (evaluacion.nivelLluvia().ordinal() > evaluacion.nivelCaudal().ordinal()) {
+            recomendaciones.add("El riesgo proviene principalmente de la lluvia pronosticada: "
+                    + "aunque el caudal todavía sea bajo, pueden ocurrir crecidas repentinas.");
+        }
+        if (!evaluacion.confiable()) {
+            recomendaciones.add("Los datos no son completamente confiables; toma esta estimación "
+                    + "como orientativa y consulta los avisos oficiales.");
+        }
+        return List.copyOf(recomendaciones);
+    }
+
+    private List<String> recomendacionesPorNivel(LectorDatosIngresados.NivelAlerta nivel) {
+        return switch (nivel) {
+            case EMERGENCIA -> List.of(
+                    "Aléjate de la ribera y de las zonas bajas o inundables.",
+                    "Busca un lugar alto y sigue las indicaciones de SINAPROC y de las autoridades locales.",
+                    "No intentes cruzar calles, puentes ni cauces con agua.");
+            case ALERTA -> List.of(
+                    "Evita acercarte al cauce y a las zonas propensas a inundación.",
+                    "Prepara un plan de salida y mantente atento a los avisos oficiales.",
+                    "No dejes objetos ni vehículos en zonas bajas.");
+            case VIGILANCIA -> List.of(
+                    "Mantente atento a la evolución del río y a los avisos oficiales.",
+                    "Revisa que tu familia y tus vecinos conozcan una ruta de evacuación.");
+            case NORMAL -> List.of(
+                    "No se requiere una acción inmediata.",
+                    "Mantente informado por los canales oficiales.");
+        };
     }
 
     /**
@@ -203,7 +239,7 @@ public class AlertaService {
         sim.setAdvertencias(List.of(
                 "Esta simulación no representa una condición real y no envía notificaciones push."
         ));
-        sim.setRecomendaciones(List.of());
+        sim.setRecomendaciones(recomendacionesPorNivel(nivel));
         return sim;
     }
 

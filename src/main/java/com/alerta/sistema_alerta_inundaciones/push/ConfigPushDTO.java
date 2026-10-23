@@ -9,7 +9,6 @@ public record ConfigPushDTO(
         String projectId,
         String messagingSenderId,
         String appId,
-        String vapidKey,
-        Long reachId
+        String vapidKey
 ) {
 }

@@ -6,6 +6,7 @@ import java.util.List;
 public class AlertaRioDTO {
 
     private Long reachId;
+    private Long rioId;
     private String nombreRio;
     private String nivelAlerta; // NORMAL, VIGILANCIA, ALERTA, EMERGENCIA
     private double caudalActualOInicial;
@@ -102,6 +103,14 @@ public class AlertaRioDTO {
 
     public void setReachId(Long reachId) {
         this.reachId = reachId;
+    }
+
+    public Long getRioId() {
+        return rioId;
+    }
+
+    public void setRioId(Long rioId) {
+        this.rioId = rioId;
     }
 
     public String getNombreRio() {

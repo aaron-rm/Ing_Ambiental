@@ -1,9 +1,7 @@
 package com.alerta.sistema_alerta_inundaciones.push;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 public class RegistroPushRequest {
@@ -16,10 +14,6 @@ public class RegistroPushRequest {
     @NotBlank(message = "El identificador del dispositivo es obligatorio.")
     @Pattern(regexp = "^[A-Za-z0-9-]{8,64}$", message = "El identificador del dispositivo es inválido.")
     private String deviceId;
-
-    @NotNull(message = "El tramo es obligatorio.")
-    @Positive(message = "El tramo debe ser un identificador positivo.")
-    private Long reachId;
 
     @Size(max = 30, message = "La plataforma es demasiado larga.")
     private String plataforma;
@@ -38,14 +32,6 @@ public class RegistroPushRequest {
 
     public void setDeviceId(String deviceId) {
         this.deviceId = deviceId;
-    }
-
-    public Long getReachId() {
-        return reachId;
-    }
-
-    public void setReachId(Long reachId) {
-        this.reachId = reachId;
     }
 
     public String getPlataforma() {
