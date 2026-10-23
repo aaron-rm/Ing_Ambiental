@@ -14,16 +14,14 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
+import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
- * Cliente HTTP de la consola. Consume únicamente la API REST pública del
- * backend, igual que lo hará el frontend definitivo. No accede a repositorios
- * ni replica reglas de negocio.
+ * Cliente HTTP de la consola. Consume únicamente la API REST del backend,
+ * igual que lo hará el frontend definitivo. No accede a repositorios ni replica
+ * reglas de negocio.
  */
 @Component
 public class BackendApiClient {
@@ -31,17 +29,11 @@ public class BackendApiClient {
     private final HttpClient http;
     private final ObjectMapper mapper;
     private final String baseUrl;
-    private final String adminToken;
+    private volatile String token;
 
-    public BackendApiClient(
-            @Value("${alerta.api.base-url:http://localhost:8081}") String baseUrl,
-            @Value("${alerta.admin.token:}") String adminToken) {
-        // Spring Boot 4 usa Jackson 3 para MVC, pero Firebase Admin y este
-        // cliente trabajan con Jackson 2. Se crea el mapper localmente para no
-        // depender de un bean que Spring Boot 4 ya no expone.
+    public BackendApiClient(@Value("${alerta.api.base-url:http://localhost:8081}") String baseUrl) {
         this.mapper = new ObjectMapper().findAndRegisterModules();
         this.baseUrl = quitarBarraFinal(baseUrl);
-        this.adminToken = adminToken == null ? "" : adminToken.trim();
         this.http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
@@ -51,111 +43,96 @@ public class BackendApiClient {
         return baseUrl;
     }
 
-    public boolean tieneTokenAdmin() {
-        return !adminToken.isBlank();
+    public boolean tieneSesion() {
+        return token != null && !token.isBlank();
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public SesionApi iniciarSesion(String identificador, String password) {
+        SesionApi sesion = post("/api/auth/login",
+                Map.of("identificador", identificador, "password", password), SesionApi.class);
+        this.token = sesion.token();
+        return sesion;
+    }
+
+    public SesionApi registrarse(String identificador, String password) {
+        SesionApi sesion = post("/api/auth/registro",
+                Map.of("identificador", identificador, "password", password), SesionApi.class);
+        this.token = sesion.token();
+        return sesion;
+    }
+
+    public UsuarioApi sesionActual() {
+        return get("/api/auth/me", UsuarioApi.class);
+    }
+
+    public void cerrarSesion() {
+        this.token = null;
     }
 
     public List<RioApi> listarRios() {
         return get("/api/rios", new TypeReference<List<RioApi>>() { });
     }
 
-    public RioApi crearRio(String nombre, Long geoglowsId, Double latitud, Double longitud) {
-        Map<String, Object> cuerpo = Map.of(
-                "nombre", nombre,
-                "geoglowsId", geoglowsId,
-                "latitud", latitud,
-                "longitud", longitud
-        );
-        return post("/api/rios", cuerpo, RioApi.class, false);
+    public List<RioSeguidoApi> listarRiosSeguidos() {
+        return get("/api/usuarios/me/rios", new TypeReference<List<RioSeguidoApi>>() { });
     }
 
-    public RioApi actualizarRio(RioApi rio) {
-        if (rio.id() == null) {
-            throw new IllegalArgumentException("El rio no tiene un ID interno para actualizar.");
-        }
-        Map<String, Object> cuerpo = new LinkedHashMap<>();
-        cuerpo.put("nombre", rio.nombre());
-        cuerpo.put("geoglowsId", rio.geoglowsId());
-        cuerpo.put("latitud", rio.latitud());
-        cuerpo.put("longitud", rio.longitud());
-        return put("/api/rios/" + rio.id(), cuerpo, RioApi.class);
+    public SeleccionApi seguirRio(Long rioId) {
+        return post("/api/usuarios/me/rios/" + rioId, null, SeleccionApi.class);
+    }
+
+    public void dejarDeSeguirRio(Long rioId) {
+        delete("/api/usuarios/me/rios/" + rioId);
+    }
+
+    public AlertaRioDTO consultarEstadoPorRio(Long rioId) {
+        return get("/api/alertas/rio/" + rioId, AlertaRioDTO.class);
     }
 
     public AlertaRioDTO consultarEstado(long reachId) {
         return get("/api/alertas/tramo/" + reachId, AlertaRioDTO.class);
     }
 
-    public AlertaRioDTO consultarEstadoPorRio(long rioId) {
-        return get("/api/alertas/rio/" + rioId, AlertaRioDTO.class);
-    }
-
     public AlertaRioDTO simular(long reachId, double caudal) {
-        String ruta = String.format(Locale.US, "/api/alertas/simular?reachId=%d&caudal=%.2f",
-                reachId, caudal);
-        return post(ruta, null, AlertaRioDTO.class, false);
+        String ruta = String.format(java.util.Locale.US,
+                "/api/alertas/simular?reachId=%d&caudal=%.2f", reachId, caudal);
+        return post(ruta, null, AlertaRioDTO.class);
     }
 
-    public SuscripcionApi suscribir(long reachId, String nombre, String contacto) {
-        Map<String, Object> cuerpo = Map.of(
-                "reachId", reachId,
-                "nombreContacto", nombre,
-                "contacto", contacto
-        );
-        return post("/api/alertas/suscribir", cuerpo, SuscripcionApi.class, false);
-    }
-
-    public List<SuscripcionApi> listarSuscripciones(long reachId) {
-        exigirTokenAdmin();
-        return get("/api/alertas/suscripciones/" + reachId,
-                new TypeReference<List<SuscripcionApi>>() { }, true);
+    public ResultadoEvaluacionApi evaluar(long reachId) {
+        return post("/api/alertas/evaluar/" + reachId, null, ResultadoEvaluacionApi.class);
     }
 
     public ResultadoDemoPush enviarDemoPush() {
-        exigirTokenAdmin();
-        return post("/api/push/demo", null, ResultadoDemoPush.class, true);
-    }
-
-    private void exigirTokenAdmin() {
-        if (!tieneTokenAdmin()) {
-            throw new ApiException(403,
-                    "ALERTA_ADMIN_TOKEN no esta configurado en el entorno del backend.");
-        }
+        return post("/api/admin/push/demo", null, ResultadoDemoPush.class);
     }
 
     private <T> T get(String ruta, Class<T> tipo) {
-        return get(ruta, tipo, false);
-    }
-
-    private <T> T get(String ruta, Class<T> tipo, boolean admin) {
-        HttpRequest.Builder constructor = base(ruta, admin);
-        return enviar(constructor.GET().build(), tipo);
+        return enviar(base(ruta).GET().build(), tipo);
     }
 
     private <T> T get(String ruta, TypeReference<T> tipo) {
-        return get(ruta, tipo, false);
+        return enviar(base(ruta).GET().build(), tipo);
     }
 
-    private <T> T get(String ruta, TypeReference<T> tipo, boolean admin) {
-        HttpRequest.Builder constructor = base(ruta, admin);
-        return enviar(constructor.GET().build(), tipo);
+    private <T> T post(String ruta, Object cuerpo, Class<T> tipo) {
+        return enviar(conCuerpo(base(ruta), "POST", cuerpo), tipo);
     }
 
-    private <T> T post(String ruta, Object cuerpo, Class<T> tipo, boolean admin) {
-        HttpRequest.Builder constructor = base(ruta, admin);
-        return enviar(conCuerpo(constructor, "POST", cuerpo), tipo);
+    private void delete(String ruta) {
+        ejecutar(conCuerpo(base(ruta), "DELETE", null));
     }
 
-    private <T> T put(String ruta, Object cuerpo, Class<T> tipo) {
-        HttpRequest.Builder constructor = base(ruta, false);
-        return enviar(conCuerpo(constructor, "PUT", cuerpo), tipo);
-    }
-
-    private HttpRequest.Builder base(String ruta, boolean admin) {
+    private HttpRequest.Builder base(String ruta) {
         HttpRequest.Builder constructor = HttpRequest.newBuilder(URI.create(baseUrl + ruta))
                 .timeout(Duration.ofSeconds(60))
                 .header("Accept", "application/json");
-        if (admin && !adminToken.isBlank()) {
-            constructor.header("X-Admin-Token", adminToken);
+        if (tieneSesion()) {
+            constructor.header("Authorization", "Bearer " + token);
         }
         return constructor;
     }
@@ -248,11 +225,26 @@ public class BackendApiClient {
         return limpia;
     }
 
-    public record RioApi(Long id, String nombre, Long geoglowsId, Double latitud, Double longitud) {
+    public record SesionApi(String token, UsuarioApi usuario) {
     }
 
-    public record SuscripcionApi(Long id, Long reachId, String nombreContacto,
-                                 String contacto, LocalDateTime fechaRegistro) {
+    public record UsuarioApi(Long id, String identificador, String rol) {
+    }
+
+    public record RioApi(Long rioId, String nombre, Long reachId, Double latitud,
+                         Double longitud, boolean tieneGeometria) {
+    }
+
+    public record RioSeguidoApi(Long rioId, String nombre, Long reachId, Double latitud,
+                                Double longitud, Instant fechaSeleccion) {
+    }
+
+    public record SeleccionApi(Long rioId, boolean seguido, String mensaje) {
+    }
+
+    public record ResultadoEvaluacionApi(Long reachId, Long eventoId, String nivel,
+                                         boolean datosConfiables, boolean notificado,
+                                         String mensaje) {
     }
 
     /** Error HTTP o de conexion con el backend, con el codigo disponible. */
