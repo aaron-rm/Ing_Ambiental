@@ -4,47 +4,107 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0f766e">
-    <meta name="description" content="Página de prueba para verificar la recepción de notificaciones push del sistema de alertas.">
-    <title>Prueba de notificaciones</title>
+    <meta name="description" content="Prueba de la PWA del sistema de alerta temprana de inundaciones: login, catálogo de ríos y notificaciones push.">
+    <title>Alertas de inundación</title>
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-    <main class="card" aria-labelledby="titulo">
-        <div class="brand" aria-hidden="true">
-            <svg viewBox="0 0 24 24" role="img" focusable="false">
-                <path d="M12 3a6 6 0 0 0-6 6v3.2l-1.6 3.1A1 1 0 0 0 5.3 17h13.4a1 1 0 0 0 .9-1.7L18 12.2V9a6 6 0 0 0-6-6Z"
-                      fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
-                <path d="M9.5 20a2.8 2.8 0 0 0 5 0" fill="none" stroke="currentColor"
-                      stroke-width="1.7" stroke-linecap="round"/>
-            </svg>
-        </div>
+    <main class="app">
+        <section id="vistaLogin" class="card" aria-labelledby="tituloLogin">
+            <div class="brand" aria-hidden="true">
+                <svg viewBox="0 0 24 24" role="img" focusable="false">
+                    <path d="M12 3a6 6 0 0 0-6 6v3.2l-1.6 3.1A1 1 0 0 0 5.3 17h13.4a1 1 0 0 0 .9-1.7L18 12.2V9a6 6 0 0 0-6-6Z"
+                          fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+                    <path d="M9.5 20a2.8 2.8 0 0 0 5 0" fill="none" stroke="currentColor"
+                          stroke-width="1.7" stroke-linecap="round"/>
+                </svg>
+            </div>
 
-        <p class="eyebrow">Sistema de alertas</p>
-        <h1 id="titulo">Prueba de notificaciones</h1>
-        <p class="lead">
-            Activa las notificaciones en este dispositivo para comprobar que puedes recibir
-            los avisos del sistema. Esta página solo se usa para verificar el canal de
-            notificaciones.
-        </p>
+            <p class="eyebrow">Sistema de alertas</p>
+            <h1 id="tituloLogin">Alertas de inundación</h1>
+            <p class="lead">
+                Inicia sesión o crea una cuenta para ver los ríos monitoreados, consultar
+                su caudal y recibir notificaciones de los ríos que sigas.
+            </p>
 
-        <div id="estado" class="status" role="status" aria-live="polite">
-            <span class="status-dot" aria-hidden="true"></span>
-            <span id="estadoTexto">Comprobando…</span>
-        </div>
+            <form id="formLogin" class="formulario" autocomplete="on">
+                <label for="identificador">Correo o nombre de usuario</label>
+                <input id="identificador" name="identificador" type="text" required
+                       autocomplete="username" autocapitalize="none" spellcheck="false">
 
-        <button id="activarBoton" class="button" type="button" disabled>
-            Activar notificaciones
-        </button>
+                <label for="password">Contraseña</label>
+                <input id="password" name="password" type="password" required
+                       minlength="8" autocomplete="current-password">
 
-        <p id="mensaje" class="message" role="status" aria-live="polite" hidden></p>
+                <button id="botonEntrar" class="button" type="submit">Entrar</button>
+                <button id="botonRegistrar" class="button secundario" type="button">Crear cuenta</button>
+            </form>
 
-        <p class="footnote">
-            Android: usa Chrome. iPhone/iPad: requiere iOS 16.4 o superior y agregar esta
-            página a la pantalla de inicio.
-        </p>
+            <p id="mensajeLogin" class="message" role="status" aria-live="polite" hidden></p>
+
+            <p class="footnote">
+                El registro público crea un usuario normal. Las cuentas de administración
+                se configuran en el backend.
+            </p>
+        </section>
+
+        <section id="vistaApp" class="panel" hidden aria-labelledby="tituloApp">
+            <header class="app-header">
+                <div>
+                    <p class="eyebrow">Sistema de alertas</p>
+                    <h1 id="tituloApp">Ríos monitoreados</h1>
+                </div>
+                <div class="sesion">
+                    <span id="usuarioActual" class="usuario"></span>
+                    <button id="botonSalir" class="button secundario compacto" type="button">Salir</button>
+                </div>
+            </header>
+
+            <p id="mensajeApp" class="message" role="status" aria-live="polite" hidden></p>
+
+            <section class="bloque" aria-labelledby="tituloMapa">
+                <h2 id="tituloMapa">Mapa del catálogo</h2>
+                <p class="ayuda">
+                    Toca una línea para abrir el panel de ese río. Los ríos que sigues se
+                    muestran resaltados. El mapa es una vista esquemática de la geometría
+                    oficial de GEOGloWS; no sustituye a un mapa topográfico.
+                </p>
+                <div id="mapa" class="mapa" role="img"
+                     aria-label="Vista esquemática de los ríos del catálogo"></div>
+            </section>
+
+            <section id="bloquePanel" class="bloque" hidden aria-labelledby="panelTitulo">
+                <h2 id="panelTitulo">Panel del río</h2>
+                <div id="panelContenido"></div>
+            </section>
+
+            <section class="bloque" aria-labelledby="tituloLista">
+                <h2 id="tituloLista">Ríos del catálogo</h2>
+                <ul id="listaRios" class="lista-rios"></ul>
+            </section>
+
+            <section class="bloque" aria-labelledby="tituloPush">
+                <h2 id="tituloPush">Notificaciones</h2>
+                <p class="ayuda">
+                    Actívalas solo en el dispositivo donde quieras recibir los avisos.
+                    Recibirás alertas de los ríos que sigues.
+                </p>
+                <div id="estadoPush" class="status">
+                    <span class="status-dot" aria-hidden="true"></span>
+                    <span id="estadoPushTexto">Comprobando…</span>
+                </div>
+                <button id="botonPush" class="button" type="button" disabled>Activar notificaciones</button>
+                <button id="botonPruebaPush" class="button secundario" type="button" disabled>Enviar notificación de prueba</button>
+                <p id="mensajePush" class="message" role="status" aria-live="polite" hidden></p>
+                <p class="footnote">
+                    Android: usa Chrome. iPhone/iPad: requiere iOS 16.4 o superior y agregar
+                    esta página a la pantalla de inicio.
+                </p>
+            </section>
+        </section>
     </main>
 
     <script src="/app.js" defer></script>
