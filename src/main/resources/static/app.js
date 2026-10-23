@@ -77,8 +77,9 @@ async function mostrarApp() {
     el('vistaApp').hidden = false;
     el('usuarioActual').textContent = `${estado.usuario.identificador} (${estado.usuario.rol})`;
 
-    await Promise.all([cargarCatalogo(), cargarMapa(), cargarSeguidos()]);
+    await Promise.all([cargarCatalogo(), cargarSeguidos()]);
     dibujarListaRios();
+    await cargarMapa();
     await cargarConfigPush();
     await reanudarPushGuardado();
 }

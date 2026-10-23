@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Prueba de notificaciones",
-  "short_name": "Prueba Push",
-  "description": "Página mínima para verificar la suscripción y recepción de notificaciones push del sistema de alertas.",
+  "name": "Alertas de inundación (prueba)",
+  "short_name": "Alertas",
+  "description": "PWA de prueba del sistema de alerta temprana de inundaciones: login, catálogo de ríos, panel de caudal y lluvia, y notificaciones push.",
   "lang": "es-PA",
   "start_url": "/",
   "scope": "/",

@@ -1,5 +1,5 @@
 /*
- * Service Worker de la página de prueba de notificaciones.
+ * Service Worker de la PWA de prueba.
  *
  * No guarda datos ni caché de la aplicación. Solo inicializa Firebase
  * Messaging con la configuración pública recibida por query string, muestra
