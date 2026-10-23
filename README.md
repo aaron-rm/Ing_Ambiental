@@ -63,9 +63,14 @@ podman run -d --name alerta-postgres \
 cp .env.demo.example .env.demo
 # completar .env.demo; DB_PASSWORD debe coincidir con POSTGRES_PASSWORD
 
-bash scripts/iniciar-demo.sh            # backend con consola interactiva
+bash scripts/iniciar-demo.sh            # consola interactiva y navegador
 bash scripts/iniciar-demo.sh --tunel    # ademas abre cloudflared si esta instalado
 ```
+
+Con doble clic, el script detecta que no hay terminal y se relanza en Konsole,
+GNOME Terminal o xterm; además abre el navegador en `http://localhost:8081`
+cuando el backend responde. Si ya hay un backend corriendo en el puerto 8081,
+solo abre la página y no lanza una segunda instancia.
 
 En Linux `./mvnw` puede fallar con «Permiso denegado»: usar `bash mvnw`. Si
 OneDrive sincroniza la carpeta `target/` desde Windows y Maven falla con

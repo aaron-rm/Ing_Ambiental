@@ -121,9 +121,14 @@ distribuciones. El equivalente en bash carga `.env.demo` y arranca la aplicació
 con la consola interactiva:
 
 ```bash
-bash scripts/iniciar-demo.sh            # http://localhost:8081
+bash scripts/iniciar-demo.sh            # consola interactiva y navegador
 bash scripts/iniciar-demo.sh --tunel    # ademas abre cloudflared si esta instalado
 ```
+
+Con doble clic (sin terminal) el script se relanza en Konsole, GNOME Terminal o
+xterm, y abre el navegador en `http://localhost:8081` cuando el backend
+responde. Si el puerto 8081 ya está ocupado, solo abre la página y no lanza una
+segunda instancia.
 
 Si no hay PostgreSQL local, se puede usar un contenedor:
 
