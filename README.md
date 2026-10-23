@@ -14,6 +14,14 @@ Incluye dos clientes de apoyo:
 > Proyecto académico y orientativo. No emite declaraciones oficiales de
 > emergencia ni sustituye a SINAPROC, IMHPA u otra autoridad competente.
 
+> **Estado:** el siguiente avance (login, catálogo de cuatro ríos y selección
+> múltiple) está documentado, pero todavía no implementado. Para retomarlo en
+> otra sesión o computadora, empezar por
+> [docs/CONTINUIDAD_SESION.md](docs/CONTINUIDAD_SESION.md).
+
+> Para una explicación funcional breve, sin tecnicismos, ver
+> [docs/RESUMEN_PROYECTO.md](docs/RESUMEN_PROYECTO.md).
+
 ## Arranque rápido
 
 Requisitos: Java 21+, PostgreSQL y, para push, un proyecto Firebase.
@@ -74,11 +82,15 @@ nueva del Service Worker elimina las cachés `alerta-shell-*` al activarse.
 
 | Documento | Contenido |
 |---|---|
+| [docs/CONTINUIDAD_SESION.md](docs/CONTINUIDAD_SESION.md) | Estado actual y cómo retomar el proyecto desde otra computadora o sesión |
+| [docs/AVANCE_EQUIPO.md](docs/AVANCE_EQUIPO.md) | Resumen breve de las decisiones para los compañeros del equipo |
+| [docs/RESUMEN_PROYECTO.md](docs/RESUMEN_PROYECTO.md) | Explicación de alto nivel, flujo, alcance y guía para la presentación |
 | [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | Directrices permanentes y separación backend/clientes |
 | [docs/GUIA_PRUEBA_NOTIFICACIONES.md](docs/GUIA_PRUEBA_NOTIFICACIONES.md) | Guía paso a paso para compañeros y agentes de IA |
 | [INFORME_ALERTAS_INUNDACION.md](INFORME_ALERTAS_INUNDACION.md) | Informe: cambios, pruebas reales, pendientes y limitaciones |
 | [docs/CONFIGURACION_PUSH.md](docs/CONFIGURACION_PUSH.md) | Variables de entorno, PostgreSQL y Firebase/FCM |
 | [docs/INTEGRACION_FRONTEND.md](docs/INTEGRACION_FRONTEND.md) | Contrato de API y guía para el equipo de frontend |
+| [docs/GUIA_FRONTEND.md](docs/GUIA_FRONTEND.md) | Guía del avance: login, mapa, selección múltiple y admin (borrador) |
 | [IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md) | Historia de implementación y decisiones previas |
 
 ## Pruebas

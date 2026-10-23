@@ -15,10 +15,12 @@
 >   basarse obligatoriamente en la PWA de pruebas.
 >
 > Las reglas de arquitectura vigentes están en
-> `docs/ARQUITECTURA.md`. El estado actual, las pruebas y los pendientes están en
-> `INFORME_ALERTAS_INUNDACION.md`. El contrato para frontend está en
-> `docs/INTEGRACION_FRONTEND.md`; la configuración operativa, en
-> `docs/CONFIGURACION_PUSH.md`.
+> `docs/ARQUITECTURA.md`. Para retomar el trabajo en otra sesión o computadora,
+> leer `docs/CONTINUIDAD_SESION.md`. El estado actual, las pruebas y los
+> pendientes están en `INFORME_ALERTAS_INUNDACION.md`. El contrato para frontend
+> está en `docs/INTEGRACION_FRONTEND.md`; la configuración operativa, en
+> `docs/CONFIGURACION_PUSH.md`. Este documento es histórico: conserva la
+> implementación anterior y no describe el avance de autenticación/catálogo.
 
 ## 1. Resumen
 Se completó la integración funcional del backend en Spring Boot para el avance del 50 % del sistema de alerta temprana de inundaciones con GEOGLOWS. 

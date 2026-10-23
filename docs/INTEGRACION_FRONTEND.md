@@ -1,7 +1,7 @@
 # Contrato de API para el frontend definitivo
 
 **Backend:** Spring Boot en `http://localhost:8081`  
-**PWA de pruebas:** `src/main/resources/static/` — solo verifica notificaciones  
+**PWA de pruebas:** `src/main/resources/static/` — hoy solo verifica notificaciones; el siguiente avance añade login y selección de ríos<br>
 **Frontend definitivo:** lo construirá otro equipo desde cero
 
 > Este documento describe los contratos públicos del backend. El equipo de
@@ -11,6 +11,21 @@
 >
 > Las reglas de separación entre backend, consola y clientes están en
 > [`ARQUITECTURA.md`](ARQUITECTURA.md).
+>
+> **Aviso:** el avance de autenticación, mapa con geometría y selección
+> múltiple de ríos se describe en [`GUIA_FRONTEND.md`](GUIA_FRONTEND.md). Ese
+> documento es un borrador de diseño; este archivo sigue describiendo la API
+> que existe actualmente.
+>
+> **Cobertura:** este documento enumera todos los endpoints implementados hoy.
+> Todavía no incluye autenticación con usuarios, roles, geometría para el mapa,
+> selección múltiple de ríos ni el panel de administración con JWT. Esas piezas
+> están en la guía y se incorporarán aquí cuando se implementen y prueben.
+>
+> **Catálogo acordado para la próxima entrega (aún no implementado):** Río
+> Abajo (`710039498`), Río Curundú (`710037516`), Río Juan Díaz (`710051399`) y
+> Río Tocumen (`670053261`). El seed actual todavía crea un “Río Pacora” con el
+> `reachId` de Abajo; se corregirá al implementar el catálogo.
 
 ---
 
@@ -94,6 +109,11 @@ Base: `/api`. Todos devuelven JSON salvo algunos errores en texto plano.
 conocida que debe corregirse antes de producción; no se debe asumir que esas
 rutas son seguras para exponerlas públicamente en un despliegue real.
 
+> **Próximo avance:** las rutas heredadas `POST /api/alertas/suscribir` y
+> `GET /api/alertas/suscripciones/{reachId}` se retirarán del flujo de usuario y
+> de la consola. El modelo definitivo será usuario–ríos con push. El campo
+> `reachId` de `GET /api/push/config` quedará obsoleto para el frontend.
+
 ### Códigos de error esperados
 
 | Código | Significado |
@@ -123,6 +143,10 @@ rutas son seguras para exponerlas públicamente en un despliegue real.
   }
 ]
 ```
+
+> El ejemplo refleja el seed provisional actual. En la próxima entrega se
+> reemplazará por el catálogo de cuatro ríos indicado arriba; no usar “Río
+> Pacora” como nombre definitivo.
 
 ### `GET /api/alertas/rio/{rioId}` y `/tramo/{reachId}` → `AlertaRioDTO`
 

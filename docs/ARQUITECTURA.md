@@ -133,8 +133,10 @@ Paquete base: `com.alerta.sistema_alerta_inundaciones`.
 - No inyecta repositorios ni servicios de negocio.
 - Conserva las opciones y salidas existentes; la opción `0` envía la
   notificación push de demostración.
-- Requiere `ALERTA_ADMIN_TOKEN` para consultar suscriptores y enviar la demo
-  push, porque esos endpoints están protegidos.
+- Hoy requiere `ALERTA_ADMIN_TOKEN` para consultar suscriptores y enviar la demo
+  push. En el próximo avance pedirá inicio de sesión y usará JWT con roles; la
+  consola normal verá solo las opciones de usuario y la consola administrativa
+  verá además simulación, evaluación y demo push.
 
 ### PWA de pruebas
 
@@ -189,7 +191,9 @@ Principios del contrato:
 - Las respuestas usan DTOs estables, no entidades JPA cuando el DTO aporta
   claridad o evita acoplamiento.
 - Los errores usan códigos HTTP coherentes y mensajes comprensibles.
-- Las operaciones sensibles se protegen con `X-Admin-Token`.
+- Las operaciones sensibles se protegen con autenticación administrativa. Hoy
+  se usa `X-Admin-Token`; en el avance de usuarios y roles se migrarán a JWT con
+  rol `ADMIN`, y el token quedará solo como compatibilidad temporal.
 - Los endpoints públicos no revelan credenciales ni datos administrativos.
 
 ### Decisiones adoptadas en la refactorización actual
@@ -217,7 +221,7 @@ Variables principales:
 | Variable | Uso |
 |---|---|
 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | PostgreSQL |
-| `ALERTA_ADMIN_TOKEN` | Protección de endpoints administrativos |
+| `ALERTA_ADMIN_TOKEN` | Token temporal de compatibilidad para la consola; se reemplazará por JWT con rol `ADMIN` |
 | `ALERTA_API_BASE_URL` | URL que usa la consola para consumir el backend |
 | `ALERTA_DEMO_CONSOLA_HABILITADA` | Activa o desactiva la consola |
 | `FIREBASE_ENABLED` | Habilita o deshabilita FCM |
@@ -235,7 +239,9 @@ Reglas:
 Limitación actual: la gestión de ríos (`POST`/`PUT /api/rios`) no tiene token
 administrativo, igual que el diseño previo. Antes de producción debe protegerse
 o restringirse. El listado de suscripciones y la evaluación manual sí requieren
-`X-Admin-Token`.
+`X-Admin-Token`. En el avance de autenticación, la escritura de ríos y las
+operaciones administrativas pasarán a exigir JWT con rol `ADMIN`; la consola se
+adaptará para conservar sus opciones.
 
 ---
 
@@ -258,6 +264,7 @@ Documentos relacionados:
 
 | Documento | Contenido |
 |---|---|
+| [`RESUMEN_PROYECTO.md`](RESUMEN_PROYECTO.md) | Explicación funcional de alto nivel y guía de presentación |
 | [`../GEMINI.md`](../GEMINI.md) | Resumen de reglas para agentes y enlace a este documento |
 | [`GUIA_PRUEBA_NOTIFICACIONES.md`](GUIA_PRUEBA_NOTIFICACIONES.md) | Guía paso a paso para ejecutar y verificar la demo |
 | [`../README.md`](../README.md) | Arranque, demo y pruebas |
