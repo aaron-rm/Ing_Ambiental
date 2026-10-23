@@ -1,34 +1,34 @@
 # Avance del proyecto para el equipo
 
-**23/10/2026 — todavía no hay código nuevo; esto es lo que se viene.**
+**23/10/2026 — el inicio de sesión, el catálogo con mapa y las notificaciones por río ya están implementados.**
 
 ## Los cuatro ríos
 
-El catálogo queda cerrado en **Río Abajo, Curundú, Juan Díaz y Tocumen**.
+El catálogo quedó cerrado en **Río Abajo, Curundú, Juan Díaz y Tocumen**.
 No incluimos Matasnillo, Matías Hernández ni Tapia porque no tienen un tramo
 propio de pronóstico o duplican el de otro río.
 
-## Cómo va a funcionar
+## Cómo funciona ahora
 
-- La consola pedirá iniciar sesión o registrarse.
-- Cada usuario verá los cuatro ríos.
-- Al hacer clic en cualquier río se abrirá un panel con su caudal y la lluvia
-  prevista, esté o no suscrito.
+- La consola y la PWA piden iniciar sesión o registrarse.
+- Cada usuario ve los cuatro ríos y puede hacer clic en cualquiera para abrir un
+  panel con su caudal y la lluvia prevista, esté o no suscrito.
 - El botón de seguir solo sirve para recibir notificaciones si ese río supera
   los niveles de alerta.
 - El usuario puede seguir varios ríos.
-- La página de prueba del celular tendrá el mismo inicio de sesión y selección.
-- Habrá una cuenta administradora de demostración; su clave se configura
-  localmente y no se publica.
-- El usuario normal y el administrador verán opciones distintas.
+- La cuenta administradora de demostración se configura localmente y no se
+  publica.
+- El usuario normal solo ve las opciones de consulta y selección; el
+  administrador ve además simulación, evaluación real y push de demostración.
 
-## Qué se retira
+## Lo que se retiró del flujo
 
 - Las suscripciones por correo o teléfono.
-- La creación o edición de ríos desde la interfaz.
-- La calibración de umbrales por temporada queda para después.
+- La creación o edición de ríos desde la interfaz (quedó solo para
+  administración).
+- La calibración de umbrales por temporada sigue para después.
 
 ## Siguiente paso
 
-Implementar el inicio de sesión, el catálogo con mapa, la selección múltiple y
-las notificaciones por río. Por ahora no hay que hacer nada en el repositorio.
+Probar con PostgreSQL real y validar la recepción del push en un celular. Para
+retomar el trabajo, leer [`CONTINUIDAD_SESION.md`](CONTINUIDAD_SESION.md).

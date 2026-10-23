@@ -10,10 +10,10 @@
 > entrar en clases, frameworks ni detalles de implementación. La documentación
 > técnica sigue siendo la referencia para modificar el código.
 
-> **Estado del siguiente avance:** las decisiones están cerradas, pero la
-> implementación todavía no ha comenzado. El catálogo tendrá cuatro ríos:
-> Abajo, Curundú, Juan Díaz y Tocumen. Para retomar el trabajo, leer
-> [`CONTINUIDAD_SESION.md`](CONTINUIDAD_SESION.md).
+> **Estado del avance:** implementado. El catálogo quedó cerrado en cuatro
+> ríos (Abajo, Curundú, Juan Díaz y Tocumen) con geometría real, y ya existen
+> login con roles, selección múltiple de ríos y push asociado al usuario. Para
+> retomar el trabajo, leer [`CONTINUIDAD_SESION.md`](CONTINUIDAD_SESION.md).
 
 ---
 
@@ -82,8 +82,8 @@ suscritos cuando el nivel cambia.
                               └──> Firebase ──> notificaciones push
 ```
 
-1. Un río se registra con un identificador de tramo de GEOGloWS (`reachId`) y
-   sus coordenadas.
+1. Un río del catálogo se registra con un identificador de tramo de GEOGloWS
+   (`reachId`), sus coordenadas y su geometría simplificada.
 2. El backend evalúa los ríos automáticamente cada **15 minutos** por defecto.
    También existe una evaluación manual para pruebas.
 3. Para cada río obtiene:
@@ -245,8 +245,8 @@ El trabajo se organizó en tres bloques:
 - **Sin duplicados:** los cambios de nivel se registran una sola vez.
 - **Degradación controlada:** si falla una fuente o Firebase, el sistema informa
   el problema y sigue funcionando en lo posible.
-- **Seguridad básica:** las credenciales van por variables de entorno y los
-  endpoints administrativos usan un token.
+- **Seguridad:** credenciales por variables de entorno; JWT con roles `USER` y
+  `ADMIN` para las rutas administrativas y el push.
 
 ---
 
@@ -259,14 +259,14 @@ El trabajo se organizó en tres bloques:
 | Historial y detalle de eventos | Implementado. |
 | Registro de dispositivos y lógica push | Implementado y probado con mocks. |
 | Push real de extremo a extremo | Pendiente de credenciales Firebase y dispositivo físico. |
-| PWA de prueba | Implementada para activar y verificar notificaciones; falta probar la recepción en un dispositivo real. |
+| PWA de prueba | Con login, mapa, panel y push por usuario; falta probar la recepción en un dispositivo real. |
 | Frontend definitivo | Lo desarrolla otro equipo. |
 | Umbrales | Experimentales; requieren calibración local. La calibración estacional (invierno/verano) está pendiente de investigación y no se implementará con valores inventados. |
-| Autenticación | En diseño: login con identificador, JWT y roles `USER`/`ADMIN`. La consola también pedirá sesión. Aún no implementado. |
-| Gestión de ríos | Catálogo cerrado de cuatro ríos con geometría: Abajo, Curundú, Juan Díaz y Tocumen. La escritura quedará protegida para administradores. |
-| Consulta de ríos | En diseño: al hacer clic en cualquier río del catálogo se muestra su caudal y su lluvia. No hace falta estar suscrito; la suscripción solo controla el push. |
-| Selección múltiple | En diseño: cada usuario podrá seguir varios ríos y el push se enviará según sus selecciones. Aún no implementado. |
-| Pruebas automatizadas | 51 pruebas, 0 fallos (antes del avance de autenticación). |
+| Autenticación | Implementada: login con identificador, JWT de 24 horas y roles `USER`/`ADMIN`. |
+| Gestión de ríos | Catálogo cerrado de cuatro ríos con geometría real: Abajo, Curundú, Juan Díaz y Tocumen. La escritura está protegida bajo `/api/admin/rios`. |
+| Consulta de ríos | Implementada: al hacer clic en cualquier río del catálogo se muestra su caudal y su lluvia. No hace falta estar suscrito; la suscripción solo controla el push. |
+| Selección múltiple | Implementada: cada usuario sigue los ríos que quiera y el push se envía según sus selecciones. |
+| Pruebas automatizadas | 67 pruebas, 0 fallos. |
 
 Otras limitaciones conocidas:
 
@@ -324,7 +324,7 @@ Otras limitaciones conocidas:
 | ¿Cómo evitan notificaciones repetidas? | Solo se notifica un cambio de nivel y se usa una clave de idempotencia. |
 | ¿La lluvia por sí sola puede generar una alerta? | Sí, el nivel final es el mayor entre caudal y lluvia, siempre que el pronóstico de caudal sea reciente y confiable. |
 | ¿Se ajustan los umbrales para invierno o verano? | Todavía no. Los umbrales son fijos y experimentales; la calibración estacional es una mejora pendiente. |
-| ¿Qué falta para producción? | Calibrar umbrales, probar push real, completar la autenticación y la selección múltiple, y construir el frontend definitivo. |
+| ¿Qué falta para producción? | Calibrar umbrales, probar el push real en dispositivos, construir el frontend definitivo y retirar los endpoints heredados. |
 | ¿Se puede usar en el celular? | Sí, mediante HTTPS y una PWA; en iOS requiere 16.4+ e instalación en la pantalla de inicio. |
 
 ### Qué no afirmar
@@ -351,7 +351,7 @@ Otras limitaciones conocidas:
 | **Caudal** | Cantidad de agua que pasa por el río por segundo (m³/s). |
 | **Umbral** | Valor límite que marca el paso a un nivel de riesgo. |
 | **FCM** | Servicio de Firebase para enviar notificaciones push. |
-| **PWA** | Página web instalable; aquí se usa para probar notificaciones y, en el siguiente avance, el login y la selección de ríos. |
+| **PWA** | Página web instalable; aquí se usa para probar el flujo completo (login, mapa, panel y notificaciones). No es el frontend definitivo. |
 | **Idempotencia** | Evitar que una misma operación se registre o notifique dos veces. |
 
 ---

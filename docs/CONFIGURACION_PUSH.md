@@ -20,7 +20,12 @@ Firebase Cloud Messaging (FCM). No contiene credenciales reales.
 | `DB_URL` | `jdbc:postgresql://localhost:5432/alerta_inundaciones` | URL JDBC |
 | `DB_USERNAME` | `postgres` | Usuario |
 | `DB_PASSWORD` | vacío | Contraseña; definirla fuera del repositorio |
-| `ALERTA_ADMIN_TOKEN` | vacío | Token de endpoints administrativos; si está vacío responden 403 |
+| `ALERTA_JWT_SECRET` | sin valor | Secreto HS256 del JWT; mínimo 32 caracteres |
+| `ALERTA_ADMIN_IDENTIFICADOR` | `admin` | Identificador del administrador inicial |
+| `ALERTA_ADMIN_PASSWORD` | vacío | Contraseña del administrador; solo en entorno o `.env.demo` |
+| `ALERTA_CORS_ORIGENES` | orígenes locales | Orígenes permitidos para el frontend |
+| `ALERTA_CARGAR_CATALOGO` | `true` | Carga el catálogo de cuatro ríos al arrancar |
+| `ALERTA_ADMIN_TOKEN` | vacío | Solo para rutas heredadas (`POST /api/push/demo`, `GET /api/alertas/suscripciones/{reachId}`) |
 | `ALERTA_API_BASE_URL` | `http://localhost:8081` | URL que usa la consola para consumir la API |
 | `ALERTA_DEMO_CONSOLA_HABILITADA` | `true` | Activa o desactiva la consola de demostración |
 
@@ -33,9 +38,14 @@ Ejemplo en PowerShell:
 $env:DB_URL = "jdbc:postgresql://localhost:5432/alerta_inundaciones"
 $env:DB_USERNAME = "postgres"
 $env:DB_PASSWORD = "su-contraseña-local"
-$env:ALERTA_ADMIN_TOKEN = "un-token-largo-y-aleatorio"
+$env:ALERTA_JWT_SECRET = "un-secreto-de-al-menos-32-caracteres"
+$env:ALERTA_ADMIN_IDENTIFICADOR = "admin"
+$env:ALERTA_ADMIN_PASSWORD = "la-contraseña-local-acordada"
 .\mvnw.cmd spring-boot:run
 ```
+
+`ALERTA_ADMIN_TOKEN` ya solo se usa para las dos rutas heredadas mencionadas en
+la tabla; la consola y la PWA usan login con JWT.
 
 Abrir `http://localhost:8081`.
 
@@ -52,9 +62,11 @@ $env:ALERTA_API_BASE_URL = "http://localhost:8081"
 $env:ALERTA_DEMO_CONSOLA_HABILITADA = "false"
 ```
 
-La consola requiere `ALERTA_ADMIN_TOKEN` para listar suscriptores y para enviar
-la notificación push de demostración. Sin ese token, el backend responde 403 en
-esos endpoints y la consola muestra un mensaje explicativo.
+La consola pide iniciar sesión o registrarse. Con una cuenta `ADMIN` puede
+enviar la notificación push de demostración y evaluar ríos con datos reales; con
+una cuenta `USER` solo consulta el catálogo, el panel y sus ríos seguidos.
+`ALERTA_ADMIN_TOKEN` ya no es necesario para la consola: solo se usa en las dos
+rutas heredadas de la tabla anterior.
 
 ## 3. Variables de monitoreo y riesgo
 
@@ -123,10 +135,9 @@ cuando el usuario pulsa «Activar notificaciones» y registra el Service Worker 
 `/firebase-messaging-sw.js`. La configuración pública se pasa al Service Worker
 por parámetros de consulta; no se escribe en el archivo.
 
-La respuesta incluye además `reachId`, el tramo por defecto
-(`alerta.demo.reach-id-inicial`, por defecto `710039498`). La PWA lo usa para
-registrar el dispositivo sin mostrar datos de ríos. El frontend definitivo podrá
-enviar el `reachId` que corresponda al tramo elegido por el usuario.
+La respuesta solo contiene datos públicos de Firebase; ya **no** incluye
+`reachId`. El dispositivo se registra con JWT y queda asociado al usuario; las
+alertas se enrutan según los ríos que sigue, no según un tramo fijo.
 
 ### 4.4 Comprobar la configuración
 
@@ -134,32 +145,35 @@ enviar el `reachId` que corresponda al tramo elegido por el usuario.
 Invoke-RestMethod http://localhost:8081/api/push/config
 ```
 
-Debe devolver `habilitado: true`, los datos públicos de Firebase y `reachId`. Si
-falta la credencial administrativa o algún dato público, devuelve
-`habilitado: false` con un motivo, y la PWA muestra «No disponible» sin intentar
-registrar el dispositivo.
+Debe devolver `habilitado: true` y los datos públicos de Firebase. Si falta la
+credencial administrativa o algún dato público, devuelve `habilitado: false` con
+un motivo, y la PWA muestra «No disponible» sin intentar registrar el
+dispositivo.
 
 ## 5. Prueba en un dispositivo real
 
 1. Publicar la app en HTTPS (o abrir `localhost` en el equipo de desarrollo).
-2. Abrir la PWA de pruebas y pulsar **Activar notificaciones**; aceptar el
-   permiso. La página solo confirma la suscripción; no muestra datos de ríos.
-3. En la consola del backend, elegir la opción **0**
-   (`Enviar notificacion push de demostracion a todos`) o ejecutar:
+2. Abrir la PWA de pruebas, iniciar sesión o crear una cuenta, seguir al menos
+   un río y pulsar **Activar notificaciones**; aceptar el permiso.
+3. En la consola del backend, iniciar sesión con la cuenta `ADMIN` y elegir la
+   opción **8** (`Enviar notificacion push de demostracion`). También se puede
+   ejecutar con JWT:
 
 ```powershell
-Invoke-RestMethod -Method Post `
-  -Uri "http://localhost:8081/api/push/demo" `
-  -Headers @{ "X-Admin-Token" = $env:ALERTA_ADMIN_TOKEN }
+$cuerpo = @{ identificador = "admin"; password = "la-contraseña-local" } | ConvertTo-Json
+$sesion = Invoke-RestMethod -Method Post -Uri "http://localhost:8081/api/auth/login" `
+  -ContentType "application/json" -Body $cuerpo
+Invoke-RestMethod -Method Post -Uri "http://localhost:8081/api/admin/push/demo" `
+  -Headers @{ Authorization = "Bearer $($sesion.token)" }
 ```
 
 4. Para probar una alerta real sin esperar a una crecida, un administrador puede
-   ejecutar la evaluación manual con `X-Admin-Token`:
+   ejecutar la evaluación manual (requiere JWT con rol `ADMIN`):
 
 ```powershell
 Invoke-RestMethod -Method Post `
   -Uri "http://localhost:8081/api/alertas/evaluar/710039498" `
-  -Headers @{ "X-Admin-Token" = $env:ALERTA_ADMIN_TOKEN }
+  -Headers @{ Authorization = "Bearer $($sesion.token)" }
 ```
 
 No se debe usar la simulación (`/api/alertas/simular`) para probar push: esa
@@ -169,16 +183,17 @@ ruta no persiste eventos ni envía notificaciones reales.
 
 1. Copiar `.env.demo.example` a `.env.demo` y completar las credenciales.
 2. Ejecutar `.\scripts\iniciar-demo.ps1`; abre la app y el túnel HTTPS.
-3. Cada estudiante abre la URL del túnel, pulsa **Activar notificaciones** y
-   acepta el permiso.
-4. En la terminal del backend, elegir la opción **0** de la consola para enviar
-   la notificación de demostración a todos.
+3. Cada estudiante abre la URL del túnel, inicia sesión o crea una cuenta, sigue
+   al menos un río y pulsa **Activar notificaciones**.
+4. En la terminal del backend, iniciar sesión en la consola con la cuenta
+   `ADMIN` y elegir la opción **8** para enviar la notificación de demostración.
 
-La PWA ya no incluye un panel de demostración ni un botón para enviar push. El
-envío se hace desde la consola o directamente contra el endpoint.
+La PWA solo puede pedir una notificación de prueba para su propio dispositivo;
+el envío masivo se hace desde la consola o directamente contra el endpoint.
 
-El endpoint `POST /api/push/demo` envía un simulacro a todos los dispositivos
-activos sin crear un evento de riesgo. Está protegido por `X-Admin-Token`.
+El endpoint `POST /api/admin/push/demo` envía un simulacro a todos los
+dispositivos activos sin crear un evento de riesgo. Requiere JWT con rol
+`ADMIN`; la ruta heredada `POST /api/push/demo` sigue usando `X-Admin-Token`.
 
 ## 6. Notas de compatibilidad
 
@@ -188,7 +203,7 @@ activos sin crear un evento de riesgo. Está protegido por `X-Admin-Token`.
   pantalla de inicio. El comportamiento exacto depende de Safari y del sistema.
 - El backend envía mensajes **data-only**; el Service Worker construye y muestra
   la notificación. El clic abre la URL indicada en el payload (`/?alerta={id}` o
-  `/?demo=1`). La PWA de prueba solo muestra un aviso breve; no presenta el
+  `/?demo=1`). La PWA de prueba muestra un aviso breve; no presenta el
   detalle del evento.
 - Si el navegador no soporta Service Workers, notificaciones o Push API, la PWA
   lo indica y deshabilita el botón. El backend y la consola siguen funcionando
@@ -196,19 +211,23 @@ activos sin crear un evento de riesgo. Está protegido por `X-Admin-Token`.
 
 ## 7. Solución de problemas
 
-### `Invoke-RestMethod: Referencia a objeto no establecida...`
+### `Invoke-RestMethod` falla con un error de referencia o responde 401/403
 
-Significa que `$env:ALERTA_ADMIN_TOKEN` está vacío **en esa ventana de
-PowerShell**. Las variables de entorno no se comparten entre ventanas ni se leen
-automáticamente desde `.env.demo`.
+Las rutas administrativas ahora requieren JWT con rol `ADMIN`: primero hay que
+iniciar sesión en `POST /api/auth/login` y enviar
+`Authorization: Bearer <token>`. Un `403` indica que la cuenta no es `ADMIN` o
+que el token venció.
 
-Opciones:
+Si el comando usaba `X-Admin-Token`, ese encabezado ya solo aplica a las rutas
+heredadas `POST /api/push/demo` y
+`GET /api/alertas/suscripciones/{reachId}`. Para el resto, iniciar sesión:
 
-- Usar la opción **0** de la consola del backend, que lee
-  `ALERTA_ADMIN_TOKEN` del entorno con el que se inició la aplicación.
-- Pasar el token literal en la petición, usando el mismo valor con el que se
-  arrancó la app.
-- Cargar `.env.demo` en esa sesión antes de ejecutar el comando.
+```powershell
+$cuerpo = @{ identificador = "admin"; password = "la-contraseña-local" } | ConvertTo-Json
+$sesion = Invoke-RestMethod -Method Post -Uri "http://localhost:8081/api/auth/login" `
+  -ContentType "application/json" -Body $cuerpo
+# usar $sesion.token en el encabezado Authorization
+```
 
 ### La PWA dice que el navegador no soporta Service Workers
 
@@ -226,7 +245,7 @@ antivirus.
 ### La notificación de prueba no aparece en la PC
 
 Verifique que el dispositivo esté activo (la PWA debe mostrar «Activadas»), que
-la opción 0 de la consola informe `Enviados` mayor que cero y que Windows no
+la opción 8 de la consola informe `Enviados` mayor que cero y que Windows no
 tenga bloqueadas las notificaciones del navegador o el Asistente de
 concentración. Con la pestaña visible, la PWA también intenta mostrar la
 notificación local y actualiza su mensaje de estado.

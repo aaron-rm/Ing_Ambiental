@@ -1,7 +1,9 @@
 # Ajustes necesarios para el panel de río
 
 **Fecha:** 23/10/2026<br>
-**Estado:** notas de análisis; no implementado.<br>
+**Estado:** casi todo implementado en el avance de autenticación, catálogo y
+panel. Quedan pendientes la caché de GEOGloWS (2.4) y el campo opcional
+`siguiendo` (2.5). El gráfico se implementó como hidrograma de caudal.<br>
 **Objetivo:** que al hacer clic en cualquiera de los cuatro ríos se abra un panel
 con caudal, lluvia, estado, gráfico, recomendaciones y botón de suscripción.
 
@@ -27,6 +29,10 @@ hacer con el contrato actual. La mayor parte del trabajo del panel es frontend.
 
 ### 2.1. Las recomendaciones están vacías
 
+> **Implementado.** `AlertaService` ahora genera recomendaciones por nivel y
+> añade avisos cuando el riesgo principal es la lluvia o cuando los datos no son
+> confiables.
+
 En `AlertaService.mapear()` se ejecuta:
 
 ```java
@@ -47,6 +53,9 @@ duplicando la lógica de riesgo.
 
 ### 2.2. Falta el catálogo con geometría para el mapa
 
+> **Implementado.** `Rio` tiene `geometria` y `GET /api/rios/mapa` devuelve la
+> `FeatureCollection` con la geometría real simplificada de GEOGloWS V2.
+
 `Rio` solo tiene `latitud` y `longitud`; no tiene la línea del río. Tampoco está
 implementado `GET /api/rios/mapa`.
 
@@ -60,10 +69,17 @@ No usar un punto o un marcador si el diseño exige hacer clic sobre el cauce.
 
 ### 2.3. El seed actual no coincide con el catálogo
 
+> **Implementado.** `InicializadorDatos` se eliminó y `InicializadorCatalogo`
+> hace upsert por `reachId`, con lo que “Río Pacora” se corrigió a Río Abajo sin
+> duplicar filas.
+
 `InicializadorDatos` crea “Río Pacora” con el `reachId` de Río Abajo. Hay que
 reemplazarlo por los cuatro ríos acordados antes de probar el panel.
 
 ### 2.4. La consulta puede ser lenta al hacer clic
+
+> **Pendiente.** GEOGloWS sigue sin caché propia; la PWA y la consola consultan
+> en vivo al abrir el panel. Open-Meteo ya cachea 15 minutos.
 
 Cada llamada a `GET /api/alertas/rio/{rioId}` consulta GEOGloWS
 (`forecaststats` y `returnperiods`) y Open-Meteo. Open-Meteo ya tiene caché de
@@ -79,6 +95,9 @@ indique si el dato es reciente.
 
 ### 2.5. Falta `rioId` y, opcionalmente, el estado de suscripción
 
+> **Parcial.** `AlertaRioDTO` ya incluye `rioId`. El campo `siguiendo` no se
+> agregó: la PWA consulta `GET /api/usuarios/me/rios` y cruza la lista.
+
 `AlertaRioDTO` devuelve `reachId` y `nombreRio`, pero no el `rioId` que el
 frontend usa para el clic. No es un bloqueo porque el frontend ya lo conoce,
 pero incluirlo evita confusiones.
@@ -89,6 +108,9 @@ evitar esa llamada adicional, se puede agregar un campo `siguiendo` a la
 respuesta del panel cuando la petición incluya sesión.
 
 ### 2.6. Separar el estado del caudal del estado final
+
+> **Aplicado.** El contrato expone `nivelRiesgoCaudal` y `nivelRiesgoLluvia`; el
+> hidrograma se dibuja con los umbrales de caudal y el panel muestra ambos.
 
 `nivelAlerta` es el **mayor** entre el riesgo por caudal y el riesgo por lluvia.
 En cambio, `pronosticoDiario.estadoDia` se calcula solo con el caudal.
@@ -104,6 +126,9 @@ Para el panel hay que decidir y documentar:
 - mostrar explícitamente si el riesgo viene del caudal, de la lluvia o de ambos.
 
 ### 2.7. Evitar devolver entidades JPA en el catálogo
+
+> **Implementado.** `GET /api/rios` devuelve `RioResumenDTO` y el mapa sale como
+> GeoJSON; la entidad `Rio` no se expone.
 
 `GET /api/rios` devuelve hoy la entidad `Rio`. Si se le agrega geometría, esa
 respuesta puede volverse pesada y acoplar al frontend a la base de datos.
@@ -149,15 +174,15 @@ deben inventarse ni presentarse como una medición.
 - Botón naranja de suscripción: es frontend; usa los endpoints de usuario–ríos.
 - Dibujo del gráfico y de las líneas de umbral: el backend ya entrega los
   valores.
-- Textos de recomendación: se muestran, pero primero hay que poblarlos en el
-  backend.
+- Textos de recomendación: ya se generan en el backend según el nivel.
 
-## 5. Orden sugerido
+## 5. Orden sugerido (estado)
 
-1. Usar el hidrograma de caudal con umbrales (decisión tomada en la sección 3).
-2. Corregir el catálogo: cuatro ríos, geometría y endpoint del mapa.
-3. Poblar `recomendaciones`.
-4. Agregar caché o última evaluación para que el clic sea rápido.
-5. Agregar `rioId` y, si se decide, `siguiendo`.
-6. Implementar usuario–ríos y el botón de suscripción.
-7. Documentar el contrato final en `INTEGRACION_FRONTEND.md`.
+1. ~~Usar el hidrograma de caudal con umbrales~~ — la PWA ya lo usa.
+2. ~~Corregir el catálogo: cuatro ríos, geometría y endpoint del mapa~~ — hecho.
+3. ~~Poblar `recomendaciones`~~ — hecho en `AlertaService`.
+4. Agregar caché o última evaluación para que el clic sea rápido — **pendiente**.
+5. ~~Agregar `rioId`~~ — hecho; `siguiendo` no se agregó (la PWA usa
+   `/api/usuarios/me/rios`).
+6. ~~Implementar usuario–ríos y el botón de suscripción~~ — hecho.
+7. ~~Documentar el contrato final en `INTEGRACION_FRONTEND.md`~~ — hecho.

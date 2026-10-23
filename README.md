@@ -6,17 +6,20 @@ Messaging (FCM).
 
 Incluye dos clientes de apoyo:
 
-- `ConsolaDemoRunner`: cliente HTTP de demostración y pruebas del backend.
-- PWA mínima de pruebas: solo sirve para activar notificaciones y comprobar su
-  recepción. **No es el frontend definitivo**; ese frontend lo construirá otro
-  equipo desde cero.
+- `ConsolaDemoRunner`: cliente HTTP de demostración y pruebas del backend, con
+  login y menús según el rol (`USER`/`ADMIN`).
+- PWA de pruebas: login, mapa del catálogo, panel de caudal y lluvia de
+  cualquier río y activación de notificaciones. **No es el frontend
+  definitivo**; ese frontend lo construirá otro equipo desde cero.
 
 > Proyecto académico y orientativo. No emite declaraciones oficiales de
 > emergencia ni sustituye a SINAPROC, IMHPA u otra autoridad competente.
 
-> **Estado:** el siguiente avance (login, catálogo de cuatro ríos y selección
-> múltiple) está documentado, pero todavía no implementado. Para retomarlo en
-> otra sesión o computadora, empezar por
+> **Estado:** el avance de autenticación, catálogo de cuatro ríos con geometría
+> real, selección usuario–ríos y push asociado al usuario está implementado y
+> con 67 pruebas en verde. Falta validar con PostgreSQL real y probar la
+> recepción push en un dispositivo. Para retomarlo en otra sesión o
+> computadora, empezar por
 > [docs/CONTINUIDAD_SESION.md](docs/CONTINUIDAD_SESION.md).
 
 > Para una explicación funcional breve, sin tecnicismos, ver
@@ -39,9 +42,14 @@ Arranque manual:
 
 ```powershell
 $env:DB_PASSWORD = "su-contraseña-local"
-$env:ALERTA_ADMIN_TOKEN = "un-token-largo"
+$env:ALERTA_JWT_SECRET = "un-secreto-de-al-menos-32-caracteres"
+$env:ALERTA_ADMIN_IDENTIFICADOR = "admin"
+$env:ALERTA_ADMIN_PASSWORD = "la-contraseña-local-acordada"
 .\mvnw.cmd spring-boot:run
 ```
+
+Al arrancar, el backend carga el catálogo de cuatro ríos desde
+`src/main/resources/catalogo/rios.json` (upsert por `reachId`).
 
 La consola se puede desactivar sin afectar al backend:
 
@@ -52,20 +60,22 @@ $env:ALERTA_DEMO_CONSOLA_HABILITADA = "false"
 
 ## Demo de notificaciones en clase
 
-1. Cada estudiante abre la URL HTTPS del túnel, pulsa **Activar notificaciones**
-   y acepta el permiso.
-2. En la terminal donde corre el backend, elegir la opción **0** de la consola:
-   `Enviar notificacion push de demostracion a todos`.
+1. Cada estudiante abre la URL HTTPS del túnel, inicia sesión o crea una cuenta,
+   sigue al menos un río y pulsa **Activar notificaciones**.
+2. En la terminal donde corre el backend, iniciar sesión en la consola con la
+   cuenta `ADMIN` y elegir la opción **8: Enviar notificacion push de
+   demostracion**.
 3. La notificación debe aparecer en los dispositivos suscritos.
 
-La consola usa `ALERTA_ADMIN_TOKEN` para autenticarse contra
-`POST /api/push/demo`. El simulacro no crea un evento real de riesgo.
+El simulacro no crea un evento real de riesgo. Para probar el enrutamiento por
+río, el administrador puede evaluar un río con datos reales (opción 7): solo
+reciben la notificación los usuarios que siguen ese río.
 
 ## Si ves la PWA antigua o “Sin conexión”
 
 El navegador pudo conservar el Service Worker de una versión anterior. Cuando el
 backend está detenido, ese Service Worker puede servir el HTML viejo desde su
-caché y mostrar “Sin conexión”, aunque el código actual ya sea la página mínima.
+caché y mostrar “Sin conexión”, aunque el código actual ya sea la página nueva.
 
 En Chrome de escritorio:
 
@@ -90,17 +100,18 @@ nueva del Service Worker elimina las cachés `alerta-shell-*` al activarse.
 | [INFORME_ALERTAS_INUNDACION.md](INFORME_ALERTAS_INUNDACION.md) | Informe: cambios, pruebas reales, pendientes y limitaciones |
 | [docs/CONFIGURACION_PUSH.md](docs/CONFIGURACION_PUSH.md) | Variables de entorno, PostgreSQL y Firebase/FCM |
 | [docs/INTEGRACION_FRONTEND.md](docs/INTEGRACION_FRONTEND.md) | Contrato de API y guía para el equipo de frontend |
-| [docs/GUIA_FRONTEND.md](docs/GUIA_FRONTEND.md) | Guía del avance: login, mapa, selección múltiple y admin (borrador) |
-| [docs/AJUSTES_PANEL_RIO.md](docs/AJUSTES_PANEL_RIO.md) | Correcciones necesarias para el panel informativo de río |
+| [docs/GUIA_FRONTEND.md](docs/GUIA_FRONTEND.md) | Diseño implementado: login, mapa, selección múltiple y admin |
+| [docs/AJUSTES_PANEL_RIO.md](docs/AJUSTES_PANEL_RIO.md) | Estado de los ajustes del panel informativo de río |
 | [IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md) | Historia de implementación y decisiones previas |
 
 ## Pruebas
 
 ```powershell
-.\mvnw.cmd package
+.\mvnw.cmd test
 ```
 
-Estado actual: **51 pruebas, 0 fallos**.
+Estado actual: **67 pruebas, 0 fallos**. En Linux, usar `bash mvnw test` si
+`./mvnw` falla con “Permiso denegado”.
 
 Validación de sintaxis de la PWA:
 
@@ -112,14 +123,18 @@ node --check src/main/resources/static/firebase-messaging-sw.js
 ## Estructura
 
 ```text
+src/main/java/.../auth/     Usuarios, JWT, roles y seguridad
+src/main/java/.../usuario/  Selección usuario–ríos
 src/main/java/.../alerta/   Eventos, monitoreo y API de alertas
 src/main/java/.../riesgo/   Reglas de caudal y lluvia
 src/main/java/.../clima/    Open-Meteo y caché
-src/main/java/.../push/     FCM, registro y envío
-src/main/java/.../rio/      Ríos configurados
-src/main/java/.../demo/     Consola HTTP e inicialización de demo
-src/main/resources/static/  PWA mínima de prueba de notificaciones
-src/test/java/...           51 pruebas automatizadas
+src/main/java/.../push/     FCM, registro y envío por seguidores
+src/main/java/.../rio/      Catálogo, geometría y mapa
+src/main/java/.../demo/     Consola HTTP de demostración
+src/main/resources/catalogo/  Catálogo con geometría real (GeoJSON)
+tools/                      Script reproducible del catálogo
+src/main/resources/static/  PWA de pruebas
+src/test/java/...           67 pruebas automatizadas
 docs/                       Arquitectura y guías operativas
 scripts/                    Arranque de demo
 ```
@@ -128,8 +143,12 @@ scripts/                    Arranque de demo
 
 - Umbrales de lluvia experimentales (25/50/100 mm).
 - `returnperiods` de GEOGloWS falla; se usa el fallback 15/30/60 m³/s.
-- Push real pendiente de credenciales Firebase y dispositivo físico.
+- Push real pendiente de credenciales Firebase y dispositivo físico; no está
+  probado de extremo a extremo.
+- La aplicación no se ha arrancado todavía contra PostgreSQL real en el entorno
+  de desarrollo usado; solo hay compilación y pruebas unitarias.
 - iOS requiere 16.4+ y la PWA instalada en la pantalla de inicio.
 - El túnel HTTPS es temporal; para producción se necesita un dominio estable.
-- La gestión de ríos (`POST`/`PUT /api/rios`) aún no está protegida con token;
-  debe restringirse antes de producción.
+- Dos rutas heredadas (`POST /api/push/demo` y
+  `GET /api/alertas/suscripciones/{reachId}`) siguen con `X-Admin-Token` y se
+  retirarán; el resto de las operaciones administrativas ya exige JWT `ADMIN`.

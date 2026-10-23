@@ -1,7 +1,8 @@
 # Directrices de arquitectura
 
-**Última actualización:** 22/10/2026  
-**Estado:** vigente para el avance actual y para el trabajo futuro sobre el backend.
+**Última actualización:** 23/10/2026  
+**Estado:** vigente. Refleja el avance de autenticación, catálogo de cuatro ríos,
+selección usuario–ríos y push asociado al usuario.
 
 Este documento es la referencia permanente para separar responsabilidades entre el
 backend, la consola de demostración y los clientes. `GEMINI.md` resume estas
@@ -23,7 +24,7 @@ La separación buscada es:
 Backend (lógica de negocio, integraciones, persistencia, push)
    ├── API REST pública
    ├── ConsolaDemoRunner  → cliente HTTP de demostración y pruebas
-   ├── PWA de pruebas     → cliente HTTP mínimo para verificar push
+   ├── PWA de pruebas     → cliente HTTP de prueba (login, mapa, panel y push)
    └── Frontend definitivo → cliente HTTP desarrollado por otro equipo
 ```
 
@@ -90,11 +91,11 @@ definitivo.** Ese equipo puede elegir framework, arquitectura de componentes,
 sistema de diseño, navegación y presentación de datos, siempre que respete los
 contratos HTTP públicos del backend.
 
-La PWA actual es solamente una herramienta mínima para verificar notificaciones.
-No constituye una referencia obligatoria de diseño ni una base que el frontend
-definitivo deba reutilizar. El frontend definitivo se construirá desde cero y
-podrá mostrar caudales, lluvia, pronósticos, mapas, riesgo e historial según sus
-propias decisiones de producto.
+La PWA actual es una herramienta de prueba del flujo completo (login, catálogo,
+panel y notificaciones). No constituye una referencia obligatoria de diseño ni
+una base que el frontend definitivo deba reutilizar. El frontend definitivo se
+construirá desde cero y podrá mostrar caudales, lluvia, pronósticos, mapas,
+riesgo e historial según sus propias decisiones de producto.
 
 Tampoco debe interpretarse que todo el proyecto debe limitarse a una consola o a
 una página minimalista. El backend es el sistema; la consola y la PWA son
@@ -110,17 +111,19 @@ Paquete base: `com.alerta.sistema_alerta_inundaciones`.
 
 | Componente | Responsabilidad |
 |---|---|
-| `alerta/AlertaController` | API de consulta, historial, suscripciones y simulación |
+| `auth/` | Registro, login, JWT, roles y `SecurityConfig` |
+| `usuario/` | Entidad `Usuario` y selección usuario–ríos |
+| `alerta/AlertaController` | API de consulta, historial y simulación/evaluación (`ADMIN`) |
 | `alerta/AlertaService` | Consulta a GEOGloWS, simulación y suscripciones heredadas |
 | `alerta/AlertaMonitoreoService` | Evaluación periódica y manual de todos los ríos |
 | `alerta/AlertaEventoService` | Transiciones, idempotencia y estado de envío |
 | `riesgo/EvaluadorRiesgo` | Reglas de caudal y lluvia |
 | `clima/OpenMeteoCliente` | Precipitación y caché |
-| `push/PushController` | Configuración, registro, baja y prueba push |
-| `push/PushService` | Registro de dispositivos y envío FCM |
+| `push/PushController` | Configuración, registro, baja y prueba push (JWT) |
+| `push/PushService` | Registro por usuario y envío a los seguidores del río |
 | `push/FirebasePushSender` | Integración con Firebase Admin |
-| `rio/RioController` | Gestión de ríos del sistema |
-| `demo/InicializadorDatos` | Río inicial de demostración, solo si la tabla está vacía |
+| `rio/RioController` | Catálogo y GeoJSON del mapa |
+| `rio/InicializadorCatalogo` | Upsert del catálogo de cuatro ríos desde `catalogo/rios.json` |
 
 ### `ConsolaDemoRunner`
 
@@ -131,21 +134,21 @@ Paquete base: `com.alerta.sistema_alerta_inundaciones`.
 - Usa `BackendApiClient` contra `alerta.api.base-url`
   (`ALERTA_API_BASE_URL`, por defecto `http://localhost:8081`).
 - No inyecta repositorios ni servicios de negocio.
-- Conserva las opciones y salidas existentes; la opción `0` envía la
-  notificación push de demostración.
-- Hoy requiere `ALERTA_ADMIN_TOKEN` para consultar suscriptores y enviar la demo
-  push. En el próximo avance pedirá inicio de sesión y usará JWT con roles; la
-  consola normal verá solo las opciones de usuario y la consola administrativa
-  verá además simulación, evaluación y demo push.
+- Pide login o registro al arrancar y usa JWT solo en memoria; no guarda el token
+  en disco.
+- Menú de `USER`: catálogo, panel de cualquier río, seguir/dejar de seguir, mis
+  ríos y cerrar sesión.
+- Menú de `ADMIN`: lo anterior más simulación (no envía push), evaluación real y
+  push de demostración (`POST /api/admin/push/demo`).
 
 ### PWA de pruebas
 
 - Archivos en `src/main/resources/static/`.
-- Solo permite activar notificaciones y comprobar la recepción.
-- No muestra datos hidrológicos ni de monitoreo.
-- No tiene panel administrativo ni botón para enviar push.
-- La prueba controlada se lanza desde la consola (opción `0`) o desde
-  `POST /api/push/demo` con `X-Admin-Token`.
+- Login/registro, mapa SVG del catálogo, panel de caudal y lluvia de cualquier
+  río y activación de push con JWT.
+- Selección múltiple de ríos; seguir un río solo controla las notificaciones.
+- No tiene panel administrativo; el push de demostración se lanza desde la
+  consola con rol `ADMIN`.
 - No es el frontend definitivo.
 
 ### Frontend definitivo
@@ -163,9 +166,8 @@ eventos o envíe notificaciones:
 
 | Elemento | Uso | Separación |
 |---|---|---|
-| `demo/InicializadorDatos` | Crea el Río Pacora solo si la tabla de ríos está vacía | `ALERTA_CREAR_RIO_INICIAL=false` |
-| `demo/ConsolaDemoRunner` | Menú interactivo; usa el primer río y un fallback Pacora | `ALERTA_DEMO_CONSOLA_HABILITADA=false` |
-| `alerta.demo.reach-id-inicial` | `reachId` por defecto que expone `/api/push/config` para la PWA de prueba | El frontend definitivo debe elegir un río de `/api/rios`; no debe asumir ese valor |
+| `rio/InicializadorCatalogo` | Carga inicial del catálogo de cuatro ríos (upsert por `reachId`) | `ALERTA_CARGAR_CATALOGO=false` |
+| `demo/ConsolaDemoRunner` | Menú interactivo con login y menús por rol | `ALERTA_DEMO_CONSOLA_HABILITADA=false` |
 | `GEOGLOWS/GeneradorAlertaFinal.main` | Demostración independiente con un `reachId` fijo | No es un bean de Spring ni participa en el monitoreo |
 
 El monitoreo programado recorre `rioRepository.findAll()` y la API acepta
@@ -191,9 +193,10 @@ Principios del contrato:
 - Las respuestas usan DTOs estables, no entidades JPA cuando el DTO aporta
   claridad o evita acoplamiento.
 - Los errores usan códigos HTTP coherentes y mensajes comprensibles.
-- Las operaciones sensibles se protegen con autenticación administrativa. Hoy
-  se usa `X-Admin-Token`; en el avance de usuarios y roles se migrarán a JWT con
-  rol `ADMIN`, y el token quedará solo como compatibilidad temporal.
+- Las operaciones sensibles se protegen con JWT y rol `ADMIN`. Dos rutas
+  heredadas (`POST /api/push/demo` y
+  `GET /api/alertas/suscripciones/{reachId}`) conservan `X-Admin-Token` como
+  compatibilidad temporal y se retirarán más adelante.
 - Los endpoints públicos no revelan credenciales ni datos administrativos.
 
 ### Decisiones adoptadas en la refactorización actual
@@ -204,13 +207,13 @@ Principios del contrato:
   Boot 4 usa Jackson 3 para MVC y no expone el bean de Jackson 2. Firebase Admin
   también usa Jackson 2. No volver a inyectar
   `com.fasterxml.jackson.databind.ObjectMapper` como bean de Spring.
-- Se añadió `PUT /api/rios/{id}` para que la consola pueda corregir el río
-  inicial sin acceso directo a la base.
-- `/api/push/config` devuelve `reachId` para que la PWA de prueba se registre en
-  el tramo por defecto sin mostrar datos de ríos.
+- La escritura del catálogo vive en `AdminRioController` bajo `/api/admin/rios`
+  (JWT + `ADMIN`); la consola ya no la usa.
+- `/api/push/config` ya no devuelve `reachId`: el dispositivo se registra con
+  JWT y las alertas dependen de los ríos que sigue el usuario.
 - La consola es un bean condicional y puede desactivarse sin afectar al backend.
-- La PWA dejó de ser un panel de monitoreo y pasó a ser un receptor mínimo de
-  push.
+- La PWA pasó de ser un receptor mínimo de push a un cliente de prueba del flujo
+  completo (login, mapa, panel y notificaciones).
 
 ---
 
@@ -221,7 +224,11 @@ Variables principales:
 | Variable | Uso |
 |---|---|
 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | PostgreSQL |
-| `ALERTA_ADMIN_TOKEN` | Token temporal de compatibilidad para la consola; se reemplazará por JWT con rol `ADMIN` |
+| `ALERTA_JWT_SECRET` | Secreto HS256 del JWT (mínimo 32 caracteres) |
+| `ALERTA_ADMIN_IDENTIFICADOR` / `ALERTA_ADMIN_PASSWORD` | Administrador inicial; la contraseña solo vive en el entorno o en `.env.demo` |
+| `ALERTA_CORS_ORIGENES` | Orígenes permitidos para el frontend definitivo |
+| `ALERTA_CARGAR_CATALOGO` | Activa la carga del catálogo de cuatro ríos al arrancar |
+| `ALERTA_ADMIN_TOKEN` | Solo compatibilidad: `POST /api/push/demo` y `GET /api/alertas/suscripciones/{reachId}` |
 | `ALERTA_API_BASE_URL` | URL que usa la consola para consumir el backend |
 | `ALERTA_DEMO_CONSOLA_HABILITADA` | Activa o desactiva la consola |
 | `FIREBASE_ENABLED` | Habilita o deshabilita FCM |
@@ -236,12 +243,11 @@ Reglas:
 - Documentar cualquier limitación de seguridad pendiente en lugar de inventar
   autenticación compleja que el proyecto aún no necesita.
 
-Limitación actual: la gestión de ríos (`POST`/`PUT /api/rios`) no tiene token
-administrativo, igual que el diseño previo. Antes de producción debe protegerse
-o restringirse. El listado de suscripciones y la evaluación manual sí requieren
-`X-Admin-Token`. En el avance de autenticación, la escritura de ríos y las
-operaciones administrativas pasarán a exigir JWT con rol `ADMIN`; la consola se
-adaptará para conservar sus opciones.
+Limitación actual: quedan dos rutas heredadas con `X-Admin-Token`
+(`POST /api/push/demo` y `GET /api/alertas/suscripciones/{reachId}`);
+se retirarán en una entrega futura. El resto de las operaciones
+administrativas (escritura de ríos, simulación, evaluación manual y push de
+demostración) ya exigen JWT con rol `ADMIN`.
 
 ---
 

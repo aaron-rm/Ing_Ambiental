@@ -1,12 +1,13 @@
 # Guía de integración para el frontend
 
-**Estado:** borrador del contrato para el avance de autenticación, mapa y
-selección múltiple de ríos. Los endpoints marcados como **propuestos** todavía
-no están implementados.
+**Estado:** **implementado**. Este documento describe el diseño del avance de
+autenticación, mapa y selección múltiple de ríos que ya está en la rama
+`backend`, y cómo debe integrarse el frontend definitivo. Se conserva como
+referencia de decisiones; los endpoints listados existen tal como se describen
+salvo lo indicado en la sección 8.
 
 **Contrato vigente:** [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md)
-describe la API que existe hoy. Este documento describe hacia dónde va el
-backend y cómo debe integrarse el frontend definitivo.
+resume la API que existe hoy.
 
 ---
 
@@ -183,7 +184,7 @@ Todas las rutas protegidas usan:
 Authorization: Bearer <jwt>
 ```
 
-Duración propuesta: **24 horas**, configurable en el backend. No habrá refresh
+Duración: **24 horas**, configurable en el backend. No habrá refresh
 token en este avance. Cuando el token expire, el frontend recibe `401` y debe
 volver a pedir login.
 
@@ -212,7 +213,7 @@ credenciales o tokens.
 GET /api/rios/mapa
 ```
 
-Respuesta propuesta:
+Respuesta:
 
 ```json
 {
@@ -328,7 +329,7 @@ GET /api/usuarios/me/rios
 Authorization: Bearer <jwt>
 ```
 
-Respuesta propuesta:
+Respuesta:
 
 ```json
 [
@@ -408,10 +409,10 @@ a un `reachId` suelto.
 GET /api/push/config
 ```
 
-El frontend usa esta respuesta para inicializar Firebase. El campo `reachId`
-que aparece hoy es heredado de la PWA de prueba: **el frontend definitivo no
-debe usarlo para decidir qué ríos recibe**. La selección se hace con
-`/api/usuarios/me/rios`.
+El frontend usa esta respuesta para inicializar Firebase. La respuesta solo
+contiene datos públicos de Firebase (API key, VAPID key, etc.); ya **no**
+incluye `reachId`. El dispositivo se asocia al usuario y las alertas dependen de
+los ríos que sigue, consultados con `/api/usuarios/me/rios`.
 
 ### 6.3. Registro del dispositivo
 
@@ -480,16 +481,16 @@ Recomendaciones:
 
 ### 6.7. PWA de prueba con login mínimo
 
-La PWA actual no tiene login y registra el push con un `reachId` fijo. Para que
-siga sirviendo en la demo de clase, se actualizará con un flujo mínimo:
+La PWA de prueba ya quedó actualizada con un flujo mínimo:
 
 1. pantalla de login o registro;
-2. lista de los cuatro ríos del catálogo con selección múltiple;
-3. botón para activar notificaciones;
-4. registro del token FCM con el JWT;
-5. opción para cerrar sesión y desactivar el dispositivo.
+2. mapa y lista de los cuatro ríos del catálogo con selección múltiple;
+3. panel de caudal y lluvia para cualquier río, esté o no seguido;
+4. botón para activar notificaciones;
+5. registro del token FCM con el JWT (sin `reachId`);
+6. opción para cerrar sesión y desactivar el dispositivo.
 
-No será el frontend definitivo ni tendrá panel de administración. Solo permitirá
+No es el frontend definitivo ni tiene panel de administración. Solo permite
 probar en el celular el mismo flujo de usuario que ya existe en la consola.
 
 ---
@@ -535,15 +536,14 @@ mismos roles que el frontend.
 
 La recomendación técnica es:
 
-| Cliente | Autenticación propuesta | Endpoint de demo |
+| Cliente | Autenticación | Endpoint de demo |
 |---|---|---|
 | Consola migrada | JWT con rol `ADMIN` | `POST /api/admin/push/demo` |
 | Frontend nuevo | JWT con rol `ADMIN` | `POST /api/admin/push/demo` |
 
-Con la consola autenticada, `X-Admin-Token` deja de ser necesario. Se puede
-retirar cuando la consola termine de migrar sus opciones administrativas. Si se
-conserva temporalmente, debe quedar claro que es solo compatibilidad y que el
-frontend **nunca** debe usarlo.
+La consola ya usa JWT. `X-Admin-Token` se conserva solo para dos rutas heredadas
+(`POST /api/push/demo` y `GET /api/alertas/suscripciones/{reachId}`) que se
+retirarán más adelante; el frontend **nunca** debe usarlo.
 
 El token es un secreto compartido, no una credencial de usuario. No debe
 enviarse desde el navegador.
@@ -554,28 +554,28 @@ enviarse desde el navegador.
 
 | Método | Ruta | Auth | Estado |
 |---|---|---|---|
-| POST | `/api/auth/registro` | pública | propuesto |
-| POST | `/api/auth/login` | pública | propuesto |
-| GET | `/api/auth/me` | JWT | propuesto |
-| GET | `/api/rios` | pública | existe |
-| GET | `/api/rios/mapa` | pública | propuesto |
-| GET | `/api/usuarios/me/rios` | JWT | propuesto |
-| POST | `/api/usuarios/me/rios/{rioId}` | JWT | propuesto |
-| DELETE | `/api/usuarios/me/rios/{rioId}` | JWT | propuesto |
-| GET | `/api/alertas/rio/{rioId}` | pública | existe |
-| GET | `/api/push/config` | pública | existe |
-| POST | `/api/push/registrar` | JWT | cambiará |
-| DELETE | `/api/push/registrar` | JWT | cambiará |
-| POST | `/api/push/prueba` | JWT | cambiará |
-| POST | `/api/admin/push/demo` | JWT + ADMIN | propuesto |
-| POST | `/api/admin/rios` | JWT + ADMIN | reservado para mantenimiento; no se usará en esta entrega |
-| PUT | `/api/admin/rios/{rioId}` | JWT + ADMIN | reservado para mantenimiento; no se usará en esta entrega |
-| POST | `/api/push/demo` | `X-Admin-Token` | existente; se retirará al migrar la consola |
+| POST | `/api/auth/registro` | pública | implementado |
+| POST | `/api/auth/login` | pública | implementado |
+| GET | `/api/auth/me` | JWT | implementado |
+| GET | `/api/rios` | pública | implementado |
+| GET | `/api/rios/mapa` | pública | implementado |
+| GET | `/api/usuarios/me/rios` | JWT | implementado |
+| POST | `/api/usuarios/me/rios/{rioId}` | JWT | implementado |
+| DELETE | `/api/usuarios/me/rios/{rioId}` | JWT | implementado |
+| GET | `/api/alertas/rio/{rioId}` | pública | implementado |
+| GET | `/api/push/config` | pública | implementado (sin `reachId`) |
+| POST | `/api/push/registrar` | JWT | implementado (sin `reachId`) |
+| DELETE | `/api/push/registrar` | JWT | implementado |
+| POST | `/api/push/prueba` | JWT | implementado |
+| POST | `/api/admin/push/demo` | JWT + ADMIN | implementado |
+| POST | `/api/admin/rios` | JWT + ADMIN | reservado para mantenimiento; no se usó en esta entrega |
+| PUT | `/api/admin/rios/{rioId}` | JWT + ADMIN | reservado para mantenimiento; no se usó en esta entrega |
+| POST | `/api/push/demo` | `X-Admin-Token` | heredado; se retirará |
 
-Las rutas actuales que usan `X-Admin-Token` para evaluación manual y consulta de
-suscriptores se migrarán a JWT con rol `ADMIN` cuando la consola adopte el
-login. Si se mantienen temporalmente, serán solo compatibilidad para la consola
-y no se documentarán como parte del contrato del frontend.
+La evaluación manual (`POST /api/alertas/evaluar/{reachId}`) y la simulación
+(`POST /api/alertas/simular`) ya exigen JWT con rol `ADMIN`. Las rutas heredadas
+que aún usan `X-Admin-Token` son solo compatibilidad para la consola y no se
+documentan como parte del contrato del frontend.
 
 Las rutas heredadas de suscripción por correo o teléfono
 (`POST /api/alertas/suscribir` y
@@ -627,8 +627,9 @@ frontend debe tolerar tanto texto como JSON.
 
 Decisiones tomadas:
 
-1. La consola migrará a JWT y `X-Admin-Token` se retirará al terminar la
-   migración.
+1. La consola migró a JWT. `X-Admin-Token` se conserva solo para las dos rutas
+   heredadas (`POST /api/push/demo` y
+   `GET /api/alertas/suscripciones/{reachId}`) y se retirará más adelante.
 2. El catálogo queda cerrado en cuatro ríos: Abajo, Curundú, Juan Díaz y
    Tocumen. Se cargan predefinidos; no habrá creación ni edición de ríos en la
    interfaz de esta entrega. Los endpoints de escritura quedarán reservados y
@@ -652,10 +653,11 @@ Decisiones tomadas:
 
 Pendientes antes de cerrar el avance:
 
-1. Definir la URL exacta del frontend para CORS.
+1. Definir la URL exacta del frontend para CORS (`ALERTA_CORS_ORIGENES`).
 2. Investigar y calibrar umbrales de lluvia por temporada (invierno/verano).
    No se implementará con valores inventados.
-3. Implementar y probar todo el flujo descrito en esta guía.
+3. Probar con PostgreSQL real y verificar la recepción push en un dispositivo
+   físico. No afirmar que el push funciona de extremo a extremo sin esa prueba.
 
 Hasta que termine la implementación, este documento es una guía de diseño y no
 un contrato implementado.

@@ -4,7 +4,10 @@
 **Rama de trabajo:** `backend`<br>
 **Último commit de referencia:** el commit de documentación más reciente de la
 rama (`git log -1`).<br>
-**Estado:** planificación cerrada; implementación del siguiente avance **no iniciada**.<br>
+**Estado:** el avance de autenticación, catálogo de cuatro ríos con geometría
+real, selección usuario–ríos y push asociado al usuario está **implementado**,
+compilado y con **67 pruebas en verde**. Falta la validación con PostgreSQL real
+y la prueba de push de extremo a extremo en un dispositivo.<br>
 **Objetivo de este documento:** permitir que otra persona o una sesión nueva de IA
 retome el proyecto desde otra computadora sin necesitar el historial del chat.
 
@@ -16,12 +19,12 @@ Al retomar el proyecto, leer en este orden:
 
 1. Este documento.
 2. [`RESUMEN_PROYECTO.md`](RESUMEN_PROYECTO.md): explicación funcional y alcance.
-3. [`GUIA_FRONTEND.md`](GUIA_FRONTEND.md): diseño del avance de login, mapa,
-   selección múltiple y administración.
-4. [`AJUSTES_PANEL_RIO.md`](AJUSTES_PANEL_RIO.md): correcciones necesarias para
-   el panel informativo de cada río.
-5. [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md): contrato de la API que
+3. [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md): contrato de la API que
    existe hoy.
+4. [`GUIA_FRONTEND.md`](GUIA_FRONTEND.md): diseño que se implementó (login,
+   mapa, selección múltiple y administración).
+5. [`AJUSTES_PANEL_RIO.md`](AJUSTES_PANEL_RIO.md): criterios del panel
+   informativo de cada río.
 6. [`ARQUITECTURA.md`](ARQUITECTURA.md): separación entre backend, consola, PWA
    y frontend.
 7. [`../GEMINI.md`](../GEMINI.md): reglas de trabajo para agentes de IA.
@@ -30,254 +33,163 @@ Después revisar:
 
 ```powershell
 git status
-git log -5 --oneline
+git log -8 --oneline
 ```
 
-**Importante:** no asumir que la autenticación, el catálogo de cuatro ríos ni la
-selección múltiple ya existen en el código. Hasta la fecha de este documento
-solo hay documentación y decisiones; no se ha implementado ese avance.
+**Importante:** este avance **ya está implementado**. No hay que volver a
+diseñarlo, a sembrar los ríos ni a migrar la consola: al arrancar, el backend
+carga el catálogo desde `catalogo/rios.json` y la consola pide inicio de sesión.
 
 ---
 
-## 2. Objetivo del siguiente avance
+## 2. Qué se implementó
 
-Convertir el backend actual en una aplicación con:
+### 2.1. Autenticación, roles y seguridad
 
-- registro e inicio de sesión con un solo identificador (correo o nombre de
-  usuario) y contraseña;
-- dos roles: `USER` y `ADMIN`;
-- catálogo cerrado de cuatro ríos cercanos a la UTP, con geometría;
-- selección múltiple de ríos por usuario;
-- consulta de caudal, lluvia y pronóstico de cualquiera de los cuatro ríos,
-  esté o no seguido;
-- push asociado a los ríos que sigue cada usuario;
-- consola con login y menús distintos según el rol;
-- PWA mínima de prueba con login, selección de ríos y activación de push.
+- Entidad `Usuario` en el paquete `usuario`, con un solo campo `identificador`
+  (correo o nombre de usuario), contraseña con BCrypt y roles `USER` / `ADMIN`.
+- Registro público (`POST /api/auth/registro`) siempre crea `USER`; login
+  (`POST /api/auth/login`) y sesión actual (`GET /api/auth/me`).
+- JWT HS256 de 24 horas (`ALERTA_JWT_SECRET`); sin refresh token. Filtro
+  `JwtAuthenticationFilter`; al vencer, el cliente vuelve al login.
+- Administrador sembrado desde entorno (`ALERTA_ADMIN_IDENTIFICADOR` y
+  `ALERTA_ADMIN_PASSWORD`). Si falta la contraseña, no se crea y se registra una
+  advertencia.
+- `SecurityConfig` con reglas por rol:
+  - `POST /api/alertas/simular` y `POST /api/alertas/evaluar/**` exigen
+    `ADMIN`;
+  - `/api/admin/**` exige `ADMIN`;
+  - `/api/push/**` (excepto `/api/push/config`) exige JWT;
+  - catálogo y consultas GET de alertas siguen siendo públicos;
+  - CORS configurable con `ALERTA_CORS_ORIGENES`.
 
-La consola **no desaparece** en esta entrega. Sigue siendo el cliente de
-demostración hasta que el frontend definitivo cubra sus funciones.
+### 2.2. Catálogo de cuatro ríos con geometría real
 
----
+- Catálogo cerrado: Abajo `710039498`, Curundú `710037516` (cadena
+  `710035532 → 710037516 → 710039500`), Juan Díaz `710051399` (cadena
+  `710051399 → 710035528 → 710055369 → 710057353`) y Tocumen `670053261`
+  (cadena `670053261 → 670054285 → 670055309`).
+- Geometría real de GEOGloWS V2 (red TDX-Hydro):
+  `s3://geoglows-v2/hydrography/vpu=701/streams_701.gpkg` y
+  `vpu=614/streams_614.gpkg`. `LINKNO` es el `reachId`; la geometría original
+  está en EPSG:3857.
+- `tools/generar_catalogo_geoglows.py` (solo biblioteca estándar) lee los
+  GeoPackage, convierte a WGS84, simplifica con Douglas-Peucker (8 m) y escribe
+  `src/main/resources/catalogo/rios.json` (~40 KB) con el punto representativo
+  de cada río. Es reproducible: si falta un `LINKNO`, falla en vez de inventar.
+- `InicializadorCatalogo` hace *upsert* por `reachId` al arrancar. Esto corrigió
+  el seed heredado “Río Pacora” (que en realidad era Río Abajo) sin duplicar
+  filas ni borrar ríos que otros integrantes hayan agregado.
+- `Rio` ganó `geometria` (GeoJSON como texto). `GET /api/rios` devuelve el
+  resumen y `GET /api/rios/mapa` una `FeatureCollection` con la geometría.
+- La escritura del catálogo quedó bajo `/api/admin/rios` (JWT + `ADMIN`).
+- Se eliminó `InicializadorDatos` y la propiedad `alerta.demo.reach-id-inicial`;
+  ahora se usa `alerta.demo.cargar-catalogo` (`ALERTA_CARGAR_CATALOGO`).
 
-## 3. Decisiones cerradas
+### 2.3. Selección usuario–ríos
 
-### 3.1. Autenticación y roles
+- Entidades `UsuarioRio` / `UsuarioRioRepository` y endpoints:
+  - `GET /api/usuarios/me/rios`
+  - `POST /api/usuarios/me/rios/{rioId}` (idempotente)
+  - `DELETE /api/usuarios/me/rios/{rioId}`
+- El panel de un río se consulta con `GET /api/alertas/rio/{rioId}` esté o no
+  seguido; seguir solo controla las notificaciones push.
 
-- Un solo campo `identificador`: correo o nombre de usuario.
-- Contraseña cifrada con BCrypt.
-- Registro público siempre crea rol `USER`.
-- El administrador se crea desde configuración de entorno; no desde el
-  formulario público.
-- JWT de 24 horas, configurable, sin refresh token.
-- Al expirar la sesión, el cliente vuelve al login.
-- `X-Admin-Token` se retira cuando la consola migre a JWT.
-- Los endpoints administrativos validan el rol en el backend, no solo en la
-  interfaz.
+### 2.4. Push asociado al usuario
 
-### 3.2. Cuenta de demostración
+- `DispositivoPush` se ligó a `Usuario`; `reachId` quedó como columna heredada
+  con `0L` y ya no participa del enrutamiento.
+- Registro y baja con JWT: `POST` y `DELETE /api/push/registrar` (sin
+  `reachId`). `GET /api/push/config` ya no expone `reachId`.
+- La prueba `POST /api/push/prueba` exige JWT; el demo administrativo pasó a
+  `POST /api/admin/push/demo` (JWT + `ADMIN`).
+- El envío por evento se enruta a los dispositivos activos de los usuarios que
+  siguen el río afectado.
+- Si el mismo dispositivo cambia de usuario, el token FCM se reasigna al último
+  login; al cerrar sesión, la PWA llama a `DELETE /api/push/registrar`.
 
-- La cuenta de demostración será `admin` con la contraseña local acordada.
-- **No escribir esa contraseña en el repositorio, README ni documentación.**
-- La contraseña vive únicamente en `.env.demo` local, que está ignorado por Git.
-- `.env.demo.example` solo contiene placeholders.
-- Si el backend arranca sin `ALERTA_ADMIN_PASSWORD`, no debe crear el
-  administrador; debe registrar una advertencia.
-- No es necesario sembrar usuarios normales: se pueden crear desde el registro
-  al probar.
+### 2.5. Consola (`ConsolaDemoRunner`)
 
-### 3.3. Catálogo de ríos
+- Pide login o registro al arrancar; guarda el JWT solo en memoria.
+- Menú `USER`: catálogo, panel de cualquier río, seguir/dejar de seguir, mis
+  ríos, cerrar sesión.
+- Menú `ADMIN` añade: simulación (no envía push), evaluación real con datos de
+  GEOGloWS/Open-Meteo y push de demostración.
+- `BackendApiClient` migró a JWT (`Authorization: Bearer`), con los DTO de la
+  API actual. Los dos endpoints heredados con `X-Admin-Token`
+  (`POST /api/push/demo` y `GET /api/alertas/suscripciones/{reachId}`) siguen
+  existiendo solo por compatibilidad y no se documentan para el frontend.
 
-El catálogo queda cerrado en cuatro ríos. No se crearán ni editarán ríos desde
-la interfaz en esta entrega.
+### 2.6. PWA de prueba (`src/main/resources/static/`)
 
-| Río | `reachId` principal | Distancia aproximada a la UTP | Geometría modelada | VPU |
-|---|---|---:|---:|---:|
-| **Río Abajo** | `710039498` | ~1.5 km | ~4.2 km | 701 |
-| **Río Curundú** | `710037516` | ~3.7 km al cauce; ~8.0 km al tramo modelado | ~6.0 km | 701 |
-| **Río Juan Díaz** | `710051399` | ~8.9 km | ~13.4 km | 701 |
-| **Río Tocumen** | `670053261` | ~14.3 km | ~3.7 km | 614 |
+- Login/registro, catálogo, mapa SVG propio (sin librería externa), panel con
+  hidrograma de caudal y umbrales, lluvia de Open-Meteo, seguir/dejar de seguir.
+- Activación de push con JWT (sin `reachId`), prueba desde la propia PWA y
+  desactivación del dispositivo al cerrar sesión.
+- El hidrograma usa caudal pronosticado; no se muestran metros de nivel porque
+  dependerían de la sección real del cauce.
 
-Los cuatro `reachId` principales fueron verificados contra:
+### 2.7. Pruebas
 
-```text
-https://geoglows.ecmwf.int/api/v2/forecaststats/{reachId}
-```
-
-Ríos descartados y por qué:
-
-- **Matasnillo:** ~1 km, pero GEOGloWS no tiene un tramo propio; el punto más
-  cercano se resuelve contra Abajo o Curundú.
-- **Matías Hernández:** su tramo modelado coincide con el de Río Abajo; incluirlo
-  duplicaría el mismo pronóstico.
-- **Tapia:** se resuelve contra Juan Díaz o Tocumen; no tiene un tramo
-  independiente claro.
-
-### 3.4. Geometría
-
-- Fuente: GEOGloWS V2, red TDX-Hydro.
-- Capas oficiales usadas:
-  - `s3://geoglows-v2/hydrography/vpu=701/streams_701.gpkg`
-  - `s3://geoglows-v2/hydrography/vpu=614/streams_614.gpkg`
-- El campo `LINKNO` es el `reachId`.
-- `DSLINKNO` indica el tramo aguas abajo.
-- La geometría está en EPSG:3857; hay que convertirla a WGS84.
-- Se agruparán tramos conectados para dibujar el cauce principal:
-  - Abajo: `710039498`.
-  - Curundú: `710035532` → `710037516` → `710039500`.
-  - Juan Díaz: `710051399` → `710035528` → `710055369` → `710057353`.
-  - Tocumen: `670053261` → `670054285` → `670055309`.
-- Guardar una geometría simplificada en GeoJSON dentro de la base de datos. No
-  consultar la geometría a internet en tiempo de ejecución.
-- La app no debe buscar el río más cercano a coordenadas arbitrarias: el usuario
-  hace clic sobre una línea del catálogo.
-
-### 3.5. Consola, PWA y push
-
-- La consola pedirá login o registro al arrancar.
-- Menú de usuario normal: catálogo, panel de cualquier río (caudal/lluvia),
-  ríos seguidos, seguir o dejar de seguir, cerrar sesión.
-- Menú de administrador: lo anterior más simulación, evaluación manual y push de
-  prueba.
-- No habrá opción de crear o editar ríos en la consola.
-- La PWA de prueba tendrá login, selección múltiple y activación de push.
-- El token FCM se asocia al usuario, no a un `reachId` suelto.
-- Al iniciar sesión en un dispositivo que ya tenía otro usuario, el token se
-  reasigna al último usuario.
-- Al cerrar sesión, el dispositivo se desactiva.
-- Las suscripciones heredadas por correo/teléfono se retiran del flujo y de la
-  consola.
-
-### 3.6. Consulta de información y suscripción
-
-- El panel de información se abre al hacer clic en **cualquier río del
-  catálogo**, esté o no seguido.
-- El panel muestra caudal y precipitación usando los datos de GEOGloWS y
-  Open-Meteo. El backend ya expone la consulta en
-  `GET /api/alertas/rio/{rioId}`.
-- La consulta **no depende de la suscripción**: seguir un río no habilita el
-  panel ni dejar de seguirlo lo bloquea.
-- El botón **Seguir** o **Dejar de seguir** solo controla si se reciben
-  notificaciones cuando ese río supera los umbrales de alerta.
-- La selección múltiple sigue existiendo para definir qué ríos generan push,
-  no para limitar qué ríos se pueden consultar.
-
-### 3.7. CORS y configuración
-
-- CORS será configurable por variable de entorno.
-- Como aún no existe el frontend, se dejarán orígenes locales comunes por
-  defecto y se ajustará cuando el equipo de frontend informe la URL exacta.
-- No usar `Access-Control-Allow-Origin: *` si se envían credenciales o tokens.
-
-### 3.8. Umbrales
-
-- Los umbrales actuales de caudal y lluvia siguen siendo provisionales.
-- La calibración por temporada (invierno/verano) queda documentada como trabajo
-  futuro. No se implementará con valores inventados.
-- `returnperiods` de GEOGloWS sigue fallando; se mantiene el fallback
-  15/30/60 m³/s.
+- `bash mvnw test` (Linux; `./mvnw` falla con “Permiso denegado”): **67
+  pruebas, 0 fallos**.
+- Nuevas: `UsuarioRioServiceTest`, `InicializadorCatalogoTest`, `RioServiceTest`,
+  `AuthServiceTest`; reescritas `PushServiceTest` y `BackendApiClientTest`.
+- No se pudo ejecutar la aplicación contra PostgreSQL real en el entorno donde
+  se implementó (no había servidor ni `psql` disponibles). Solo compilación y
+  pruebas unitarias; la prueba de humo con base de datos queda pendiente.
 
 ---
 
-## 4. Estado actual del repositorio
+## 3. Decisiones clave aplicadas
 
-- Rama actual: `backend`.
-- Último commit: el más reciente de `backend` (`git log -1`).
-- El repositorio remoto es `https://github.com/aaron-rm/Ing_Ambiental.git`.
-- La rama por defecto es `main`; el trabajo de este avance va en `backend`.
-- No hay código de autenticación, usuarios, roles, JWT, BCrypt ni CORS.
-- No hay modelo usuario–ríos.
-- `DispositivoPush` todavía tiene un solo `reachId` y no está ligado a usuarios.
-- `Rio` todavía no tiene geometría.
-- La PWA actual solo prueba notificaciones; no tiene login ni selección de ríos.
-- La consola actual usa `X-Admin-Token` y suscripciones heredadas.
-
-### 4.1. Inconsistencia conocida del seed actual
-
-`InicializadorDatos` crea un río llamado **“Río Pacora”** con
-`reachId = 710039498`. Ese `reachId` corresponde en realidad al **Río Abajo**.
-El mismo nombre y `reachId` se repiten en `ConsolaDemoRunner` y en el valor por
-defecto de `alerta.demo.reach-id-inicial`.
-
-Esto se corregirá al implementar el catálogo de cuatro ríos. Hay dos cuidados:
-
-- el seed solo actúa si la tabla `rios` está vacía, así que una base que ya tenga
-  “Río Pacora” no se corrige sola; la implementación debe hacer *upsert* por
-  `reachId` o migrar esa fila;
-- las pruebas y la consola que mencionan “Río Pacora” deben actualizarse en el
-  mismo cambio.
-
-### 4.2. Documentación de este avance
-
-La documentación de este avance está versionada en la rama `backend`. Antes de
-empezar a implementar, confirmar con `git status` que no haya cambios de código
-reales pendientes.
-
-**Nota para Linux:** varios archivos aparecen como modificados solo por
-diferencias de fin de línea (CRLF en Windows frente a LF en Linux). No son
-cambios de contenido y no deben mezclarse con el commit de implementación.
-
-### 4.3. Pruebas
-
-- Último estado conocido: **51 pruebas, 0 fallos**.
-- No se ejecutaron pruebas después de estos cambios de documentación porque no
-  se tocó código.
-- Al iniciar la implementación, ejecutar:
-
-```powershell
-.\mvnw.cmd test
-```
+- Un solo `identificador` (correo o usuario); BCrypt; JWT de 24 h; sin refresh
+  token; el registro público nunca crea administradores.
+- El administrador de demostración vive únicamente en `.env.demo` (ignorado por
+  Git). **No escribir su contraseña en el repositorio.**
+- Catálogo cerrado de cuatro ríos; no se incluyen Matasnillo, Matías Hernández
+  ni Tapia porque no tienen un tramo de pronóstico propio que no duplique otro.
+- No inventar ríos, `reachId` ni geometrías: todo sale de GEOGloWS V2 y del
+  script reproducible.
+- El panel de cualquier río se consulta esté o no seguido; seguir solo controla
+  el push.
+- El gráfico del panel se basa en caudal (m³/s); no se muestran niveles en metros
+  ni bordes de inundación inventados.
+- CORS queda configurable porque la URL exacta del frontend aún no existe.
+- Los umbrales de caudal (fallback 15/30/60 m³/s) y de lluvia siguen siendo
+  provisionales; la calibración por temporada queda para después.
+- La consola sigue siendo el cliente de demostración; no desaparece en esta
+  entrega. No se agregó creación/edición de ríos a la consola.
 
 ---
 
-## 5. Orden recomendado de implementación
+## 4. Estado del repositorio
 
-1. **Autenticación**
-   - entidad de usuario, repositorio, servicio y controlador;
-   - BCrypt;
-   - registro y login;
-   - JWT de 24 horas;
-   - filtro de seguridad y roles.
+- Rama: `backend`. Remoto: `https://github.com/aaron-rm/Ing_Ambiental.git`
+  (la rama por defecto es `main`).
+- Commits de este avance (locales hasta el `push` a `origin/backend`):
 
-2. **Catálogo de ríos**
-   - agregar geometría a `Rio`;
-   - sembrar los cuatro ríos;
-   - endpoint de catálogo GeoJSON;
-   - proteger escritura para `ADMIN`, aunque no se use en la interfaz.
+| Commit | Contenido |
+|---|---|
+| `7d843c9` | `feat(auth)`: usuarios, JWT, roles y seguridad |
+| `96ff6e8` | `feat(usuarios)`: selección usuario–ríos y push por seguidores |
+| `6af8015` | `feat(catalogo)`: cuatro ríos con geometría real de GEOGloWS V2 |
+| `04f7937` | `feat(seguridad)`: rol `ADMIN` para simular y evaluar |
+| `b5f3e28` | `feat(consola)`: consola JWT con login y menús por rol |
+| `55c0ccb` | `feat(pwa)`: login, mapa, panel y push por usuario |
+| `29d7481` | `fix(pwa)`: orden de carga y textos del manifiesto |
 
-3. **Relación usuario–ríos**
-   - entidad y repositorio;
-   - endpoints para listar, seguir y dejar de seguir;
-   - validar que el río exista.
-
-4. **Push por usuario**
-   - asociar `DispositivoPush` al usuario;
-   - registro con JWT;
-   - reasignación de token al último login;
-   - desactivación al cerrar sesión;
-   - envío solo a usuarios que siguen el río afectado.
-
-5. **Consola**
-   - login/registro;
-   - menús por rol;
-   - catálogo y selección múltiple;
-   - panel de caudal/lluvia para cualquier río del mapa, sin exigir suscripción;
-   - retirar suscripciones heredadas y `X-Admin-Token`.
-
-6. **PWA mínima**
-   - login/registro;
-   - selección múltiple;
-   - activación de push con JWT;
-   - cierre de sesión.
-
-7. **Pruebas y documentación**
-   - actualizar pruebas;
-   - actualizar `INTEGRACION_FRONTEND.md`;
-   - actualizar `RESUMEN_PROYECTO.md`, `GUIA_FRONTEND.md` y `README.md`;
-   - actualizar este documento al final de la sesión.
+- Variables nuevas: `ALERTA_JWT_SECRET`, `ALERTA_ADMIN_IDENTIFICADOR`,
+  `ALERTA_ADMIN_PASSWORD`, `ALERTA_CORS_ORIGENES`, `ALERTA_CARGAR_CATALOGO`.
+  Retirada: `ALERTA_REACH_ID_INICIAL` (y `ALERTA_CREAR_RIO_INICIAL`).
+  `ALERTA_ADMIN_TOKEN` sigue solo para los dos endpoints heredados.
+- La geometría de Río Abajo (`710039498`) es un `MultiLineString` con varias
+  líneas; el punto del panel corresponde a la línea principal según
+  `LengthGeodesicMeters`.
 
 ---
 
-## 6. Cómo retomar en otra computadora
+## 5. Cómo retomar en otra computadora
 
 1. Clonar o actualizar el repositorio:
 
@@ -287,18 +199,18 @@ git switch backend
 git pull
 ```
 
-2. Verificar que los documentos nuevos estén presentes:
+2. Verificar que la documentación esté presente:
 
 ```powershell
 Test-Path docs/CONTINUIDAD_SESION.md
-Test-Path docs/AVANCE_EQUIPO.md
+Test-Path docs/INTEGRACION_FRONTEND.md
 ```
 
 3. Crear la configuración local (nunca versionarla):
 
 ```powershell
 Copy-Item .env.demo.example .env.demo
-# completar DB_PASSWORD, Firebase y credenciales de demostración
+# completar DB_PASSWORD, Firebase, ALERTA_JWT_SECRET y credenciales de demostración
 ```
 
 4. Verificar que `.env.demo` esté ignorado:
@@ -313,79 +225,91 @@ git check-ignore .env.demo
 .\mvnw.cmd test
 ```
 
-6. Abrir una sesión nueva de IA y pedirle que lea, en orden:
+Esperado: **67 pruebas, 0 fallos**.
 
-```text
-docs/CONTINUIDAD_SESION.md
-docs/RESUMEN_PROYECTO.md
-docs/GUIA_FRONTEND.md
-docs/INTEGRACION_FRONTEND.md
-docs/ARQUITECTURA.md
-GEMINI.md
+6. Para regenerar el catálogo (opcional; no hace falta para arrancar):
+
+```bash
+python3 tools/generar_catalogo_geoglows.py /ruta/a/los/gpkgs
 ```
 
-7. Pedirle que revise `git status` y que confirme que la implementación no ha
-   comenzado antes de tocar código.
+Los GeoPackage se descargan de las URLs indicadas en el encabezado del script
+(~600 MB entre los dos). El catálogo ya está versionado en
+`src/main/resources/catalogo/rios.json`.
+
+7. Prueba de humo pendiente (no se pudo hacer en el entorno de implementación):
+
+```powershell
+.\scripts\iniciar-demo.ps1
+```
+
+Con PostgreSQL real: confirmar que arranca, que `/api/rios` devuelve cuatro
+ríos, que el login funciona y que la PWA carga.
 
 ---
 
-## 7. Archivos clave
+## 6. Archivos clave
 
 | Archivo | Para qué sirve |
 |---|---|
-| `src/main/java/.../demo/ConsolaDemoRunner.java` | Consola que se adaptará con login y menús por rol. |
-| `src/main/java/.../demo/BackendApiClient.java` | Cliente HTTP de la consola; deberá usar JWT. |
-| `src/main/java/.../demo/InicializadorDatos.java` | Seed actual; se reemplazará por los cuatro ríos. |
-| `src/main/java/.../rio/Rio.java` | Entidad de río; falta geometría. |
-| `src/main/java/.../rio/RioController.java` | Lectura pública y escritura aún pública. |
-| `src/main/java/.../push/DispositivoPush.java` | Modelo actual con un solo `reachId`; debe migrarse. |
-| `src/main/java/.../push/PushService.java` | Lógica de envío; debe pasar a usuario–ríos. |
-| `src/main/java/.../push/PushController.java` | Registro push y demo con token. |
-| `src/main/java/.../alerta/AlertaController.java` | Simulación y endpoints administrativos actuales. |
-| `src/main/java/.../GEOGLOWS/ClienteApiGeoglows.java` | Cliente GEOGloWS; contiene `buscarReachIdCercano`. |
-| `src/main/resources/application.properties` | Configuración actual; faltan CORS, JWT y admin. |
-| `pom.xml` | Falta Spring Security, BCrypt y JWT. |
-| `src/main/resources/static/` | PWA mínima actual; se actualizará con login. |
+| `src/main/java/.../auth/` | Usuarios, JWT, roles y `SecurityConfig` |
+| `src/main/java/.../usuario/` | Entidad `Usuario`, selección usuario–ríos |
+| `src/main/java/.../rio/InicializadorCatalogo.java` | Upsert del catálogo desde `catalogo/rios.json` |
+| `src/main/java/.../rio/RioService.java` | Catálogo y GeoJSON del mapa |
+| `src/main/resources/catalogo/rios.json` | Catálogo con geometría real |
+| `tools/generar_catalogo_geoglows.py` | Generación reproducible del catálogo |
+| `src/main/java/.../push/PushService.java` | Registro por usuario y envío por seguidores |
+| `src/main/java/.../push/PushController.java` | Registro, baja, prueba y demo |
+| `src/main/java/.../demo/BackendApiClient.java` | Cliente HTTP JWT de la consola |
+| `src/main/java/.../demo/ConsolaDemoRunner.java` | Consola con login y menús por rol |
+| `src/main/java/.../alerta/AlertaController.java` | Alertas, simulación y evaluación |
+| `src/main/resources/static/` | PWA de prueba (login, mapa, panel y push) |
+| `docs/INTEGRACION_FRONTEND.md` | Contrato vigente para el frontend definitivo |
 
 ---
 
-## 8. Reglas que no se deben romper
+## 7. Reglas que no se deben romper
 
 - No publicar contraseñas, secretos, tokens ni credenciales reales.
-- No escribir la contraseña del administrador de demostración en este documento.
+- No escribir la contraseña del administrador de demostración en el repositorio.
 - No versionar `.env.demo` ni archivos de Firebase.
-- No inventar ríos, `reachId` ni geometrías.
+- No inventar ríos, `reachId`, geometrías ni umbrales oficiales.
 - No hacer que la consola o la PWA accedan directamente a repositorios o a la
   lógica de negocio; deben usar la API HTTP.
-- No hacer commits automáticamente si el usuario no lo pidió.
-- Actualizar la documentación cuando cambie un contrato o una decisión.
-- Mantener las pruebas existentes y agregar las del flujo nuevo.
+- No devolver el enrutamiento push al modelo de `reachId` suelto: el push
+  depende de los ríos que sigue cada usuario.
+- No pedir permiso de notificaciones al cargar la PWA: solo tras un clic.
 - No afirmar que el push funciona de extremo a extremo sin una prueba en un
   dispositivo real.
+- Mantener las pruebas existentes y agregar las del flujo nuevo.
+- Actualizar la documentación cuando cambie un contrato o una decisión.
 
 ---
 
-## 9. Pendientes y riesgos
+## 8. Pendientes y riesgos
 
-1. **URL exacta del frontend para CORS:** aún no existe; se dejará configurable.
-2. **Push real:** falta verificar Firebase y recepción en un dispositivo físico.
-3. **Rotación de credenciales locales de PostgreSQL:** pendiente; no registrar
+1. **Prueba de humo con PostgreSQL real:** no se ejecutó en el entorno de
+   implementación; falta arrancar `scripts/iniciar-demo.ps1` en una máquina con
+   PostgreSQL y Firebase.
+2. **Push real:** falta verificar la recepción en un dispositivo físico. No
+   afirmarlo sin esa prueba.
+3. **URL exacta del frontend para CORS:** aún no existe; mantener
+   `ALERTA_CORS_ORIGENES` configurable.
+4. **Endpoints heredados:** `POST /api/push/demo` y
+   `GET /api/alertas/suscripciones/{reachId}` siguen con `X-Admin-Token`; se
+   retirarán en una entrega futura.
+5. **Umbrales por temporada:** investigación futura; no inventar valores.
+6. **Rotación de credenciales locales de PostgreSQL:** pendiente; no registrar
    valores en el repositorio.
-4. **Umbrales por temporada:** investigación futura; no inventar valores.
-5. **Seed actual inconsistente:** “Río Pacora” con `reachId` de Abajo; corregir
-   al implementar el catálogo.
-6. **Fin de línea en Linux:** algunos archivos con CRLF aparecen como
-   modificados sin cambios reales de contenido; no incluirlos en commits de
-   documentación o implementación.
-7. **Panel de administración del frontend:** por ahora solo necesita el push de
-   prueba; la consola administrativa tendrá además simulación y evaluación
-   manual.
-8. **Panel de río:** revisar [`AJUSTES_PANEL_RIO.md`](AJUSTES_PANEL_RIO.md)
-   antes de implementar el mapa, el gráfico o las recomendaciones.
+7. **Panel de administración del frontend:** la PWA no incluye panel admin; el
+   frontend definitivo lo decidirá. La consola ya cubre simulación, evaluación y
+   push demo.
+8. **Fin de línea en Linux:** algunos archivos con CRLF aparecen como
+   modificados sin cambios reales; no mezclarlos en commits de contenido.
 
 ---
 
-## 10. Checklist para actualizar este documento
+## 9. Checklist para actualizar este documento
 
 Al terminar una sesión de trabajo, actualizar:
 
