@@ -18,7 +18,7 @@ Necesitas:
 
 - Java 21 o superior.
 - PostgreSQL iniciado y la base `alerta_inundaciones` disponible.
-- PowerShell en Windows.
+- PowerShell en Windows o una terminal bash en Linux.
 - Un navegador Chrome para la prueba de escritorio.
 - Opcional para push real:
   - proyecto Firebase con Cloud Messaging;
@@ -113,6 +113,30 @@ $env:ALERTA_ADMIN_IDENTIFICADOR = "admin"
 $env:ALERTA_ADMIN_PASSWORD = "tu_contraseña_local"
 .\mvnw.cmd spring-boot:run
 ```
+
+### Arranque en Linux
+
+El script de PowerShell requiere `pwsh`, que no viene instalado en la mayoría de
+distribuciones. El equivalente en bash carga `.env.demo` y arranca la aplicación
+con la consola interactiva:
+
+```bash
+bash scripts/iniciar-demo.sh            # http://localhost:8081
+bash scripts/iniciar-demo.sh --tunel    # ademas abre cloudflared si esta instalado
+```
+
+Si no hay PostgreSQL local, se puede usar un contenedor:
+
+```bash
+podman run -d --name alerta-postgres \
+  -e POSTGRES_DB=alerta_inundaciones -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=alerta_local_dev \
+  -p 127.0.0.1:5432:5432 -v alerta-pgdata:/var/lib/postgresql/data \
+  docker.io/library/postgres:16-alpine
+```
+
+`DB_PASSWORD` en `.env.demo` debe coincidir con `POSTGRES_PASSWORD`. En Linux,
+`./mvnw` puede fallar con «Permiso denegado»: usar `bash mvnw`.
 
 Abre:
 

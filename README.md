@@ -51,6 +51,26 @@ $env:ALERTA_ADMIN_PASSWORD = "la-contraseña-local-acordada"
 Al arrancar, el backend carga el catálogo de cuatro ríos desde
 `src/main/resources/catalogo/rios.json` (upsert por `reachId`).
 
+Arranque en Linux (con PostgreSQL en un contenedor Podman):
+
+```bash
+podman run -d --name alerta-postgres \
+  -e POSTGRES_DB=alerta_inundaciones -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=alerta_local_dev \
+  -p 127.0.0.1:5432:5432 -v alerta-pgdata:/var/lib/postgresql/data \
+  docker.io/library/postgres:16-alpine
+
+cp .env.demo.example .env.demo
+# completar .env.demo; DB_PASSWORD debe coincidir con POSTGRES_PASSWORD
+
+bash scripts/iniciar-demo.sh            # backend con consola interactiva
+bash scripts/iniciar-demo.sh --tunel    # ademas abre cloudflared si esta instalado
+```
+
+En Linux `./mvnw` puede fallar con «Permiso denegado»: usar `bash mvnw`. Si
+OneDrive sincroniza la carpeta `target/` desde Windows y Maven falla con
+«Unable to find a single main class», ejecutar `bash mvnw clean` y reintentar.
+
 La consola se puede desactivar sin afectar al backend:
 
 ```powershell

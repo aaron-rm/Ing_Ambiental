@@ -47,6 +47,23 @@ $env:ALERTA_ADMIN_PASSWORD = "la-contraseña-local-acordada"
 `ALERTA_ADMIN_TOKEN` ya solo se usa para las dos rutas heredadas mencionadas en
 la tabla; la consola y la PWA usan login con JWT.
 
+Ejemplo en Linux (PostgreSQL en un contenedor Podman):
+
+```bash
+podman run -d --name alerta-postgres \
+  -e POSTGRES_DB=alerta_inundaciones -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=alerta_local_dev \
+  -p 127.0.0.1:5432:5432 -v alerta-pgdata:/var/lib/postgresql/data \
+  docker.io/library/postgres:16-alpine
+
+cp .env.demo.example .env.demo
+# completar .env.demo; DB_PASSWORD debe coincidir con POSTGRES_PASSWORD
+bash scripts/iniciar-demo.sh
+```
+
+Para detener la base: `podman stop alerta-postgres`; para volver a levantarla:
+`podman start alerta-postgres`.
+
 Abrir `http://localhost:8081`.
 
 ### 2.1 Consola de demostración
