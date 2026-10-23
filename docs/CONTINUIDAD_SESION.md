@@ -4,10 +4,9 @@
 **Rama de trabajo:** `backend`<br>
 **Último commit de referencia:** el commit de documentación más reciente de la
 rama (`git log -1`).<br>
-**Estado:** el avance de autenticación, catálogo de cuatro ríos con geometría
-real, selección usuario–ríos y push asociado al usuario está **implementado**,
-compilado y con **67 pruebas en verde**. Falta la validación con PostgreSQL real
-y la prueba de push de extremo a extremo en un dispositivo.<br>
+**Estado:** implementado, con **67 pruebas en verde** y **prueba de humo real
+con PostgreSQL en Linux (23/10/2026)**. Falta repetir la prueba en Windows y
+verificar el push de extremo a extremo en un dispositivo.<br>
 **Objetivo de este documento:** permitir que otra persona o una sesión nueva de IA
 retome el proyecto desde otra computadora sin necesitar el historial del chat.
 
@@ -119,6 +118,9 @@ carga el catálogo desde `catalogo/rios.json` y la consola pide inicio de sesió
   API actual. Los dos endpoints heredados con `X-Admin-Token`
   (`POST /api/push/demo` y `GET /api/alertas/suscripciones/{reachId}`) siguen
   existiendo solo por compatibilidad y no se documentan para el frontend.
+- Si se arranca sin terminal interactiva (segundo plano, doble clic), la consola
+  se omite con un aviso en lugar de repetir el menú; con entrada cerrada (EOF)
+  también termina sola.
 
 ### 2.6. PWA de prueba (`src/main/resources/static/`)
 
@@ -135,9 +137,12 @@ carga el catálogo desde `catalogo/rios.json` y la consola pide inicio de sesió
   pruebas, 0 fallos**.
 - Nuevas: `UsuarioRioServiceTest`, `InicializadorCatalogoTest`, `RioServiceTest`,
   `AuthServiceTest`; reescritas `PushServiceTest` y `BackendApiClientTest`.
-- No se pudo ejecutar la aplicación contra PostgreSQL real en el entorno donde
-  se implementó (no había servidor ni `psql` disponibles). Solo compilación y
-  pruebas unitarias; la prueba de humo con base de datos queda pendiente.
+- Prueba de humo real (Linux, 23/10/2026; PostgreSQL 16 en Podman): el backend
+  arrancó en 5 s, cargó los cuatro ríos con geometría, el login `ADMIN` emitió
+  JWT, el seguimiento de ríos respondió, `/api/usuarios/me/rios` sin token
+  devolvió `401` y el panel de Río Abajo devolvió datos reales de GEOGloWS y
+  Open-Meteo (`NORMAL`, 0.9 m³/s, lluvia 13.9/33.4 mm). Sin Firebase, el push
+  queda deshabilitado con motivo. Queda pendiente repetirla en Windows.
 
 ---
 
@@ -167,7 +172,7 @@ carga el catálogo desde `catalogo/rios.json` y la consola pide inicio de sesió
 
 - Rama: `backend`. Remoto: `https://github.com/aaron-rm/Ing_Ambiental.git`
   (la rama por defecto es `main`).
-- Commits de este avance (locales hasta el `push` a `origin/backend`):
+- Todos los commits del avance están subidos a `origin/backend`:
 
 | Commit | Contenido |
 |---|---|
@@ -178,6 +183,10 @@ carga el catálogo desde `catalogo/rios.json` y la consola pide inicio de sesió
 | `b5f3e28` | `feat(consola)`: consola JWT con login y menús por rol |
 | `55c0ccb` | `feat(pwa)`: login, mapa, panel y push por usuario |
 | `29d7481` | `fix(pwa)`: orden de carga y textos del manifiesto |
+| `ccedeb4` | `docs`: documentar autenticación, catálogo y push por usuario |
+| `e97671e` | `feat(scripts)`: arranque de demo en Linux y documentación |
+| `5d191ae` | `fix(consola)`: no repetir el menú sin terminal interactiva |
+| `9a346ed` | `feat(scripts)`: relanzar en terminal y abrir el navegador en Linux |
 
 - Variables nuevas: `ALERTA_JWT_SECRET`, `ALERTA_ADMIN_IDENTIFICADOR`,
   `ALERTA_ADMIN_PASSWORD`, `ALERTA_CORS_ORIGENES`, `ALERTA_CARGAR_CATALOGO`.
@@ -186,6 +195,28 @@ carga el catálogo desde `catalogo/rios.json` y la consola pide inicio de sesió
 - La geometría de Río Abajo (`710039498`) es un `MultiLineString` con varias
   líneas; el punto del panel corresponde a la línea principal según
   `LengthGeodesicMeters`.
+
+### 4.1. Sesión de prueba del 23/10/2026 (Linux)
+
+- Entorno: Fedora/KDE con Java 25; PostgreSQL 16 en un contenedor Podman
+  (`alerta-postgres`, volumen `alerta-pgdata`, puerto `127.0.0.1:5432`).
+- `scripts/iniciar-demo.sh` es el equivalente Linux de `iniciar-demo.ps1`:
+  carga `.env.demo`, relanza el script en Konsole/GNOME Terminal/xterm si no hay
+  terminal (doble clic), abre el navegador cuando el backend responde y no lanza
+  una segunda instancia si el puerto 8081 ya está ocupado. `--tunel` inicia
+  `cloudflared` si está instalado.
+- `.env.demo` de esa máquina recibió `ALERTA_JWT_SECRET`,
+  `ALERTA_ADMIN_IDENTIFICADOR`, `ALERTA_ADMIN_PASSWORD`, `ALERTA_CORS_ORIGENES`,
+  `ALERTA_CARGAR_CATALOGO` y `FIREBASE_ENABLED=false`. **La contraseña de
+  PostgreSQL se reemplazó por una del contenedor local.** Si OneDrive sincroniza
+  `.env.demo` de vuelta a Windows, restaurar allí `DB_PASSWORD` con la
+  contraseña del PostgreSQL de Windows.
+- OneDrive sincronizó `target/` desde Windows con clases `*-safeBackup-0001` y
+  Maven falló con «Unable to find a single main class». Se corrigió con
+  `bash mvnw clean` (en Windows: `.\mvnw.cmd clean`). Si vuelve a ocurrir, es el
+  mismo remedio.
+- La consola ahora se omite sola cuando no hay terminal (antes quedaba al 98 %
+  de CPU repitiendo el menú) y cierra al recibir EOF. Verificado con CPU en 0 %.
 
 ---
 
@@ -213,6 +244,12 @@ Copy-Item .env.demo.example .env.demo
 # completar DB_PASSWORD, Firebase, ALERTA_JWT_SECRET y credenciales de demostración
 ```
 
+Si `.env.demo` ya existe (por ejemplo, sincronizado por OneDrive desde la
+laptop Linux), **revise `DB_PASSWORD`**: debe ser la contraseña del PostgreSQL de
+esta máquina. Las demás variables nuevas (`ALERTA_JWT_SECRET`,
+`ALERTA_ADMIN_IDENTIFICADOR`, `ALERTA_ADMIN_PASSWORD`, `ALERTA_CORS_ORIGENES`)
+ya vienen completas y sirven en ambas máquinas.
+
 4. Verificar que `.env.demo` esté ignorado:
 
 ```powershell
@@ -237,14 +274,22 @@ Los GeoPackage se descargan de las URLs indicadas en el encabezado del script
 (~600 MB entre los dos). El catálogo ya está versionado en
 `src/main/resources/catalogo/rios.json`.
 
-7. Prueba de humo pendiente (no se pudo hacer en el entorno de implementación):
+7. Arrancar la demo en Windows:
 
 ```powershell
 .\scripts\iniciar-demo.ps1
 ```
 
-Con PostgreSQL real: confirmar que arranca, que `/api/rios` devuelve cuatro
-ríos, que el login funciona y que la PWA carga.
+La prueba de humo ya se completó en Linux (sección 2.7). En Windows confirmar lo
+mismo: el backend arranca, `/api/rios` devuelve los cuatro ríos, el login
+funciona y la PWA carga en `http://localhost:8081`.
+
+En Linux, para la próxima sesión:
+
+```bash
+podman start alerta-postgres   # si el contenedor está detenido
+bash scripts/iniciar-demo.sh   # backend, menú y navegador
+```
 
 ---
 
@@ -265,6 +310,8 @@ ríos, que el login funciona y que la PWA carga.
 | `src/main/java/.../alerta/AlertaController.java` | Alertas, simulación y evaluación |
 | `src/main/resources/static/` | PWA de prueba (login, mapa, panel y push) |
 | `docs/INTEGRACION_FRONTEND.md` | Contrato vigente para el frontend definitivo |
+| `scripts/iniciar-demo.ps1` | Arranque en Windows (PowerShell) |
+| `scripts/iniciar-demo.sh` | Arranque en Linux (terminal automática y navegador) |
 
 ---
 
@@ -288,9 +335,8 @@ ríos, que el login funciona y que la PWA carga.
 
 ## 8. Pendientes y riesgos
 
-1. **Prueba de humo con PostgreSQL real:** no se ejecutó en el entorno de
-   implementación; falta arrancar `scripts/iniciar-demo.ps1` en una máquina con
-   PostgreSQL y Firebase.
+1. **Prueba de humo con PostgreSQL real:** hecha en Linux el 23/10/2026 (ver
+   sección 2.7); falta repetirla en Windows con `scripts/iniciar-demo.ps1`.
 2. **Push real:** falta verificar la recepción en un dispositivo físico. No
    afirmarlo sin esa prueba.
 3. **URL exacta del frontend para CORS:** aún no existe; mantener
@@ -306,6 +352,9 @@ ríos, que el login funciona y que la PWA carga.
    push demo.
 8. **Fin de línea en Linux:** algunos archivos con CRLF aparecen como
    modificados sin cambios reales; no mezclarlos en commits de contenido.
+9. **OneDrive y `target/` en Linux:** si se sincroniza `target/` desde Windows,
+   Maven puede fallar con «Unable to find a single main class» por las clases
+   `*-safeBackup-*`; ejecutar `bash mvnw clean` (o `.\mvnw.cmd clean`).
 
 ---
 

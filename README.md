@@ -17,9 +17,9 @@ Incluye dos clientes de apoyo:
 
 > **Estado:** el avance de autenticación, catálogo de cuatro ríos con geometría
 > real, selección usuario–ríos y push asociado al usuario está implementado y
-> con 67 pruebas en verde. Falta validar con PostgreSQL real y probar la
-> recepción push en un dispositivo. Para retomarlo en otra sesión o
-> computadora, empezar por
+> con 67 pruebas en verde, y ya pasó una prueba de humo con PostgreSQL real en
+> Linux (23/10/2026). Falta repetirla en Windows y probar la recepción push en un
+> dispositivo. Para retomarlo en otra sesión o computadora, empezar por
 > [docs/CONTINUIDAD_SESION.md](docs/CONTINUIDAD_SESION.md).
 
 > Para una explicación funcional breve, sin tecnicismos, ver
@@ -56,7 +56,7 @@ Arranque en Linux (con PostgreSQL en un contenedor Podman):
 ```bash
 podman run -d --name alerta-postgres \
   -e POSTGRES_DB=alerta_inundaciones -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=alerta_local_dev \
+  -e POSTGRES_PASSWORD=contrasena-local-de-ejemplo \
   -p 127.0.0.1:5432:5432 -v alerta-pgdata:/var/lib/postgresql/data \
   docker.io/library/postgres:16-alpine
 
@@ -170,8 +170,9 @@ scripts/                    Arranque de demo
 - `returnperiods` de GEOGloWS falla; se usa el fallback 15/30/60 m³/s.
 - Push real pendiente de credenciales Firebase y dispositivo físico; no está
   probado de extremo a extremo.
-- La aplicación no se ha arrancado todavía contra PostgreSQL real en el entorno
-  de desarrollo usado; solo hay compilación y pruebas unitarias.
+- La prueba de humo con PostgreSQL real se completó en Linux el 23/10/2026
+  (catálogo, login, seguimiento y panel con datos reales); falta repetirla en
+  Windows con `scripts/iniciar-demo.ps1`.
 - iOS requiere 16.4+ y la PWA instalada en la pantalla de inicio.
 - El túnel HTTPS es temporal; para producción se necesita un dominio estable.
 - Dos rutas heredadas (`POST /api/push/demo` y

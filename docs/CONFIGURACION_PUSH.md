@@ -52,7 +52,7 @@ Ejemplo en Linux (PostgreSQL en un contenedor Podman):
 ```bash
 podman run -d --name alerta-postgres \
   -e POSTGRES_DB=alerta_inundaciones -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=alerta_local_dev \
+  -e POSTGRES_PASSWORD=contrasena-local-de-ejemplo \
   -p 127.0.0.1:5432:5432 -v alerta-pgdata:/var/lib/postgresql/data \
   docker.io/library/postgres:16-alpine
 
@@ -60,6 +60,10 @@ cp .env.demo.example .env.demo
 # completar .env.demo; DB_PASSWORD debe coincidir con POSTGRES_PASSWORD
 bash scripts/iniciar-demo.sh
 ```
+
+`.env.demo` no se versiona ni debe subirse al repositorio. Si OneDrive u otro
+servicio lo sincroniza entre computadoras, revise `DB_PASSWORD` al cambiar de
+máquina: debe coincidir con la contraseña del PostgreSQL local de esa máquina.
 
 Para detener la base: `podman stop alerta-postgres`; para volver a levantarla:
 `podman start alerta-postgres`.

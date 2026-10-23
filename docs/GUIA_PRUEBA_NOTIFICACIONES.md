@@ -135,7 +135,7 @@ Si no hay PostgreSQL local, se puede usar un contenedor:
 ```bash
 podman run -d --name alerta-postgres \
   -e POSTGRES_DB=alerta_inundaciones -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=alerta_local_dev \
+  -e POSTGRES_PASSWORD=contrasena-local-de-ejemplo \
   -p 127.0.0.1:5432:5432 -v alerta-pgdata:/var/lib/postgresql/data \
   docker.io/library/postgres:16-alpine
 ```
@@ -229,6 +229,25 @@ Inicia sesión en la consola con la cuenta `ADMIN` y elige `8`.
   comportamiento esperado.
 - Si no hay dispositivos registrados, la consola indicará que no hay
   suscriptores.
+
+### Verificación de referencia (23/10/2026, Linux)
+
+Esta sección se comprobó de extremo a extremo en modo local con PostgreSQL 16 en
+un contenedor Podman. Resultados obtenidos, útiles como referencia:
+
+- `/api/rios`: los cuatro ríos (`Río Abajo` 710039498, `Río Curundú` 710037516,
+  `Río Juan Díaz` 710051399, `Río Tocumen` 670053261), todos con
+  `tieneGeometria: true`.
+- `/api/push/config`: `habilitado: false`, con motivo «FCM está deshabilitado
+  por configuración» y sin `reachId` en la respuesta.
+- Login con la cuenta `ADMIN` y seguimiento del primer río correctos;
+  `/api/usuarios/me/rios` sin JWT devuelve `401`.
+- Panel de Río Abajo con datos reales de GEOGloWS y Open-Meteo: nivel `NORMAL`,
+  0.9 m³/s, máximo pronosticado 13.5 m³/s, lluvia 13.9 mm (24 h) y 33.4 mm
+  (72 h), y 2 recomendaciones.
+
+Queda pendiente repetir la misma verificación en Windows con
+`scripts/iniciar-demo.ps1`.
 
 ---
 
