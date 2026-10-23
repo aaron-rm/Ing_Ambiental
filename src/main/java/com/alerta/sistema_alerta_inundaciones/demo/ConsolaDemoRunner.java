@@ -43,6 +43,11 @@ public class ConsolaDemoRunner implements CommandLineRunner {
                 || (environment != null && java.util.Arrays.asList(environment.getActiveProfiles()).contains("test"))) {
             return;
         }
+        if (System.console() == null) {
+            System.out.println("[i] Sin terminal interactiva: la consola de demostracion se omite.");
+            System.out.println("    Ejecute 'bash scripts/iniciar-demo.sh' en una terminal para ver el menu.");
+            return;
+        }
         Thread demoThread = new Thread(this::iniciarConsolaInteractiva);
         demoThread.setDaemon(true);
         demoThread.start();
@@ -539,8 +544,10 @@ public class ConsolaDemoRunner implements CommandLineRunner {
     }
 
     private static String leerLinea(Scanner scanner) {
+        // Sin entrada interactiva (stdin cerrado), se devuelve "0" para que los
+        // menus cierren la consola en lugar de repetirse sin fin.
         if (!scanner.hasNextLine()) {
-            return "9";
+            return "0";
         }
         return scanner.nextLine().trim();
     }
