@@ -11,9 +11,12 @@ propio de pronóstico o duplican el de otro río.
 ## Cómo va a funcionar
 
 - La consola pedirá iniciar sesión o registrarse.
-- Cada usuario verá los cuatro ríos y podrá seguir varios.
-- El mapa mostrará los ríos y se elegirá haciendo clic sobre ellos.
-- Las notificaciones llegarán solo de los ríos que sigue cada usuario.
+- Cada usuario verá los cuatro ríos.
+- Al hacer clic en cualquier río se abrirá un panel con su caudal y la lluvia
+  prevista, esté o no suscrito.
+- El botón de seguir solo sirve para recibir notificaciones si ese río supera
+  los niveles de alerta.
+- El usuario puede seguir varios ríos.
 - La página de prueba del celular tendrá el mismo inicio de sesión y selección.
 - Habrá una cuenta administradora de demostración; su clave se configura
   localmente y no se publica.

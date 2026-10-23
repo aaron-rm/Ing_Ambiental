@@ -296,16 +296,30 @@ map.on("click", "rios-lineas", (evento) => {
 });
 ```
 
+El panel se abre para **cualquier río del catálogo**, esté o no seguido. Para
+cargar sus datos, el frontend consulta:
+
+```http
+GET /api/alertas/rio/{rioId}
+```
+
 El panel puede mostrar:
 
 - nombre del río;
-- estado actual;
+- caudal actual y caudal máximo pronosticado;
+- lluvia prevista para 24 y 72 horas, y su nivel de riesgo;
+- estado actual y nivel de alerta;
 - botón **Seguir este río** o **Dejar de seguir**;
 - último evento o pronóstico, si el frontend decide mostrarlo.
 
-El clic en el mapa no debe disparar por sí solo una suscripción si el diseño
-pide confirmación. El backend solo recibe la intención cuando el frontend llama
-al endpoint correspondiente.
+La consulta de caudal y lluvia **no requiere estar suscrito**. El botón de
+seguir solo controla si el usuario recibe notificaciones cuando ese río supera
+los umbrales de alerta. El clic en el mapa no debe disparar por sí solo una
+suscripción si el diseño pide confirmación. El backend solo recibe la intención
+cuando el frontend llama al endpoint correspondiente.
+
+> Los ajustes pendientes del backend para que este panel funcione sin fricción
+> están en [`AJUSTES_PANEL_RIO.md`](AJUSTES_PANEL_RIO.md).
 
 ### 4.4. Resaltar los ríos que el usuario sigue
 
@@ -375,6 +389,9 @@ Un usuario puede seguir varios ríos. El frontend debe:
 - no asumir que hay un único río “principal”.
 
 El backend enviará las alertas de **todos** los ríos que el usuario siga.
+Seguir o dejar de seguir un río **no cambia** la posibilidad de consultar su
+caudal y su lluvia en el panel del mapa; solo cambia si se reciben
+notificaciones de ese río.
 
 ---
 
@@ -592,6 +609,9 @@ frontend debe tolerar tanto texto como JSON.
 - [ ] El token se envía como `Authorization: Bearer`.
 - [ ] El mapa dibuja el `FeatureCollection` de `/api/rios/mapa`.
 - [ ] El clic lee `properties.rioId`, no calcula cercanía.
+- [ ] Al hacer clic en cualquier río se muestra el panel con caudal y lluvia,
+      aunque el río no esté seguido.
+- [ ] Seguir o dejar de seguir solo cambia las notificaciones, no la consulta.
 - [ ] El usuario puede seguir y dejar de seguir varios ríos.
 - [ ] Los ríos seguidos se resaltan usando `/api/usuarios/me/rios`.
 - [ ] El registro push requiere sesión y no envía `reachId`.
@@ -622,6 +642,13 @@ Decisiones tomadas:
    GeoJSON; no se consulta a internet en tiempo de ejecución.
 7. El panel de administración del frontend solo necesita el push de prueba. La
    consola administrativa tendrá además simulación y evaluación manual.
+8. La consulta de caudal y lluvia está disponible para cualquier río del
+   catálogo al hacer clic en el mapa, sin necesidad de seguirlo. Seguir un río
+   solo habilita sus notificaciones cuando supera los umbrales.
+9. El gráfico del panel será un hidrograma de caudal contra tiempo con las
+   líneas de umbral. La representación del nivel del agua, si se incluye, será
+   ilustrativa y derivada del caudal; no se mostrarán metros ni bordes reales
+   del cauce, porque no hay curva de gasto ni batimetría.
 
 Pendientes antes de cerrar el avance:
 

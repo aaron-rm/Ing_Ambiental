@@ -57,6 +57,10 @@ El objetivo inmediato es implementar el siguiente avance acordado:
 6. PWA mínima con login y selección de ríos.
 7. Push asociado a los ríos que sigue cada usuario.
 
+La consulta de caudal y lluvia se abre al hacer clic en **cualquier río del
+catálogo**, esté o no seguido. La suscripción solo controla las notificaciones;
+no limita el acceso al panel informativo.
+
 Antes de implementar, leer `docs/CONTINUIDAD_SESION.md`. No asumir que estas
 piezas ya existen: a la fecha de este documento solo están documentadas.
 

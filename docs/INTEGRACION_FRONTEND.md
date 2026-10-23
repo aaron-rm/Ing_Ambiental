@@ -150,6 +150,10 @@ rutas son seguras para exponerlas públicamente en un despliegue real.
 
 ### `GET /api/alertas/rio/{rioId}` y `/tramo/{reachId}` → `AlertaRioDTO`
 
+> Consultar el caudal y la lluvia de un río **no requiere que el usuario lo
+> siga**. La selección de ríos solo controla qué notificaciones push recibe.
+> El panel del mapa debe poder abrirse para cualquiera de los cuatro ríos.
+
 Campos principales:
 
 | Campo | Tipo | Notas |

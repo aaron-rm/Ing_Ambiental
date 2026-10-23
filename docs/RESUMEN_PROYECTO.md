@@ -264,6 +264,7 @@ El trabajo se organizó en tres bloques:
 | Umbrales | Experimentales; requieren calibración local. La calibración estacional (invierno/verano) está pendiente de investigación y no se implementará con valores inventados. |
 | Autenticación | En diseño: login con identificador, JWT y roles `USER`/`ADMIN`. La consola también pedirá sesión. Aún no implementado. |
 | Gestión de ríos | Catálogo cerrado de cuatro ríos con geometría: Abajo, Curundú, Juan Díaz y Tocumen. La escritura quedará protegida para administradores. |
+| Consulta de ríos | En diseño: al hacer clic en cualquier río del catálogo se muestra su caudal y su lluvia. No hace falta estar suscrito; la suscripción solo controla el push. |
 | Selección múltiple | En diseño: cada usuario podrá seguir varios ríos y el push se enviará según sus selecciones. Aún no implementado. |
 | Pruebas automatizadas | 51 pruebas, 0 fallos (antes del avance de autenticación). |
 
@@ -291,8 +292,9 @@ Otras limitaciones conocidas:
    datos → API/push. Explicar que el nivel final es el más alto entre caudal y
    lluvia.
 4. **Demostración (60 s).** Iniciar sesión en la consola como usuario, mostrar
-   el catálogo y la selección de varios ríos, consultar caudal y lluvia. Si hay
-   una cuenta administradora, mostrar la simulación y el envío de prueba. Si no
+   el catálogo, abrir el panel de caudal/lluvia de cualquier río y seguir varios.
+   Aclarar que seguir un río solo controla las notificaciones. Si hay una cuenta
+   administradora, mostrar la simulación y el envío de prueba. Si no
    hay Firebase configurado, explicar que el envío real está pendiente de
    credenciales y dispositivo.
 5. **Resultados y límites (90 s).** Mencionar las pruebas, el historial de
@@ -388,6 +390,7 @@ Reglas que no se deben romper:
 | [`ARQUITECTURA.md`](ARQUITECTURA.md) | Reglas de separación y responsabilidades. |
 | [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md) | Contrato de API que existe hoy. |
 | [`GUIA_FRONTEND.md`](GUIA_FRONTEND.md) | Guía del avance: login, mapa, selección múltiple y admin. |
+| [`AJUSTES_PANEL_RIO.md`](AJUSTES_PANEL_RIO.md) | Correcciones necesarias para el panel informativo de cada río. |
 | [`GUIA_PRUEBA_NOTIFICACIONES.md`](GUIA_PRUEBA_NOTIFICACIONES.md) | Cómo ejecutar y verificar la demo. |
 | [`CONFIGURACION_PUSH.md`](CONFIGURACION_PUSH.md) | Variables, PostgreSQL y Firebase. |
 | [`../INFORME_ALERTAS_INUNDACION.md`](../INFORME_ALERTAS_INUNDACION.md) | Estado, pruebas y limitaciones del avance. |

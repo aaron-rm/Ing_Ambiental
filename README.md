@@ -91,6 +91,7 @@ nueva del Service Worker elimina las cachés `alerta-shell-*` al activarse.
 | [docs/CONFIGURACION_PUSH.md](docs/CONFIGURACION_PUSH.md) | Variables de entorno, PostgreSQL y Firebase/FCM |
 | [docs/INTEGRACION_FRONTEND.md](docs/INTEGRACION_FRONTEND.md) | Contrato de API y guía para el equipo de frontend |
 | [docs/GUIA_FRONTEND.md](docs/GUIA_FRONTEND.md) | Guía del avance: login, mapa, selección múltiple y admin (borrador) |
+| [docs/AJUSTES_PANEL_RIO.md](docs/AJUSTES_PANEL_RIO.md) | Correcciones necesarias para el panel informativo de río |
 | [IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md) | Historia de implementación y decisiones previas |
 
 ## Pruebas

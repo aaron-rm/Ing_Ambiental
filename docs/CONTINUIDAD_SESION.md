@@ -17,11 +17,13 @@ Al retomar el proyecto, leer en este orden:
 2. [`RESUMEN_PROYECTO.md`](RESUMEN_PROYECTO.md): explicación funcional y alcance.
 3. [`GUIA_FRONTEND.md`](GUIA_FRONTEND.md): diseño del avance de login, mapa,
    selección múltiple y administración.
-4. [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md): contrato de la API que
+4. [`AJUSTES_PANEL_RIO.md`](AJUSTES_PANEL_RIO.md): correcciones necesarias para
+   el panel informativo de cada río.
+5. [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md): contrato de la API que
    existe hoy.
-5. [`ARQUITECTURA.md`](ARQUITECTURA.md): separación entre backend, consola, PWA
+6. [`ARQUITECTURA.md`](ARQUITECTURA.md): separación entre backend, consola, PWA
    y frontend.
-6. [`../GEMINI.md`](../GEMINI.md): reglas de trabajo para agentes de IA.
+7. [`../GEMINI.md`](../GEMINI.md): reglas de trabajo para agentes de IA.
 
 Después revisar:
 
@@ -45,7 +47,8 @@ Convertir el backend actual en una aplicación con:
 - dos roles: `USER` y `ADMIN`;
 - catálogo cerrado de cuatro ríos cercanos a la UTP, con geometría;
 - selección múltiple de ríos por usuario;
-- consulta de caudal, lluvia y pronóstico del río seleccionado;
+- consulta de caudal, lluvia y pronóstico de cualquiera de los cuatro ríos,
+  esté o no seguido;
 - push asociado a los ríos que sigue cada usuario;
 - consola con login y menús distintos según el rol;
 - PWA mínima de prueba con login, selección de ríos y activación de push.
@@ -130,8 +133,8 @@ Ríos descartados y por qué:
 ### 3.5. Consola, PWA y push
 
 - La consola pedirá login o registro al arrancar.
-- Menú de usuario normal: catálogo, ríos seguidos, consulta de caudal/lluvia,
-  seguir o dejar de seguir, cerrar sesión.
+- Menú de usuario normal: catálogo, panel de cualquier río (caudal/lluvia),
+  ríos seguidos, seguir o dejar de seguir, cerrar sesión.
 - Menú de administrador: lo anterior más simulación, evaluación manual y push de
   prueba.
 - No habrá opción de crear o editar ríos en la consola.
@@ -143,14 +146,28 @@ Ríos descartados y por qué:
 - Las suscripciones heredadas por correo/teléfono se retiran del flujo y de la
   consola.
 
-### 3.6. CORS y configuración
+### 3.6. Consulta de información y suscripción
+
+- El panel de información se abre al hacer clic en **cualquier río del
+  catálogo**, esté o no seguido.
+- El panel muestra caudal y precipitación usando los datos de GEOGloWS y
+  Open-Meteo. El backend ya expone la consulta en
+  `GET /api/alertas/rio/{rioId}`.
+- La consulta **no depende de la suscripción**: seguir un río no habilita el
+  panel ni dejar de seguirlo lo bloquea.
+- El botón **Seguir** o **Dejar de seguir** solo controla si se reciben
+  notificaciones cuando ese río supera los umbrales de alerta.
+- La selección múltiple sigue existiendo para definir qué ríos generan push,
+  no para limitar qué ríos se pueden consultar.
+
+### 3.7. CORS y configuración
 
 - CORS será configurable por variable de entorno.
 - Como aún no existe el frontend, se dejarán orígenes locales comunes por
   defecto y se ajustará cuando el equipo de frontend informe la URL exacta.
 - No usar `Access-Control-Allow-Origin: *` si se envían credenciales o tokens.
 
-### 3.7. Umbrales
+### 3.8. Umbrales
 
 - Los umbrales actuales de caudal y lluvia siguen siendo provisionales.
 - La calibración por temporada (invierno/verano) queda documentada como trabajo
@@ -179,23 +196,15 @@ Ríos descartados y por qué:
 `reachId = 710039498`. Ese `reachId` corresponde en realidad al **Río Abajo**.
 Esto se corregirá al implementar el catálogo de cuatro ríos.
 
-### 4.2. Documentación modificada o nueva
+### 4.2. Documentación de este avance
 
-Al cierre de esta sesión, `git status` muestra cambios de documentación sin
-commit:
+La documentación de este avance está versionada en la rama `backend`. Antes de
+empezar a implementar, confirmar con `git status` que no haya cambios de código
+reales pendientes.
 
-- `GEMINI.md`
-- `IMPLEMENTATION_NOTES.md`
-- `README.md`
-- `docs/ARQUITECTURA.md`
-- `docs/INTEGRACION_FRONTEND.md`
-- `docs/GUIA_FRONTEND.md`
-- `docs/RESUMEN_PROYECTO.md`
-- `docs/AVANCE_EQUIPO.md` (nuevo)
-- `docs/CONTINUIDAD_SESION.md` (nuevo)
-
-**Para que la laptop vea estos cambios, hay que hacer commit y push.** No se hizo
-commit automáticamente porque el usuario no lo pidió.
+**Nota para Linux:** varios archivos aparecen como modificados solo por
+diferencias de fin de línea (CRLF en Windows frente a LF en Linux). No son
+cambios de contenido y no deben mezclarse con el commit de implementación.
 
 ### 4.3. Pruebas
 
@@ -241,7 +250,7 @@ commit automáticamente porque el usuario no lo pidió.
    - login/registro;
    - menús por rol;
    - catálogo y selección múltiple;
-   - consulta del río seleccionado;
+   - panel de caudal/lluvia para cualquier río del mapa, sin exigir suscripción;
    - retirar suscripciones heredadas y `X-Admin-Token`.
 
 6. **PWA mínima**
@@ -355,11 +364,14 @@ GEMINI.md
 4. **Umbrales por temporada:** investigación futura; no inventar valores.
 5. **Seed actual inconsistente:** “Río Pacora” con `reachId` de Abajo; corregir
    al implementar el catálogo.
-6. **Documentación sin commit:** si se cambia de computadora antes de hacer
-   commit/push, los nuevos documentos no estarán en la laptop.
+6. **Fin de línea en Linux:** algunos archivos con CRLF aparecen como
+   modificados sin cambios reales de contenido; no incluirlos en commits de
+   documentación o implementación.
 7. **Panel de administración del frontend:** por ahora solo necesita el push de
    prueba; la consola administrativa tendrá además simulación y evaluación
    manual.
+8. **Panel de río:** revisar [`AJUSTES_PANEL_RIO.md`](AJUSTES_PANEL_RIO.md)
+   antes de implementar el mapa, el gráfico o las recomendaciones.
 
 ---
 
