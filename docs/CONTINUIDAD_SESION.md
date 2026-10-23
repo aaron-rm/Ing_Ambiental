@@ -2,7 +2,8 @@
 
 **Última actualización:** 23/10/2026<br>
 **Rama de trabajo:** `backend`<br>
-**Último commit de referencia:** `600ccb9`<br>
+**Último commit de referencia:** el commit de documentación más reciente de la
+rama (`git log -1`).<br>
 **Estado:** planificación cerrada; implementación del siguiente avance **no iniciada**.<br>
 **Objetivo de este documento:** permitir que otra persona o una sesión nueva de IA
 retome el proyecto desde otra computadora sin necesitar el historial del chat.
@@ -180,7 +181,7 @@ Ríos descartados y por qué:
 ## 4. Estado actual del repositorio
 
 - Rama actual: `backend`.
-- Último commit: `600ccb9 chore: reforzar exclusion de credenciales locales`.
+- Último commit: el más reciente de `backend` (`git log -1`).
 - El repositorio remoto es `https://github.com/aaron-rm/Ing_Ambiental.git`.
 - La rama por defecto es `main`; el trabajo de este avance va en `backend`.
 - No hay código de autenticación, usuarios, roles, JWT, BCrypt ni CORS.
@@ -194,7 +195,16 @@ Ríos descartados y por qué:
 
 `InicializadorDatos` crea un río llamado **“Río Pacora”** con
 `reachId = 710039498`. Ese `reachId` corresponde en realidad al **Río Abajo**.
-Esto se corregirá al implementar el catálogo de cuatro ríos.
+El mismo nombre y `reachId` se repiten en `ConsolaDemoRunner` y en el valor por
+defecto de `alerta.demo.reach-id-inicial`.
+
+Esto se corregirá al implementar el catálogo de cuatro ríos. Hay dos cuidados:
+
+- el seed solo actúa si la tabla `rios` está vacía, así que una base que ya tenga
+  “Río Pacora” no se corrige sola; la implementación debe hacer *upsert* por
+  `reachId` o migrar esa fila;
+- las pruebas y la consola que mencionan “Río Pacora” deben actualizarse en el
+  mismo cambio.
 
 ### 4.2. Documentación de este avance
 
