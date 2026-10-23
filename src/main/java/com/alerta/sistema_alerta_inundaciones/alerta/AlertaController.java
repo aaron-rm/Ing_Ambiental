@@ -115,15 +115,10 @@ public class AlertaController {
 
     /**
      * Evalúa un tramo con datos reales y, si cambia el nivel, crea el evento y
-     * envía las notificaciones push. Requiere token administrativo.
+     * envía las notificaciones push. Requiere JWT con rol ADMIN.
      */
     @PostMapping("/evaluar/{reachId}")
-    public ResponseEntity<?> evaluar(@PathVariable Long reachId,
-                                     @RequestHeader(value = "X-Admin-Token", required = false) String token) {
-        if (!adminAutorizado(token)) {
-            return ResponseEntity.status(403).body(
-                    "Acceso restringido. Configure ALERTA_ADMIN_TOKEN y envíelo en X-Admin-Token.");
-        }
+    public ResponseEntity<?> evaluar(@PathVariable Long reachId) {
         try {
             return ResponseEntity.ok(monitoreoService.evaluarPorReachId(reachId, "MANUAL"));
         } catch (IllegalArgumentException e) {
