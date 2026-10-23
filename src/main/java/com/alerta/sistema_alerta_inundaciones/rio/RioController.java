@@ -1,15 +1,12 @@
 package com.alerta.sistema_alerta_inundaciones.rio;
 
-import java.util.List;
-
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/rios")
@@ -19,24 +16,17 @@ public class RioController {
 
     public RioController(RioService rioService) {
         this.rioService = rioService;
-    }   
-
-    @PostMapping
-    public Rio crearRio(@RequestBody Rio rio) {
-        return rioService.guardarRio(rio);
     }
 
     @GetMapping
-    public List<Rio> obtenerRios() {
+    public List<RioResumenDTO> obtenerRios() {
         return rioService.obtenerTodos();
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<?> actualizarRio(@PathVariable Long id, @RequestBody Rio rio) {
-        try {
-            return ResponseEntity.ok(rioService.actualizarRio(id, rio));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(404).body(e.getMessage());
-        }
+    @GetMapping(value = "/mapa", produces = "application/geo+json")
+    public ResponseEntity<String> obtenerMapa() {
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/geo+json"))
+                .body(rioService.obtenerMapaGeoJson());
     }
 }

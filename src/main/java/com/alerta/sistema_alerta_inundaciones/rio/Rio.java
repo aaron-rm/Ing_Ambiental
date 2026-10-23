@@ -1,9 +1,11 @@
 package com.alerta.sistema_alerta_inundaciones.rio;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 
 @Entity
@@ -21,6 +23,11 @@ public class Rio {
     private Double latitud;
 
     private Double longitud;
+
+    /** Geometría GeoJSON simplificada en WGS84 (LineString o MultiLineString). */
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String geometria;
 
     public Rio() {
     }
@@ -66,5 +73,13 @@ public class Rio {
 
     public void setLongitud(Double longitud) {
         this.longitud = longitud;
+    }
+
+    public String getGeometria() {
+        return geometria;
+    }
+
+    public void setGeometria(String geometria) {
+        this.geometria = geometria;
     }
 }
