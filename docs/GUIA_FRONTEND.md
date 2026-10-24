@@ -319,9 +319,8 @@ los umbrales de alerta. El clic en el mapa no debe disparar por sí solo una
 suscripción si el diseño pide confirmación. El backend solo recibe la intención
 cuando el frontend llama al endpoint correspondiente.
 
-> Los ajustes del backend para que este panel funcione sin fricción están en
-> [`AJUSTES_PANEL_RIO.md`](AJUSTES_PANEL_RIO.md); ya están implementados la caché,
-> `rioId`, `siguiendo`, las recomendaciones y la geometría.
+> El backend ya tiene implementados la caché de GEOGloWS, `rioId`, `siguiendo`,
+> las recomendaciones por nivel de riesgo y la geometría GeoJSON.
 
 ### 4.4. Resaltar los ríos que el usuario sigue
 

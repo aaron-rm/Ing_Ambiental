@@ -19,11 +19,9 @@ Al retomar el proyecto, leer en este orden:
    existe hoy.
 4. [`GUIA_FRONTEND.md`](GUIA_FRONTEND.md): diseño que se implementó (login,
    mapa, selección múltiple y administración).
-5. [`AJUSTES_PANEL_RIO.md`](AJUSTES_PANEL_RIO.md): criterios del panel
-   informativo de cada río.
-6. [`ARQUITECTURA.md`](ARQUITECTURA.md): separación entre backend, consola, PWA
+5. [`ARQUITECTURA.md`](ARQUITECTURA.md): separación entre backend, consola, PWA
    y frontend.
-7. [`../GEMINI.md`](../GEMINI.md): reglas de trabajo para agentes de IA.
+6. [`../GEMINI.md`](../GEMINI.md): reglas de trabajo para agentes de IA.
 
 Después revisar:
 

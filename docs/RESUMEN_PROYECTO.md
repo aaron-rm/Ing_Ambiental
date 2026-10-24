@@ -398,7 +398,6 @@ Reglas que no se deben romper:
 | [`ARQUITECTURA.md`](ARQUITECTURA.md) | Reglas de separación y responsabilidades. |
 | [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md) | Contrato de API que existe hoy. |
 | [`GUIA_FRONTEND.md`](GUIA_FRONTEND.md) | Diseño del frontend definitivo y flujo mínimo de la PWA. |
-| [`AJUSTES_PANEL_RIO.md`](AJUSTES_PANEL_RIO.md) | Correcciones necesarias para el panel informativo de cada río. |
 | [`GUIA_PRUEBA_NOTIFICACIONES.md`](GUIA_PRUEBA_NOTIFICACIONES.md) | Cómo ejecutar y verificar la demo. |
 | [`CONFIGURACION_PUSH.md`](CONFIGURACION_PUSH.md) | Variables, PostgreSQL y Firebase. |
 | [`../INFORME_ALERTAS_INUNDACION.md`](../INFORME_ALERTAS_INUNDACION.md) | Informe histórico del avance del 21–22/10 |
