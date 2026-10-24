@@ -2,10 +2,8 @@
 
 **Última actualización:** 24/10/2026<br>
 **Rama de trabajo:** `backend`<br>
-**Último commit de referencia:** cierre de revisión y preparación para la entrega del 75 % (`git log -1`).<br>
-**Estado:** **Preparado para la entrega del 75 %**, con **79 pruebas en verde (0 fallos)**, caché en memoria de
-GEOGloWS con tolerancia a caídas, campo `siguiendo` en el contrato del panel, catálogo de 4 ríos con geometría real,
-simulación administrativa con push a seguidores y PWA mínima para validación de Service Worker.<br>
+**Último commit de referencia:** cierre de revisión y preparación del backend para la entrega del 75 % (`git log -1`).<br>
+**Estado:** **Parte del backend lista y verificada para la entrega del 75 %**, con **79 pruebas en verde (0 fallos)**, contratos de API estables y base lista. Para la presentación del 75 % resta que el equipo de frontend construya y entregue sus pantallas iniciales sobre esta base.<br>
 **Objetivo de este documento:** permitir que otra persona o una sesión nueva de IA
 retome el proyecto desde otra computadora sin necesitar el historial del chat.
 
@@ -415,7 +413,7 @@ bash scripts/iniciar-demo.sh   # backend, menú y navegador
 
 ## 8. Estado de la entrega (75 % vs. 100 %) y pendientes
 
-### 8.1 Listo para la entrega del 75 % (Verificado en Backend)
+### 8.1 Parte del Backend (Listo y verificado para la entrega del 75 %)
 1. **Arquitectura y API REST:** Backend Spring Boot independiente y modular con contratos públicos estables.
 2. **Autenticación y Seguridad:** JWT HS256 (24h), registro público (`USER`), login, `GET /api/auth/me` y administrador sembrado (`ADMIN`).
 3. **Catálogo cerrado con geometría:** 4 ríos (Abajo, Curundú, Juan Díaz, Tocumen) con simplificación GeoJSON TDX-Hydro cargados vía upsert desde `catalogo/rios.json`.
@@ -424,10 +422,13 @@ bash scripts/iniciar-demo.sh   # backend, menú y navegador
 6. **Tolerancia a fallos:** Caché en memoria para GEOGloWS (`GEOGLOWS_CACHE_MINUTOS=15`) con reutilización de la última respuesta válida ante caídas de la API externa.
 7. **Notificaciones Push FCM:** Registro de dispositivos vinculado al usuario, despacho automático a seguidores según cambio de nivel con control de idempotencia y simulación de crecida administrativa (`POST /api/alertas/simular`).
 8. **Clientes de apoyo:** Consola interactiva CLI (`ConsolaDemoRunner`) y PWA mínima de prueba web para validar Service Worker y notificaciones push.
-9. **Pruebas automatizadas:** 79 pruebas pasando al 100 % sin fallos (`mvnw.cmd test`).
+9. **Pruebas automatizadas:** 79 pruebas pasando al 100 % sin fallos (`mvnw.cmd test`). Base lista para que el frontend la consuma.
 
-### 8.2 Pendiente para la entrega final (100 %)
-1. **Frontend definitivo:** Construcción del producto final por el equipo de frontend desde cero consumiendo la API REST.
+### 8.2 Parte del Frontend (Pendiente para completar la presentación del 75 %)
+1. **Pantallas iniciales del frontend:** El equipo de frontend debe construir y entregar las pantallas iniciales requeridas para la presentación del 75 % (login, catálogo/mapa de ríos, seguimiento de ríos y visualización del panel hidrológico), consumiendo la API provista por este backend.
+
+### 8.3 Pendiente para la entrega final (100 %)
+1. **Frontend definitivo completo:** Construcción y pulido del producto final por el equipo de frontend desde cero consumiendo la API REST.
 2. **Push real en dispositivo físico:** Confirmar recepción física en smartphone (requiere credenciales reales de Firebase y túnel HTTPS activo).
 3. **Calibración estacional de umbrales:** Ajuste hidrológico y de precipitación con datos oficiales de SINAPROC / IMHPA.
 4. **Configuración definitiva de producción:** Definir dominio oficial, ajustar `ALERTA_CORS_ORIGENES` y rotar credenciales sensibles fuera de entornos locales.

@@ -531,18 +531,22 @@ async function registrarDispositivoPush(tokenFcm, deviceId) {
 
 ## 9. Estado para la entrega del 75 % y pendientes para el 100 %
 
-### Listo para la entrega del 75 % (Verificado en Backend)
+### 9.1 Parte del Backend (Listo y verificado para la entrega del 75 %)
 - Contratos REST estables y verificados con 79 pruebas automatizadas (0 fallos).
 - Flujo completo de registro, login, roles (`USER`/`ADMIN`) y emisión de JWT.
 - Catálogo de 4 ríos con geometría GeoJSON real de GEOGloWS v2 (TDX-Hydro).
 - Selección de ríos por usuario y atributo `siguiendo` integrado en la respuesta del panel.
 - Simulación de crecida administrativa con despacho de push exclusivo a seguidores.
 - PWA mínima de prueba operativa en `/` para validar Service Worker y push web.
+- Base completa lista para ser consumida directamente por el equipo de frontend.
 
-### Pendiente para la entrega final (100 %)
-- Construcción y despliegue del frontend definitivo por el equipo asignado.
+### 9.2 Parte del Frontend (Pendiente para completar la presentación del 75 %)
+- **Desarrollo de pantallas iniciales:** El equipo de frontend debe construir y entregar las pantallas iniciales requeridas para la presentación del 75 % (login, catálogo/mapa de ríos, seguimiento de ríos y visualización del panel hidrológico), consumiendo la API provista por este backend.
+
+### 9.3 Pendiente para la entrega final (100 %)
+- Construcción y despliegue del frontend definitivo completo (todos los flujos y vistas detalladas).
 - Definición de la URL final del frontend para política CORS en producción (`ALERTA_CORS_ORIGENES`).
-- Calibración estacional de los umbrales de alerta hidrológica.
+- Calibración estacional de los umbrales de alerta hidrológica con autoridades competentes (SINAPROC/IMHPA).
 - Retiro definitivo de rutas heredadas (`POST /api/push/demo` y `GET /api/alertas/suscripciones/{reachId}`).
 
 ---
@@ -565,7 +569,7 @@ async function registrarDispositivoPush(tokenFcm, deviceId) {
 
 ---
 
-## 8. Contexto para agentes de IA
+## 11. Contexto para agentes de IA
 
 Antes de modificar código, leer:
 

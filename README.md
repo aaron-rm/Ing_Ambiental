@@ -14,7 +14,7 @@ Messaging (FCM).
 > Proyecto académico y orientativo. No emite declaraciones oficiales de
 > emergencia ni sustituye a SINAPROC, IMHPA u otra autoridad competente.
 
-> **Estado (Entrega 75 %):** El backend está **preparado y verificado para la entrega del 75 %**, con **79 pruebas automatizadas en verde** (0 fallos). Cuenta con autenticación JWT, roles `USER`/`ADMIN`, catálogo cerrado de cuatro ríos con geometría real (GeoJSON), selección usuario–ríos, enrutamiento push a seguidores, caché de GEOGloWS con tolerancia a fallos y campo `siguiendo` en el panel.
+> **Estado (Entrega 75 %):** La parte correspondiente al **backend está completamente lista y verificada para la entrega del 75 %**, con **79 pruebas automatizadas en verde** (0 fallos). Cuenta con autenticación JWT, roles `USER`/`ADMIN`, catálogo cerrado de cuatro ríos con geometría real (GeoJSON), selección usuario–ríos, enrutamiento push a seguidores, caché de GEOGloWS con tolerancia a fallos y campo `siguiendo` en el panel. **Para completar la presentación del 75 % solo resta que el equipo de frontend construya y entregue sus pantallas iniciales consumiendo esta base.**
 >
 > Para retomar el proyecto o consultar la historia de sesiones, ver [docs/CONTINUIDAD_SESION.md](docs/CONTINUIDAD_SESION.md).
 > Para una explicación funcional sin tecnicismos, ver [docs/RESUMEN_PROYECTO.md](docs/RESUMEN_PROYECTO.md).
@@ -164,7 +164,7 @@ scripts/                    Arranque de demo
 
 ## Estado de la entrega y alcance
 
-### Listo para la entrega del 75 % (Verificado)
+### Parte del Backend (Listo y verificado para la entrega del 75 %)
 - **Backend modular y desacoplado:** Spring Boot con API REST independiente y arquitectura por capas (Controller → Service → Repository / Client).
 - **Autenticación y roles:** Registro público (`USER`), login con emisión de JWT HS256 (24 horas) y sembrado de administrador (`ADMIN`).
 - **Catálogo cerrado de cuatro ríos:** Upsert automático de Río Abajo, Curundú, Juan Díaz y Tocumen con geometría GeoJSON simplificada real (TDX-Hydro).
@@ -172,11 +172,14 @@ scripts/                    Arranque de demo
 - **Evaluación y monitoreo de riesgo:** Clasificación combinada de caudal (GEOGloWS v2) y lluvia acumulada en 24h (Open-Meteo) bajo 4 niveles (`NORMAL`, `VIGILANCIA`, `ALERTA`, `EMERGENCIA`). Monitoreo programado cada 15 min e historial con idempotencia.
 - **Tolerancia a fallos:** Caché en memoria para GEOGloWS con reutilización de la última respuesta válida en caso de caídas del servicio externo.
 - **Notificaciones Push por seguidores:** Registro de token FCM vinculado al usuario y despacho de avisos críticos y simulacros solo a los seguidores del río.
-- **Herramientas de prueba:** Consola interactiva CLI con menú por rol y PWA mínima de prueba web para validación de Service Workers.
-- **Calidad de software:** 79 pruebas automatizadas pasando al 100% (`BUILD SUCCESS`).
+- **Herramientas de prueba:** Consola interactiva CLI con menú por rol y PWA mínima de prueba web para validación técnica de Service Workers y Push.
+- **Calidad de software:** 79 pruebas automatizadas pasando al 100% (`BUILD SUCCESS`). Base completa lista para ser consumida.
+
+### Pendiente para completar la presentación del 75 % (Equipo de Frontend)
+- **Pantallas iniciales del frontend:** Desarrollo y entrega de las primeras pantallas funcionales por parte del equipo de frontend (autenticación, catálogo/mapa de ríos, seguimiento y visualización del panel de riesgo) utilizando los endpoints provistos por el backend.
 
 ### Pendiente para la entrega final (100 %)
-- **Frontend definitivo:** Desarrollo de la interfaz gráfica completa (mapas interactivos, hidrogramas y panel de usuario) por el equipo de frontend.
+- **Frontend definitivo completo:** Aplicación frontend finalizada con todos los flujos de usuario, diseño pulido e integración total de deep links y gráficos.
 - **Calibración estacional:** Calibración fina de umbrales hidrológicos y de precipitación con entidades oficiales (SINAPROC/IMHPA).
 - **Configuración de producción:** Dominio HTTPS fijo, origen CORS definitivo para el frontend y rotación segura de credenciales de base de datos y Firebase.
 - **Limpieza de endpoints heredados:** Retiro de rutas transitorias (`POST /api/push/demo` heredado y `GET /api/alertas/suscripciones/{reachId}`).
