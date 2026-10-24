@@ -2,6 +2,7 @@ package com.alerta.sistema_alerta_inundaciones.push;
 
 import com.alerta.sistema_alerta_inundaciones.alerta.AlertaEvento;
 import com.alerta.sistema_alerta_inundaciones.alerta.AlertaEventoRepository;
+import com.alerta.sistema_alerta_inundaciones.alerta.AlertaRioDTO;
 import com.alerta.sistema_alerta_inundaciones.alerta.EstadoEnvio;
 import com.alerta.sistema_alerta_inundaciones.config.PropiedadesFirebase;
 import com.alerta.sistema_alerta_inundaciones.rio.Rio;
@@ -212,6 +213,68 @@ public class PushService {
                 Instant.now().toEpochMilli()
         );
 
+        ResultadoDemoPush resultado = enviarADispositivos(dispositivos, notificacion);
+        log.info("Demostración push: {} dispositivos, {} enviados, {} fallidos.",
+                resultado.dispositivos(), resultado.enviados(), resultado.fallidos());
+        return resultado;
+    }
+
+    /**
+     * Envía el simulacro de crecida solo a los dispositivos activos de los
+     * usuarios que siguen el río simulado. No persiste un evento.
+     *
+     * @throws IllegalStateException si FCM no está configurado.
+     */
+    public ResultadoDemoPush enviarSimulacion(AlertaRioDTO alerta) {
+        if (!pushSender.estaHabilitado()) {
+            throw new IllegalStateException(pushSender.motivoDeshabilitado());
+        }
+        if (alerta == null || alerta.getReachId() == null) {
+            throw new IllegalArgumentException("La simulación no tiene un reachId válido.");
+        }
+
+        List<DispositivoPush> dispositivos = dispositivosQueSiguen(alerta.getReachId());
+        if (dispositivos.isEmpty()) {
+            log.info("Simulación del tramo {} sin seguidores con push activo.",
+                    alerta.getReachId());
+            return new ResultadoDemoPush(0, 0, 0);
+        }
+
+        String nivel = alerta.getNivelAlerta() == null ? "SIMULACION" : alerta.getNivelAlerta();
+        boolean critico = "EMERGENCIA".equalsIgnoreCase(nivel);
+        String nombreRio = alerta.getNombreRio() == null || alerta.getNombreRio().isBlank()
+                ? "el río seleccionado" : alerta.getNombreRio();
+        String titulo = critico
+                ? "SIMULACRO: alerta de inundación"
+                : "SIMULACRO: prueba de alerta";
+        String cuerpo = "Simulación para probar las notificaciones de " + nombreRio
+                + ". Nivel simulado: " + nivel + ". No es una emergencia real.";
+
+        NotificacionPush notificacion = new NotificacionPush(
+                titulo,
+                cuerpo,
+                nivel,
+                alerta.getReachId(),
+                0L,
+                "/?simulacion=" + alerta.getReachId(),
+                "simulacion-" + alerta.getReachId(),
+                "/icons/icon-192.png",
+                "/icons/badge-72.png",
+                critico,
+                critico,
+                true,
+                Instant.now().toEpochMilli()
+        );
+
+        ResultadoDemoPush resultado = enviarADispositivos(dispositivos, notificacion);
+        log.info("Simulación del tramo {}: {} dispositivos, {} enviados, {} fallidos.",
+                alerta.getReachId(), resultado.dispositivos(), resultado.enviados(),
+                resultado.fallidos());
+        return resultado;
+    }
+
+    private ResultadoDemoPush enviarADispositivos(List<DispositivoPush> dispositivos,
+                                                  NotificacionPush notificacion) {
         int enviados = 0;
         int fallidos = 0;
         for (DispositivoPush dispositivo : dispositivos) {
@@ -226,8 +289,6 @@ public class PushService {
                 dispositivoRepository.save(dispositivo);
             }
         }
-        log.info("Demostración push: {} dispositivos, {} enviados, {} fallidos.",
-                dispositivos.size(), enviados, fallidos);
         return new ResultadoDemoPush(dispositivos.size(), enviados, fallidos);
     }
 

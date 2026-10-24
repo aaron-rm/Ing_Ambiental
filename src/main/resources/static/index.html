@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0f766e">
-    <meta name="description" content="Prueba de la PWA del sistema de alerta temprana de inundaciones: login, catálogo de ríos y notificaciones push.">
+    <meta name="description" content="PWA de prueba del sistema de alerta temprana de inundaciones: inicio de sesión, suscripción a ríos y notificaciones push.">
     <title>Alertas de inundación</title>
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/styles.css?v=8">
 </head>
 <body>
     <main class="app">
@@ -26,8 +26,8 @@
             <p class="eyebrow">Sistema de alertas</p>
             <h1 id="tituloLogin">Alertas de inundación</h1>
             <p class="lead">
-                Inicia sesión o crea una cuenta para ver los ríos monitoreados, consultar
-                su caudal y recibir notificaciones de los ríos que sigas.
+                Inicia sesión o crea una cuenta para suscribirte a tus ríos
+                y recibir notificaciones de prueba en este dispositivo.
             </p>
 
             <form id="formLogin" class="formulario" autocomplete="on">
@@ -55,7 +55,7 @@
             <header class="app-header">
                 <div>
                     <p class="eyebrow">Sistema de alertas</p>
-                    <h1 id="tituloApp">Ríos monitoreados</h1>
+                    <h1 id="tituloApp">Mis ríos</h1>
                 </div>
                 <div class="sesion">
                     <span id="usuarioActual" class="usuario"></span>
@@ -65,48 +65,51 @@
 
             <p id="mensajeApp" class="message" role="status" aria-live="polite" hidden></p>
 
-            <section class="bloque" aria-labelledby="tituloMapa">
-                <h2 id="tituloMapa">Mapa del catálogo</h2>
-                <p class="ayuda">
-                    Toca una línea para abrir el panel de ese río. Los ríos que sigues se
-                    muestran resaltados. El mapa es una vista esquemática de la geometría
-                    oficial de GEOGloWS; no sustituye a un mapa topográfico.
-                </p>
-                <div id="mapa" class="mapa" role="img"
-                     aria-label="Vista esquemática de los ríos del catálogo"></div>
-            </section>
-
-            <section id="bloquePanel" class="bloque" hidden aria-labelledby="panelTitulo">
-                <h2 id="panelTitulo">Panel del río</h2>
-                <div id="panelContenido"></div>
-            </section>
-
-            <section class="bloque" aria-labelledby="tituloLista">
-                <h2 id="tituloLista">Ríos del catálogo</h2>
-                <ul id="listaRios" class="lista-rios"></ul>
-            </section>
-
             <section class="bloque" aria-labelledby="tituloPush">
                 <h2 id="tituloPush">Notificaciones</h2>
                 <p class="ayuda">
-                    Actívalas solo en el dispositivo donde quieras recibir los avisos.
-                    Recibirás alertas de los ríos que sigues.
+                    Activa las notificaciones en este dispositivo para recibir
+                    los avisos de los ríos a los que te suscribas.
                 </p>
                 <div id="estadoPush" class="status">
                     <span class="status-dot" aria-hidden="true"></span>
                     <span id="estadoPushTexto">Comprobando…</span>
                 </div>
                 <button id="botonPush" class="button" type="button" disabled>Activar notificaciones</button>
-                <button id="botonPruebaPush" class="button secundario" type="button" disabled>Enviar notificación de prueba</button>
                 <p id="mensajePush" class="message" role="status" aria-live="polite" hidden></p>
                 <p class="footnote">
                     Android: usa Chrome. iPhone/iPad: requiere iOS 16.4 o superior y agregar
                     esta página a la pantalla de inicio.
                 </p>
             </section>
+
+            <section class="bloque" aria-labelledby="tituloLista">
+                <h2 id="tituloLista">Ríos disponibles</h2>
+                <p class="ayuda">
+                    Suscríbete a un río para recibir sus notificaciones. Puedes
+                    dejar de seguirlo cuando quieras.
+                </p>
+                <ul id="listaRios" class="lista-rios"></ul>
+            </section>
+
+            <section id="bloqueAdmin" class="bloque bloque-admin" hidden aria-labelledby="tituloAdmin">
+                <h2 id="tituloAdmin">Simulación de crecida</h2>
+                <p class="ayuda">
+                    Solo para administradores. Envía una notificación de simulacro
+                    a los dispositivos de las personas suscritas al río elegido.
+                </p>
+                <ul id="listaSimulacion" class="lista-rios"></ul>
+                <p id="mensajeAdmin" class="message" role="status" aria-live="polite" hidden></p>
+            </section>
         </section>
     </main>
 
-    <script src="/app.js" defer></script>
+    <div id="avisoPush" class="aviso-push" role="status" aria-live="assertive" hidden>
+        <strong id="avisoPushTitulo"></strong>
+        <span id="avisoPushTexto"></span>
+        <span class="aviso-push-cerrar" aria-hidden="true">Toca para cerrar</span>
+    </div>
+
+    <script src="/app.js?v=8" defer></script>
 </body>
 </html>

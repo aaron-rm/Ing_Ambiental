@@ -1,11 +1,16 @@
 # Ajustes necesarios para el panel de río
 
 **Fecha:** 23/10/2026<br>
-**Estado:** casi todo implementado en el avance de autenticación, catálogo y
-panel. Quedan pendientes la caché de GEOGloWS (2.4) y el campo opcional
-`siguiendo` (2.5). El gráfico se implementó como hidrograma de caudal.<br>
-**Objetivo:** que al hacer clic en cualquiera de los cuatro ríos se abra un panel
-con caudal, lluvia, estado, gráfico, recomendaciones y botón de suscripción.
+**Estado:** **implementado en el backend y en la consola**. La caché de GEOGloWS
+(2.4), el campo `siguiendo` (2.5), las recomendaciones, el catálogo con geometría
+y el hidrograma de caudal ya están en la rama. La PWA de prueba se redujo
+después a login, catálogo, suscripción, push y simulación admin, por lo que ya no
+muestra este panel; el contrato sigue disponible para el frontend definitivo.
+Solo quedan pendientes de validación la prueba de humo en Windows y el push en un
+dispositivo real.<br>
+**Objetivo:** que el frontend definitivo pueda abrir un panel con caudal, lluvia,
+estado, gráfico, recomendaciones y botón de suscripción al elegir cualquiera de
+los cuatro ríos.
 
 ## 1. Lo que ya sirve
 
@@ -78,8 +83,10 @@ reemplazarlo por los cuatro ríos acordados antes de probar el panel.
 
 ### 2.4. La consulta puede ser lenta al hacer clic
 
-> **Pendiente.** GEOGloWS sigue sin caché propia; la PWA y la consola consultan
-> en vivo al abrir el panel. Open-Meteo ya cachea 15 minutos.
+> **Implementado.** `ClienteApiGeoglows` cachea en memoria por endpoint y
+> `reachId` durante `GEOGLOWS_CACHE_MINUTOS` (15 min por defecto). Open-Meteo ya
+> cachea 15 minutos. Si GEOGloWS falla, se reutiliza la última respuesta cacheada
+> aunque haya expirado.
 
 Cada llamada a `GET /api/alertas/rio/{rioId}` consulta GEOGloWS
 (`forecaststats` y `returnperiods`) y Open-Meteo. Open-Meteo ya tiene caché de
@@ -95,8 +102,9 @@ indique si el dato es reciente.
 
 ### 2.5. Falta `rioId` y, opcionalmente, el estado de suscripción
 
-> **Parcial.** `AlertaRioDTO` ya incluye `rioId`. El campo `siguiendo` no se
-> agregó: la PWA consulta `GET /api/usuarios/me/rios` y cruza la lista.
+> **Implementado.** `AlertaRioDTO` incluye `rioId` y `Boolean siguiendo`. Con un
+> JWT válido, `siguiendo` es `true` o `false`; sin sesión es `null`. La PWA ya no
+> necesita cruzar `/api/usuarios/me/rios` para pintar el botón.
 
 `AlertaRioDTO` devuelve `reachId` y `nombreRio`, pero no el `rioId` que el
 frontend usa para el clic. No es un bloqueo porque el frontend ya lo conoce,
@@ -178,11 +186,13 @@ deben inventarse ni presentarse como una medición.
 
 ## 5. Orden sugerido (estado)
 
-1. ~~Usar el hidrograma de caudal con umbrales~~ — la PWA ya lo usa.
+1. ~~Usar el hidrograma de caudal con umbrales~~ — el contrato ya lo entrega; la
+   PWA mínima ya no muestra el panel.
 2. ~~Corregir el catálogo: cuatro ríos, geometría y endpoint del mapa~~ — hecho.
 3. ~~Poblar `recomendaciones`~~ — hecho en `AlertaService`.
-4. Agregar caché o última evaluación para que el clic sea rápido — **pendiente**.
-5. ~~Agregar `rioId`~~ — hecho; `siguiendo` no se agregó (la PWA usa
-   `/api/usuarios/me/rios`).
+4. ~~Agregar caché o última evaluación para que el clic sea rápido~~ — hecho en
+   `ClienteApiGeoglows`.
+5. ~~Agregar `rioId` y `siguiendo`~~ — hechos; el frontend puede usar
+   `siguiendo` en lugar de cruzar `/api/usuarios/me/rios`.
 6. ~~Implementar usuario–ríos y el botón de suscripción~~ — hecho.
 7. ~~Documentar el contrato final en `INTEGRACION_FRONTEND.md`~~ — hecho.

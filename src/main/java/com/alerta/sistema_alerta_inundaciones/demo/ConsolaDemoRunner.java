@@ -168,7 +168,6 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         System.out.println();
         System.out.println("[OK] Sesion iniciada como " + sesion.usuario().identificador()
                 + " (" + sesion.usuario().rol() + ").");
-        System.out.println("El token se guarda solo en memoria y vence en 24 horas.");
     }
 
     /** @return true si la consola debe terminar. */
@@ -186,9 +185,8 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         System.out.println("  4. Dejar de seguir un rio");
         System.out.println("  5. Ver mis rios seguidos");
         if (admin) {
-            System.out.println("  6. Simular una crecida (no envia push)");
-            System.out.println("  7. Evaluar rios con datos reales (puede enviar push)");
-            System.out.println("  8. Enviar notificacion push de demostracion");
+            System.out.println("  6. Simular una crecida y enviar push a sus seguidores");
+            System.out.println("  7. Enviar notificacion push de demostracion");
         }
         System.out.println("  0. Cerrar sesion");
         System.out.println("  9. Salir de la consola");
@@ -220,13 +218,6 @@ public class ConsolaDemoRunner implements CommandLineRunner {
                     }
                     return false;
                 case "7":
-                    if (admin) {
-                        evaluarRios(scanner);
-                    } else {
-                        System.out.println("Opcion no valida.");
-                    }
-                    return false;
-                case "8":
                     if (admin) {
                         enviarPushDemo();
                     } else {
@@ -277,8 +268,6 @@ public class ConsolaDemoRunner implements CommandLineRunner {
                     rio.tieneGeometria() ? "si" : "no",
                     seguidos.contains(rio.rioId()) ? "SEGUIDO" : "no seguido");
         }
-        System.out.println("\nSeguir un rio solo controla las notificaciones. El panel se puede "
-                + "consultar para cualquier rio, este o no seguido.");
     }
 
     private void abrirPanel(Scanner scanner) {
@@ -400,58 +389,28 @@ public class ConsolaDemoRunner implements CommandLineRunner {
             }
         }
         System.out.println("\nSimulando " + caudal + " m3/s en " + rio.nombre()
-                + " (no se envia push)...");
-        AlertaRioDTO simulacion = backend.simular(rio.reachId(), caudal);
+                + " y enviando push a sus seguidores...");
+        BackendApiClient.ResultadoSimulacionApi resultado = backend.simular(rio.reachId(), caudal);
+        AlertaRioDTO simulacion = resultado.alerta();
 
         System.out.println("\n--- RESULTADO DE LA SIMULACION ---");
         System.out.println("Rio: " + rio.nombre());
         System.out.printf(Locale.US, "Caudal simulado: %.2f m3/s%n", caudal);
         System.out.println("Estado resultante: " + formatearNivel(simulacion.getNivelAlerta()));
         System.out.println("Mensaje: " + texto(simulacion.getMensaje(), "sin mensaje"));
-        System.out.println("\nRecomendaciones:");
-        imprimirLista(simulacion.getRecomendaciones(), "Sin recomendaciones.");
-        System.out.println("\nEsta simulacion no representa una condicion real y no envia notificaciones.");
-    }
-
-    private void evaluarRios(Scanner scanner) {
-        System.out.println("\n--- EVALUACION MANUAL CON DATOS REALES ---");
-        System.out.println("La evaluacion consulta GEOGloWS y Open-Meteo. Si el nivel cambia, "
-                + "crea un evento y puede enviar push a los seguidores del rio.");
-        System.out.println("  1. Evaluar un rio");
-        System.out.println("  2. Evaluar todos los rios del catalogo");
-        System.out.print("\n> ");
-        String opcion = leerLinea(scanner);
-
-        List<BackendApiClient.RioApi> rios;
-        if ("1".equals(opcion)) {
-            BackendApiClient.RioApi rio = elegirRio(scanner, "Evaluar que rio?");
-            if (rio == null) {
-                return;
-            }
-            rios = List.of(rio);
-        } else if ("2".equals(opcion)) {
-            rios = backend.listarRios();
+        System.out.println("\nPush a seguidores:");
+        System.out.println("  Dispositivos: " + resultado.dispositivos());
+        System.out.println("  Enviados:     " + resultado.enviados());
+        System.out.println("  Fallidos:     " + resultado.fallidos());
+        if (resultado.dispositivos() == 0) {
+            System.out.println("\nNingun dispositivo sigue este rio. La simulacion se ejecuto, "
+                    + "pero no habia a quien notificar.");
+        } else if (resultado.enviados() == 0) {
+            System.out.println("\nNo se pudo entregar ninguna notificacion. Revise la configuracion de FCM.");
         } else {
-            System.out.println("Opcion no valida.");
-            return;
+            System.out.println("\nLa notificacion de simulacro debe aparecer en los dispositivos suscritos.");
         }
-
-        for (BackendApiClient.RioApi rio : rios) {
-            System.out.println("\nEvaluando " + rio.nombre() + " (reachId " + rio.reachId() + ")...");
-            try {
-                BackendApiClient.ResultadoEvaluacionApi resultado = backend.evaluar(rio.reachId());
-                System.out.println("  Nivel: " + formatearNivel(resultado.nivel())
-                        + " | evento: " + (resultado.eventoId() == null ? "sin cambio" : "#" + resultado.eventoId())
-                        + " | notificado: " + (resultado.notificado() ? "si" : "no")
-                        + " | datos confiables: " + (resultado.datosConfiables() ? "si" : "no"));
-                System.out.println("  " + resultado.mensaje());
-            } catch (BackendApiClient.ApiException e) {
-                System.out.println("  [!] No se pudo evaluar: " + e.getMessage());
-                if (e.getEstado() == 401) {
-                    throw e;
-                }
-            }
-        }
+        System.out.println("Esta simulacion no representa una condicion real.");
     }
 
     private void enviarPushDemo() {
@@ -481,22 +440,22 @@ public class ConsolaDemoRunner implements CommandLineRunner {
             System.out.printf("  %d. %s (rioId=%d, reachId=%d)%n",
                     i + 1, rio.nombre(), rio.rioId(), rio.reachId());
         }
-        System.out.print("Numero [Enter para cancelar]: ");
-        String entrada = leerLinea(scanner);
-        if (entrada.isEmpty()) {
-            System.out.println("Operacion cancelada.");
-            return null;
-        }
-        try {
-            int indice = Integer.parseInt(entrada);
-            if (indice < 1 || indice > rios.size()) {
-                System.out.println("Numero fuera de rango.");
+        while (true) {
+            System.out.print("Numero [Enter para cancelar]: ");
+            String entrada = leerLinea(scanner);
+            if (entrada.isEmpty() || "0".equals(entrada)) {
+                System.out.println("Operacion cancelada.");
                 return null;
             }
-            return rios.get(indice - 1);
-        } catch (NumberFormatException e) {
-            System.out.println("Numero invalido.");
-            return null;
+            try {
+                int indice = Integer.parseInt(entrada);
+                if (indice >= 1 && indice <= rios.size()) {
+                    return rios.get(indice - 1);
+                }
+                System.out.println("Numero fuera de rango. Intente de nuevo.");
+            } catch (NumberFormatException e) {
+                System.out.println("Numero invalido. Intente de nuevo.");
+            }
         }
     }
 
@@ -508,22 +467,22 @@ public class ConsolaDemoRunner implements CommandLineRunner {
             System.out.printf("  %d. %s (rioId=%d, reachId=%d)%n",
                     i + 1, rio.nombre(), rio.rioId(), rio.reachId());
         }
-        System.out.print("Numero [Enter para cancelar]: ");
-        String entrada = leerLinea(scanner);
-        if (entrada.isEmpty()) {
-            System.out.println("Operacion cancelada.");
-            return null;
-        }
-        try {
-            int indice = Integer.parseInt(entrada);
-            if (indice < 1 || indice > rios.size()) {
-                System.out.println("Numero fuera de rango.");
+        while (true) {
+            System.out.print("Numero [Enter para cancelar]: ");
+            String entrada = leerLinea(scanner);
+            if (entrada.isEmpty() || "0".equals(entrada)) {
+                System.out.println("Operacion cancelada.");
                 return null;
             }
-            return rios.get(indice - 1);
-        } catch (NumberFormatException e) {
-            System.out.println("Numero invalido.");
-            return null;
+            try {
+                int indice = Integer.parseInt(entrada);
+                if (indice >= 1 && indice <= rios.size()) {
+                    return rios.get(indice - 1);
+                }
+                System.out.println("Numero fuera de rango. Intente de nuevo.");
+            } catch (NumberFormatException e) {
+                System.out.println("Numero invalido. Intente de nuevo.");
+            }
         }
     }
 

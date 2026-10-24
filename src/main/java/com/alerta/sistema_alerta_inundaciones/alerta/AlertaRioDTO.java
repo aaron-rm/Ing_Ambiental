@@ -7,6 +7,11 @@ public class AlertaRioDTO {
 
     private Long reachId;
     private Long rioId;
+    /**
+     * true/false si la petición incluye un JWT válido; null si se consulta sin
+     * sesión. Solo indica si el río está seleccionado para notificaciones.
+     */
+    private Boolean siguiendo;
     private String nombreRio;
     private String nivelAlerta; // NORMAL, VIGILANCIA, ALERTA, EMERGENCIA
     private double caudalActualOInicial;
@@ -111,6 +116,14 @@ public class AlertaRioDTO {
 
     public void setRioId(Long rioId) {
         this.rioId = rioId;
+    }
+
+    public Boolean getSiguiendo() {
+        return siguiendo;
+    }
+
+    public void setSiguiendo(Boolean siguiendo) {
+        this.siguiendo = siguiendo;
     }
 
     public String getNombreRio() {

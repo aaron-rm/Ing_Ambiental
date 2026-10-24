@@ -9,6 +9,8 @@ import com.alerta.sistema_alerta_inundaciones.riesgo.EvaluadorRiesgo;
 import com.alerta.sistema_alerta_inundaciones.riesgo.ProveedorDatosRiesgo;
 import com.alerta.sistema_alerta_inundaciones.rio.Rio;
 import com.alerta.sistema_alerta_inundaciones.rio.RioRepository;
+import com.alerta.sistema_alerta_inundaciones.usuario.Usuario;
+import com.alerta.sistema_alerta_inundaciones.usuario.UsuarioRioRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
@@ -32,19 +34,22 @@ public class AlertaService {
     private final EvaluadorRiesgo evaluador;
     private final ClienteApiGeoglows clienteGeoglows;
     private final AlertaEventoRepository eventoRepository;
+    private final UsuarioRioRepository usuarioRioRepository;
 
     public AlertaService(SuscripcionAlertaRepository suscripcionRepository,
                          RioRepository rioRepository,
                          ProveedorDatosRiesgo proveedorDatos,
                          EvaluadorRiesgo evaluador,
                          ClienteApiGeoglows clienteGeoglows,
-                         AlertaEventoRepository eventoRepository) {
+                         AlertaEventoRepository eventoRepository,
+                         UsuarioRioRepository usuarioRioRepository) {
         this.suscripcionRepository = suscripcionRepository;
         this.rioRepository = rioRepository;
         this.proveedorDatos = proveedorDatos;
         this.evaluador = evaluador;
         this.clienteGeoglows = clienteGeoglows;
         this.eventoRepository = eventoRepository;
+        this.usuarioRioRepository = usuarioRioRepository;
     }
 
     /**
@@ -54,6 +59,15 @@ public class AlertaService {
      */
     public AlertaRioDTO consultarAlertaTramo(long reachId, String nombreRio)
             throws IOException, InterruptedException {
+        return consultarAlertaTramo(reachId, nombreRio, null);
+    }
+
+    /**
+     * Igual que {@link #consultarAlertaTramo(long, String)}, pero calcula
+     * {@code siguiendo} si la petición trae un usuario autenticado.
+     */
+    public AlertaRioDTO consultarAlertaTramo(long reachId, String nombreRio, Usuario usuario)
+            throws IOException, InterruptedException {
         Optional<Rio> rio = rioRepository.findFirstByGeoglowsId(reachId);
         AlertaRioDTO dto = consultarInterno(
                 reachId,
@@ -61,12 +75,24 @@ public class AlertaService {
                 rio.map(Rio::getLatitud).orElse(null),
                 rio.map(Rio::getLongitud).orElse(null)
         );
-        rio.ifPresent(value -> dto.setRioId(value.getId()));
+        rio.ifPresent(value -> {
+            dto.setRioId(value.getId());
+            dto.setSiguiendo(calcularSiguiendo(usuario, value.getId()));
+        });
         return dto;
     }
 
     /** Consulta la alerta utilizando el id de un Río guardado en PostgreSQL. */
     public AlertaRioDTO consultarAlertaPorRioId(Long rioId) throws IOException, InterruptedException {
+        return consultarAlertaPorRioId(rioId, null);
+    }
+
+    /**
+     * Consulta la alerta de un Río y marca si el usuario autenticado lo sigue.
+     * Sin sesión, {@code siguiendo} queda en null.
+     */
+    public AlertaRioDTO consultarAlertaPorRioId(Long rioId, Usuario usuario)
+            throws IOException, InterruptedException {
         Rio rio = rioRepository.findById(rioId)
                 .orElseThrow(() -> new IllegalArgumentException("No se encontró el río con ID: " + rioId));
         if (rio.getGeoglowsId() == null) {
@@ -74,7 +100,15 @@ public class AlertaService {
         }
         AlertaRioDTO dto = consultarInterno(rio.getGeoglowsId(), rio.getNombre(), rio.getLatitud(), rio.getLongitud());
         dto.setRioId(rioId);
+        dto.setSiguiendo(calcularSiguiendo(usuario, rioId));
         return dto;
+    }
+
+    private Boolean calcularSiguiendo(Usuario usuario, Long rioId) {
+        if (usuario == null || usuario.getId() == null || rioId == null) {
+            return null;
+        }
+        return usuarioRioRepository.existsByUsuarioIdAndRioId(usuario.getId(), rioId);
     }
 
     private AlertaRioDTO consultarInterno(long reachId, String nombreRio, Double latitud, Double longitud)
@@ -187,10 +221,15 @@ public class AlertaService {
     }
 
     /**
-     * Simula un caudal para demostrar la clasificación de niveles. No crea un
-     * evento persistido ni envía notificaciones push reales.
+     * Simula un caudal para probar la clasificación y el envío de
+     * notificaciones. No persiste un evento de riesgo: el resultado se marca
+     * explícitamente como simulación.
+     *
+     * <p>Si {@code caudalSolicitado} es {@code null}, se usa un caudal
+     * inmediatamente superior al umbral de emergencia del tramo. Así el botón
+     * de la PWA no necesita conocer los umbrales.</p>
      */
-    public AlertaRioDTO simularInundacion(long reachId, double caudalSimulado)
+    public AlertaRioDTO simularInundacion(long reachId, Double caudalSolicitado)
             throws IOException, InterruptedException {
         LectorDatosIngresados.UmbralAlerta umbrales;
         try {
@@ -203,6 +242,13 @@ public class AlertaService {
         double uAlt = umbrales != null ? umbrales.caudalAlerta : 30.0;
         double uEmg = umbrales != null ? umbrales.caudalEmergencia : 60.0;
 
+        double caudalSimulado = caudalSolicitado != null
+                ? caudalSolicitado
+                : (uEmg > 0 ? uEmg * 1.2 : 75.0);
+        if (!Double.isFinite(caudalSimulado) || caudalSimulado < 0) {
+            throw new IllegalArgumentException("El caudal simulado debe ser un número positivo.");
+        }
+
         LectorDatosIngresados.NivelAlerta nivel;
         if (caudalSimulado >= uEmg) {
             nivel = LectorDatosIngresados.NivelAlerta.EMERGENCIA;
@@ -214,9 +260,14 @@ public class AlertaService {
             nivel = LectorDatosIngresados.NivelAlerta.NORMAL;
         }
 
+        Rio rio = rioRepository != null
+                ? rioRepository.findFirstByGeoglowsId(reachId).orElse(null)
+                : null;
+
         AlertaRioDTO sim = new AlertaRioDTO();
         sim.setReachId(reachId);
-        sim.setNombreRio("Simulacion - Tramo " + reachId);
+        sim.setRioId(rio != null ? rio.getId() : null);
+        sim.setNombreRio(rio != null ? rio.getNombre() : "Tramo " + reachId);
         sim.setCaudalActualOInicial(caudalSimulado);
         sim.setCaudalMaximoPronosticado(caudalSimulado);
         sim.setUmbralVigilancia(uVig);
@@ -237,7 +288,7 @@ public class AlertaService {
                 "No se consultaron datos de precipitación para la simulación."
         ));
         sim.setAdvertencias(List.of(
-                "Esta simulación no representa una condición real y no envía notificaciones push."
+                "Esta simulación no representa una condición real; solo se usa para probar las notificaciones push."
         ));
         sim.setRecomendaciones(recomendacionesPorNivel(nivel));
         return sim;

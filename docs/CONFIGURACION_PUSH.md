@@ -22,7 +22,7 @@ Firebase Cloud Messaging (FCM). No contiene credenciales reales.
 | `DB_PASSWORD` | vacío | Contraseña; definirla fuera del repositorio |
 | `ALERTA_JWT_SECRET` | sin valor | Secreto HS256 del JWT; mínimo 32 caracteres |
 | `ALERTA_ADMIN_IDENTIFICADOR` | `admin` | Identificador del administrador inicial |
-| `ALERTA_ADMIN_PASSWORD` | vacío | Contraseña del administrador; solo en entorno o `.env.demo` |
+| `ALERTA_ADMIN_PASSWORD` | vacío | Contraseña del administrador (`admin-local-clave` en desarrollo local; definir segura en producción) |
 | `ALERTA_CORS_ORIGENES` | orígenes locales | Orígenes permitidos para el frontend |
 | `ALERTA_CARGAR_CATALOGO` | `true` | Carga el catálogo de cuatro ríos al arrancar |
 | `ALERTA_ADMIN_TOKEN` | vacío | Solo para rutas heredadas (`POST /api/push/demo`, `GET /api/alertas/suscripciones/{reachId}`) |
@@ -40,9 +40,11 @@ $env:DB_USERNAME = "postgres"
 $env:DB_PASSWORD = "su-contraseña-local"
 $env:ALERTA_JWT_SECRET = "un-secreto-de-al-menos-32-caracteres"
 $env:ALERTA_ADMIN_IDENTIFICADOR = "admin"
-$env:ALERTA_ADMIN_PASSWORD = "la-contraseña-local-acordada"
+$env:ALERTA_ADMIN_PASSWORD = "admin-local-clave"
 .\mvnw.cmd spring-boot:run
 ```
+
+> **Credencial de desarrollo:** `admin-local-clave` se utiliza por convención exclusivamente para pruebas y desarrollo local. Para producción debe sustituirse por una contraseña robusta.
 
 `ALERTA_ADMIN_TOKEN` ya solo se usa para las dos rutas heredadas mencionadas en
 la tabla; la consola y la PWA usan login con JWT.
@@ -84,10 +86,10 @@ $env:ALERTA_DEMO_CONSOLA_HABILITADA = "false"
 ```
 
 La consola pide iniciar sesión o registrarse. Con una cuenta `ADMIN` puede
-enviar la notificación push de demostración y evaluar ríos con datos reales; con
-una cuenta `USER` solo consulta el catálogo, el panel y sus ríos seguidos.
-`ALERTA_ADMIN_TOKEN` ya no es necesario para la consola: solo se usa en las dos
-rutas heredadas de la tabla anterior.
+simular una crecida (envía push a los seguidores del río) y enviar el simulacro
+global de demostración; con una cuenta `USER` solo consulta el catálogo, el panel
+y sus ríos seguidos. `ALERTA_ADMIN_TOKEN` ya no es necesario para la consola:
+solo se usa en las dos rutas heredadas de la tabla anterior.
 
 ## 3. Variables de monitoreo y riesgo
 
@@ -104,9 +106,14 @@ rutas heredadas de la tabla anterior.
 | `ALERTA_MAX_EDAD_PRECIPITACION_HORAS` | `6` | Frescura máxima de la lluvia |
 | `OPEN_METEO_URL` | `https://api.open-meteo.com/v1/forecast` | Fuente de precipitación |
 | `OPEN_METEO_CACHE_MINUTOS` | `15` | Caché de Open-Meteo |
+| `GEOGLOWS_CACHE_MINUTOS` | `15` | Caché en memoria de GEOGloWS por endpoint y tramo; mínimo 1 minuto |
 
 Los umbrales de lluvia son **provisionales/experimentales**. No son valores
 oficiales de IMHPA ni de SINAPROC y deben validarse localmente.
+
+La caché de GEOGloWS reduce las llamadas al consultar la alerta. Si la API falla, el
+backend reutiliza la última respuesta cacheada aunque haya expirado; el frontend
+recibe el mismo contrato y puede mostrar la antigüedad con `fechaEvaluacion`.
 
 ## 4. Firebase Cloud Messaging
 
@@ -177,18 +184,29 @@ dispositivo.
 2. Abrir la PWA de pruebas, iniciar sesión o crear una cuenta, seguir al menos
    un río y pulsar **Activar notificaciones**; aceptar el permiso.
 3. En la consola del backend, iniciar sesión con la cuenta `ADMIN` y elegir la
-   opción **8** (`Enviar notificacion push de demostracion`). También se puede
-   ejecutar con JWT:
+   opción **6** (`Simular una crecida y enviar push a sus seguidores`).
+   También se puede ejecutar con JWT:
 
 ```powershell
 $cuerpo = @{ identificador = "admin"; password = "la-contraseña-local" } | ConvertTo-Json
 $sesion = Invoke-RestMethod -Method Post -Uri "http://localhost:8081/api/auth/login" `
   -ContentType "application/json" -Body $cuerpo
+Invoke-RestMethod -Method Post `
+  -Uri "http://localhost:8081/api/alertas/simular?reachId=710039498" `
+  -Headers @{ Authorization = "Bearer $($sesion.token)" }
+```
+
+4. La notificación debe llegar solo a los dispositivos de quienes siguen ese río.
+   La respuesta incluye `dispositivos`, `enviados` y `fallidos`.
+5. Para el simulacro global, usar la opción **7** o
+   `POST /api/admin/push/demo`:
+
+```powershell
 Invoke-RestMethod -Method Post -Uri "http://localhost:8081/api/admin/push/demo" `
   -Headers @{ Authorization = "Bearer $($sesion.token)" }
 ```
 
-4. Para probar una alerta real sin esperar a una crecida, un administrador puede
+6. Para probar una alerta real sin esperar a una crecida, un administrador puede
    ejecutar la evaluación manual (requiere JWT con rol `ADMIN`):
 
 ```powershell
@@ -197,8 +215,9 @@ Invoke-RestMethod -Method Post `
   -Headers @{ Authorization = "Bearer $($sesion.token)" }
 ```
 
-No se debe usar la simulación (`/api/alertas/simular`) para probar push: esa
-ruta no persiste eventos ni envía notificaciones reales.
+La simulación no persiste un evento de riesgo, pero sí envía el push de
+simulacro a los seguidores del río. La evaluación manual sí puede crear un
+evento y notificar según las reglas normales.
 
 ### 5.1 Demostración rápida en clase
 
@@ -207,7 +226,8 @@ ruta no persiste eventos ni envía notificaciones reales.
 3. Cada estudiante abre la URL del túnel, inicia sesión o crea una cuenta, sigue
    al menos un río y pulsa **Activar notificaciones**.
 4. En la terminal del backend, iniciar sesión en la consola con la cuenta
-   `ADMIN` y elegir la opción **8** para enviar la notificación de demostración.
+   `ADMIN` y elegir la opción **6** para simular una crecida sobre un río
+   seguido, o la opción **7** para el simulacro global.
 
 La PWA solo puede pedir una notificación de prueba para su propio dispositivo;
 el envío masivo se hace desde la consola o directamente contra el endpoint.
@@ -223,9 +243,9 @@ dispositivos activos sin crear un evento de riesgo. Requiere JWT con rol
 - **iPhone/iPad:** Web Push requiere iOS 16.4 o superior y la app agregada a la
   pantalla de inicio. El comportamiento exacto depende de Safari y del sistema.
 - El backend envía mensajes **data-only**; el Service Worker construye y muestra
-  la notificación. El clic abre la URL indicada en el payload (`/?alerta={id}` o
-  `/?demo=1`). La PWA de prueba muestra un aviso breve; no presenta el
-  detalle del evento.
+  la notificación. El clic abre la URL indicada en el payload (`/?alerta={id}`,
+  `/?simulacion={reachId}` o `/?demo=1`). La PWA de prueba muestra un aviso
+  breve; no presenta el detalle del evento.
 - Si el navegador no soporta Service Workers, notificaciones o Push API, la PWA
   lo indica y deshabilita el botón. El backend y la consola siguen funcionando
   con normalidad.
@@ -256,6 +276,29 @@ Se está abriendo por `http://` en una IP o dominio que no es `localhost`. Los
 Service Workers y las notificaciones requieren HTTPS. Use la URL del túnel
 `https://...trycloudflare.com`.
 
+### El celular muestra «No tienes permiso para esa operación» o el login responde 403
+
+Si la PWA se abre desde el túnel, el navegador envía
+`Origin: https://...trycloudflare.com`. Si ese origen no está autorizado,
+Spring rechaza el `POST` con `403 Invalid CORS request` y la PWA lo muestra
+como «No tienes permiso para esa operación». Para la demo se puede autorizar
+todo el dominio de túneles temporales:
+
+```properties
+ALERTA_CORS_ORIGENES=http://localhost:8081,http://127.0.0.1:8081,https://*.trycloudflare.com
+```
+
+`SecurityConfig` acepta orígenes exactos y patrones. El patrón
+`https://*.trycloudflare.com` es solo para la demo; en producción use la URL
+exacta. Reinicie el backend después de cambiar la lista.
+
+`scripts/iniciar-demo.ps1` inicia el túnel primero, lee la URL y la agrega
+automáticamente antes de arrancar el backend. **Cada ejecución crea un túnel
+nuevo**: si el puerto 8081 ya está ocupado, el script ahora se detiene antes de
+abrir el túnel para no dejar una URL que el backend en ejecución no autorizó.
+Cierre la instancia anterior y vuelva a ejecutar el script, o use una URL que
+ya esté autorizada.
+
 ### `Registration failed - push service error`
 
 El navegador no pudo contactar al servicio push. En Brave revise que los Shields
@@ -266,7 +309,26 @@ antivirus.
 ### La notificación de prueba no aparece en la PC
 
 Verifique que el dispositivo esté activo (la PWA debe mostrar «Activadas»), que
-la opción 8 de la consola informe `Enviados` mayor que cero y que Windows no
-tenga bloqueadas las notificaciones del navegador o el Asistente de
-concentración. Con la pestaña visible, la PWA también intenta mostrar la
-notificación local y actualiza su mensaje de estado.
+la simulación (opción 6) o el simulacro global (opción 7) informen `Enviados`
+mayor que cero y que Windows no tenga bloqueadas las notificaciones del navegador
+o el Asistente de concentración.
+
+Con la pestaña visible, FCM entrega el mensaje a la página y no al service
+worker. La PWA muestra un aviso flotante dentro de la página y reenvía el
+contenido al service worker (`MOSTRAR_NOTIFICACION`) para que él muestre la
+notificación del sistema con las mismas opciones que en segundo plano. La
+notificación usa `renotify`, así que cada simulacro vuelve a avisar aunque
+reemplace a la anterior del mismo río.
+
+Si aparece el aviso flotante pero no la notificación del sistema, el push sí
+llegó: revise la configuración de notificaciones de Windows o del navegador.
+Si no aparece ninguno de los dos, el mensaje no llegó desde FCM; revise
+`Enviados`, el token y la configuración de Brave o Chrome.
+
+En Brave, active **«Usar servicios de Google para la mensajería push»** en
+`brave://settings/privacy` y recargue la PWA. Brave desactiva FCM por defecto:
+el token puede quedar registrado y FCM puede aceptar el envío, pero la
+notificación nunca llega al navegador. Tras recargar, la PWA vuelve a inicializar
+Firebase Messaging para atender también los mensajes con la pestaña en primer
+plano; antes solo reasignaba el token y el aviso se perdía si la página estaba
+visible.

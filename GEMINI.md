@@ -10,18 +10,19 @@ Stack principal:
 - Backend: Java + Spring Boot
 - Base de datos: PostgreSQL
 - Frontend definitivo: lo desarrollará otro equipo; no forma parte de este repositorio
-- PWA de pruebas: página estática mínima servida por Spring Boot; hoy solo verifica notificaciones y en el siguiente avance añade login y selección de ríos
+- PWA de pruebas: página estática servida por Spring Boot con login, catálogo, suscripción, push y simulación admin; no es el frontend definitivo
 - Fuente de datos: GEOGLOWS API + Open-Meteo (precipitación)
 - Notificaciones: Firebase Cloud Messaging (FCM)
 
 El proyecto es académico y actualmente existe una fecha de entrega cercana.
 
-> **Estado actual (23/10/2026):** el backend, el monitoreo y las notificaciones
-> push están implementados. El siguiente avance (autenticación, catálogo de
-> cuatro ríos, selección múltiple y consola con login) está **planificado pero
-> todavía no implementado**. La PWA actual es solo una herramienta mínima de
-> prueba de notificaciones; el frontend definitivo lo construirá otro equipo
-> desde cero. Antes de modificar algo, leer primero
+> **Estado actual (23/10/2026):** el backend, el monitoreo, las notificaciones
+> push, la autenticación con roles, el catálogo de cuatro ríos, la selección
+> múltiple, la consola con login y la PWA de pruebas **están implementados**.
+> También están la caché en memoria de GEOGloWS y el campo `siguiendo` en el
+> contrato del panel. Hay **79 pruebas en verde**. La PWA sigue siendo una
+> herramienta de prueba; el frontend definitivo lo construirá otro equipo desde
+> cero. Antes de modificar algo, leer primero
 > `docs/CONTINUIDAD_SESION.md`, luego `docs/RESUMEN_PROYECTO.md`,
 > `docs/GUIA_FRONTEND.md`, `docs/ARQUITECTURA.md`,
 > `docs/INTEGRACION_FRONTEND.md`, `docs/CONFIGURACION_PUSH.md` y
@@ -35,7 +36,7 @@ El detalle está en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md). En resumen:
 2. La lógica de negocio, las integraciones y la persistencia pertenecen al backend.
 3. `ConsolaDemoRunner` consume la API pública mediante `BackendApiClient`; no accede a repositorios ni replica reglas.
 4. La consola no es el lugar para implementar funcionalidades nuevas del sistema.
-5. La PWA de pruebas hoy solo verifica notificaciones; en el siguiente avance tendrá un login mínimo y selección de ríos, pero seguirá sin ser el frontend definitivo.
+5. La PWA de pruebas ya tiene login, catálogo, suscripción, push y simulación admin, pero sigue sin ser el frontend definitivo.
 6. El backend debe mantener contratos HTTP claros para el frontend futuro.
 7. Las credenciales se gestionan por variables de entorno, nunca en el repositorio.
 8. Los cambios deben preservar funcionalidades, compilar y pasar las pruebas.
@@ -47,22 +48,24 @@ definitivo; ese equipo solo debe respetar los contratos públicos de la API.
 
 ## 2. Objetivo actual
 
-El objetivo inmediato es implementar el siguiente avance acordado:
+El avance acordado ya está implementado:
 
 1. Registro e inicio de sesión con identificador y contraseña.
 2. Roles simples `USER` y `ADMIN`.
 3. Catálogo cerrado de cuatro ríos cercanos a la UTP, con geometría.
 4. Selección múltiple de ríos por usuario.
 5. Consola con login y menús distintos según el rol.
-6. PWA mínima con login y selección de ríos.
+6. PWA de pruebas con login, catálogo, suscripción, push y simulación para `ADMIN`.
 7. Push asociado a los ríos que sigue cada usuario.
 
-La consulta de caudal y lluvia se abre al hacer clic en **cualquier río del
-catálogo**, esté o no seguido. La suscripción solo controla las notificaciones;
-no limita el acceso al panel informativo.
+La consulta de caudal y lluvia sigue disponible en el backend para el frontend
+definitivo; la PWA mínima ya no la muestra. La suscripción solo controla las
+notificaciones. El campo `siguiendo` de la respuesta indica si el usuario
+autenticado sigue ese río (`null` sin sesión).
 
-Antes de implementar, leer `docs/CONTINUIDAD_SESION.md`. No asumir que estas
-piezas ya existen: a la fecha de este documento solo están documentadas.
+El trabajo pendiente es de validación, no de nuevas funcionalidades: repetir la
+prueba de humo en Windows, verificar el push de extremo a extremo en un
+dispositivo y definir la URL real del frontend para CORS.
 
 Mantener el backend funcional, la integración con GEOGLOWS y las pruebas
 existentes. No intentar características futuras que no sean necesarias para este
@@ -231,21 +234,24 @@ No implementar todavía un sistema avanzado de observabilidad, logging distribui
 
 # 11. Frontend y PWA de pruebas
 
-La PWA ubicada en `src/main/resources/static/` es **una página mínima de
-prueba**. No es el frontend definitivo ni una referencia obligatoria de diseño.
+La PWA ubicada en `src/main/resources/static/` es **una herramienta de prueba**.
+No es el frontend definitivo ni una referencia obligatoria de diseño.
 
-- Hoy solo activa notificaciones y confirma su recepción.
-- En el siguiente avance tendrá login/registro, selección múltiple de los cuatro
-  ríos y cierre de sesión.
-- No mostrar en ella caudales, lluvia, pronósticos, mapas, riesgo, historial ni
-  paneles de monitoreo; esas funciones pertenecen al frontend definitivo.
-- La prueba push controlada se lanzará desde la consola administrativa o
-  mediante el endpoint administrativo con JWT. `X-Admin-Token` se retirará.
+- Tiene login/registro, catálogo, suscripción con activación de push, cierre de
+  sesión y simulación de crecida para `ADMIN`. No muestra caudal, lluvia,
+  hidrogramas, mapas ni recomendaciones.
+- No se le deben añadir historial, visualizaciones avanzadas ni otras funciones
+  del frontend definitivo.
+- La prueba push principal es la simulación de crecida, disponible en la PWA
+  para `ADMIN` y en la consola administrativa; envía el simulacro solo a los
+  seguidores del río. El simulacro global sigue en la consola y en
+  `/api/admin/push/demo`. `X-Admin-Token` se conserva por ahora para las rutas
+  heredadas.
 
 El **frontend definitivo** lo desarrollará otro equipo desde cero. Es libre de
 elegir diseño, tecnología, estructura y forma de presentar los datos, siempre
 que consuma la API pública del backend y respete sus contratos. No se debe
-reutilizar la PWA mínima como base obligatoria ni extraer lógica desde
+reutilizar la PWA de prueba como base obligatoria ni extraer lógica desde
 `ConsolaDemoRunner`.
 
 La prioridad del backend es que exista un flujo demostrable y contratos claros.
@@ -322,7 +328,7 @@ Para este avance, prioriza:
 - Catálogo de los cuatro ríos con geometría.
 - Selección múltiple de ríos y push por usuario.
 - Consola con login y menús por rol.
-- PWA mínima con login y selección de ríos.
+- PWA de prueba con login, catálogo, suscripción, push y simulación admin.
 - Flujo principal funcionando.
 - Compilación correcta.
 

@@ -6,7 +6,7 @@
  * las notificaciones data-only y abre la página al pulsarlas.
  */
 
-const VERSION = '5';
+const VERSION = '8';
 
 self.addEventListener('install', () => {
     self.skipWaiting();
@@ -26,8 +26,16 @@ self.addEventListener('activate', (evento) => {
 });
 
 self.addEventListener('message', (evento) => {
-    if (evento.data && evento.data.tipo === 'SKIP_WAITING') {
+    const mensaje = evento.data || {};
+    if (mensaje.tipo === 'SKIP_WAITING') {
         self.skipWaiting();
+        return;
+    }
+    // Cuando la pestaña está en primer plano, FCM entrega el push a la página.
+    // Ella reenvía el contenido aquí para que la notificación del sistema la
+    // muestre el service worker, igual que cuando está en segundo plano.
+    if (mensaje.tipo === 'MOSTRAR_NOTIFICACION') {
+        evento.waitUntil(mostrarNotificacion(mensaje.datos || {}));
     }
 });
 
@@ -82,8 +90,11 @@ async function mostrarNotificacion(datos) {
     };
     if (vibrar) {
         opciones.vibrate = [200, 100, 200, 100, 400];
-        opciones.renotify = true;
     }
+    // Cada simulacro reutiliza el mismo tag por río. Sin renotify, el
+    // navegador reemplaza la notificación anterior en silencio y el usuario
+    // cree que no llegó nada.
+    opciones.renotify = true;
     return self.registration.showNotification(
         datos.title || 'Notificación de prueba',
         opciones

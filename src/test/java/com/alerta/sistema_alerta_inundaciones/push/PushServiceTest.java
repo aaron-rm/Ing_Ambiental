@@ -3,6 +3,7 @@ package com.alerta.sistema_alerta_inundaciones.push;
 import com.alerta.sistema_alerta_inundaciones.GEOGLOWS.LectorDatosIngresados.NivelAlerta;
 import com.alerta.sistema_alerta_inundaciones.alerta.AlertaEvento;
 import com.alerta.sistema_alerta_inundaciones.alerta.AlertaEventoRepository;
+import com.alerta.sistema_alerta_inundaciones.alerta.AlertaRioDTO;
 import com.alerta.sistema_alerta_inundaciones.alerta.EstadoEnvio;
 import com.alerta.sistema_alerta_inundaciones.config.PropiedadesFirebase;
 import com.alerta.sistema_alerta_inundaciones.rio.Rio;
@@ -28,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -267,6 +269,64 @@ class PushServiceTest {
         IllegalStateException error = assertThrows(IllegalStateException.class,
                 () -> service.enviarDemoATodos());
         assertTrue(error.getMessage().contains("credenciales"));
+    }
+
+    @Test
+    void simulacionEnviaSoloALosSeguidoresDelRioSimulado() {
+        DispositivoPush dispositivo = dispositivo("token-1", "device-1", true, usuario(1L));
+        when(rioRepository.findFirstByGeoglowsId(REACH_ID))
+                .thenReturn(Optional.of(new Rio("Río de prueba", REACH_ID, 9.08, -79.28)));
+        when(seleccionRepository.findUsuarioIdsByRioId(any())).thenReturn(List.of(1L));
+        when(dispositivoRepository.findByUsuarioIdInAndActivoTrue(List.of(1L)))
+                .thenReturn(List.of(dispositivo));
+        when(pushSender.estaHabilitado()).thenReturn(true);
+        when(pushSender.enviar(any(NotificacionPush.class), eq("token-1")))
+                .thenReturn(ResultadoEnvioPush.ok());
+
+        ResultadoDemoPush resultado = service.enviarSimulacion(simulacion());
+
+        assertEquals(1, resultado.dispositivos());
+        assertEquals(1, resultado.enviados());
+        assertEquals(0, resultado.fallidos());
+        verify(pushSender).enviar(
+                argThat(notificacion -> notificacion.titulo().contains("SIMULACRO")
+                        && notificacion.reachId() == REACH_ID
+                        && notificacion.eventoId() == 0L),
+                eq("token-1"));
+    }
+
+    @Test
+    void simulacionSinSeguidoresNoEnviaNada() {
+        when(rioRepository.findFirstByGeoglowsId(REACH_ID))
+                .thenReturn(Optional.of(new Rio("Río de prueba", REACH_ID, 9.08, -79.28)));
+        when(seleccionRepository.findUsuarioIdsByRioId(RIO_ID)).thenReturn(List.of());
+        when(pushSender.estaHabilitado()).thenReturn(true);
+
+        ResultadoDemoPush resultado = service.enviarSimulacion(simulacion());
+
+        assertEquals(0, resultado.dispositivos());
+        assertEquals(0, resultado.enviados());
+        verify(pushSender, never()).enviar(any(), anyString());
+    }
+
+    @Test
+    void simulacionConFcmDeshabilitadoLanzaErrorClaro() {
+        when(pushSender.estaHabilitado()).thenReturn(false);
+        when(pushSender.motivoDeshabilitado()).thenReturn("Faltan credenciales de Firebase.");
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> service.enviarSimulacion(simulacion()));
+        assertTrue(error.getMessage().contains("credenciales"));
+    }
+
+    private AlertaRioDTO simulacion() {
+        AlertaRioDTO alerta = new AlertaRioDTO();
+        alerta.setReachId(REACH_ID);
+        alerta.setRioId(RIO_ID);
+        alerta.setNombreRio("Río de prueba");
+        alerta.setNivelAlerta("EMERGENCIA");
+        alerta.setSimulacion(true);
+        return alerta;
     }
 
     private RegistroPushRequest solicitud(String token, String deviceId) {

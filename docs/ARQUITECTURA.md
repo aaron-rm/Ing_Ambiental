@@ -24,7 +24,7 @@ La separación buscada es:
 Backend (lógica de negocio, integraciones, persistencia, push)
    ├── API REST pública
    ├── ConsolaDemoRunner  → cliente HTTP de demostración y pruebas
-   ├── PWA de pruebas     → cliente HTTP de prueba (login, mapa, panel y push)
+   ├── PWA de pruebas     → cliente HTTP de prueba (login, catálogo, suscripción y push)
    └── Frontend definitivo → cliente HTTP desarrollado por otro equipo
 ```
 
@@ -83,7 +83,7 @@ a repositorios.
 ## 3. Alcance explícito de estas directrices
 
 Estas reglas aplican al **backend y a las integraciones que le corresponden**,
-incluida la consola de demostración y la PWA mínima de pruebas.
+incluida la consola de demostración y la PWA de pruebas.
 
 **No son instrucciones para imponer restricciones de implementación, diseño
 visual, estructura o tecnología al equipo que desarrollará el frontend
@@ -91,11 +91,11 @@ definitivo.** Ese equipo puede elegir framework, arquitectura de componentes,
 sistema de diseño, navegación y presentación de datos, siempre que respete los
 contratos HTTP públicos del backend.
 
-La PWA actual es una herramienta de prueba del flujo completo (login, catálogo,
-panel y notificaciones). No constituye una referencia obligatoria de diseño ni
-una base que el frontend definitivo deba reutilizar. El frontend definitivo se
-construirá desde cero y podrá mostrar caudales, lluvia, pronósticos, mapas,
-riesgo e historial según sus propias decisiones de producto.
+La PWA actual es una herramienta mínima de prueba del canal push (login,
+catálogo, suscripción y simulación admin). No constituye una referencia
+obligatoria de diseño ni una base que el frontend definitivo deba reutilizar. El
+frontend definitivo se construirá desde cero y podrá mostrar caudales, lluvia,
+pronósticos, mapas, riesgo e historial según sus propias decisiones de producto.
 
 Tampoco debe interpretarse que todo el proyecto debe limitarse a una consola o a
 una página minimalista. El backend es el sistema; la consola y la PWA son
@@ -119,6 +119,7 @@ Paquete base: `com.alerta.sistema_alerta_inundaciones`.
 | `alerta/AlertaEventoService` | Transiciones, idempotencia y estado de envío |
 | `riesgo/EvaluadorRiesgo` | Reglas de caudal y lluvia |
 | `clima/OpenMeteoCliente` | Precipitación y caché |
+| `GEOGLOWS/ClienteApiGeoglows` | Caudal, umbrales y caché en memoria por tramo |
 | `push/PushController` | Configuración, registro, baja y prueba push (JWT) |
 | `push/PushService` | Registro por usuario y envío a los seguidores del río |
 | `push/FirebasePushSender` | Integración con Firebase Admin |
@@ -138,17 +139,18 @@ Paquete base: `com.alerta.sistema_alerta_inundaciones`.
   en disco.
 - Menú de `USER`: catálogo, panel de cualquier río, seguir/dejar de seguir, mis
   ríos y cerrar sesión.
-- Menú de `ADMIN`: lo anterior más simulación (no envía push), evaluación real y
-  push de demostración (`POST /api/admin/push/demo`).
+- Menú de `ADMIN`: lo anterior más simulación de crecida con push a los
+  seguidores del río y push de demostración global
+  (`POST /api/admin/push/demo`).
 
 ### PWA de pruebas
 
 - Archivos en `src/main/resources/static/`.
-- Login/registro, mapa SVG del catálogo, panel de caudal y lluvia de cualquier
-  río y activación de push con JWT.
-- Selección múltiple de ríos; seguir un río solo controla las notificaciones.
-- No tiene panel administrativo; el push de demostración se lanza desde la
-  consola con rol `ADMIN`.
+- Login/registro, catálogo de ríos, suscripción y activación de push con JWT.
+- Suscribirse a un río solo controla las notificaciones.
+- Para `ADMIN`, botón **Simular crecida** por cada río seguido; envía un push de
+  simulacro solo a los dispositivos de quienes siguen ese río.
+- No muestra caudal, lluvia, hidrogramas, mapas ni recomendaciones.
 - No es el frontend definitivo.
 
 ### Frontend definitivo
@@ -213,7 +215,11 @@ Principios del contrato:
   JWT y las alertas dependen de los ríos que sigue el usuario.
 - La consola es un bean condicional y puede desactivarse sin afectar al backend.
 - La PWA pasó de ser un receptor mínimo de push a un cliente de prueba del flujo
-  completo (login, mapa, panel y notificaciones).
+  mínimo (login, catálogo, suscripción, push y simulación admin), sin panel
+  hidrológico.
+- `ClienteApiGeoglows` cachea en memoria por endpoint y tramo; ante un fallo de
+  GEOGloWS reutiliza la última respuesta. El panel expone `siguiendo` calculado
+  con la selección usuario–río, sin volver privada la consulta.
 
 ---
 
@@ -228,6 +234,7 @@ Variables principales:
 | `ALERTA_ADMIN_IDENTIFICADOR` / `ALERTA_ADMIN_PASSWORD` | Administrador inicial; la contraseña solo vive en el entorno o en `.env.demo` |
 | `ALERTA_CORS_ORIGENES` | Orígenes permitidos para el frontend definitivo |
 | `ALERTA_CARGAR_CATALOGO` | Activa la carga del catálogo de cuatro ríos al arrancar |
+| `GEOGLOWS_CACHE_MINUTOS` | TTL de la caché en memoria de GEOGloWS (15 por defecto; mínimo 1) |
 | `ALERTA_ADMIN_TOKEN` | Solo compatibilidad: `POST /api/push/demo` y `GET /api/alertas/suscripciones/{reachId}` |
 | `ALERTA_API_BASE_URL` | URL que usa la consola para consumir el backend |
 | `ALERTA_DEMO_CONSOLA_HABILITADA` | Activa o desactiva la consola |
@@ -275,7 +282,7 @@ Documentos relacionados:
 | [`GUIA_PRUEBA_NOTIFICACIONES.md`](GUIA_PRUEBA_NOTIFICACIONES.md) | Guía paso a paso para ejecutar y verificar la demo |
 | [`../README.md`](../README.md) | Arranque, demo y pruebas |
 | [`../IMPLEMENTATION_NOTES.md`](../IMPLEMENTATION_NOTES.md) | Historia de implementación y decisiones previas |
-| [`../INFORME_ALERTAS_INUNDACION.md`](../INFORME_ALERTAS_INUNDACION.md) | Informe de estado, pruebas y limitaciones |
+| [`../INFORME_ALERTAS_INUNDACION.md`](../INFORME_ALERTAS_INUNDACION.md) | Informe histórico del 21–22/10; el estado vigente está en `CONTINUIDAD_SESION.md` |
 | [`CONFIGURACION_PUSH.md`](CONFIGURACION_PUSH.md) | Entorno, PostgreSQL y Firebase |
 | [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md) | Contrato de API para el frontend |
 

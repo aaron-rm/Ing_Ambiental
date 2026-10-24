@@ -1,26 +1,36 @@
 # Registro de Implementación (Avance 50 % — Backend y Demo GEOGLOWS)
 
+> **Actualización 23/10/2026:** el avance de autenticación, catálogo de cuatro
+> ríos, selección múltiple y panel de caudal/lluvia **ya está implementado**, al
+> igual que la caché en memoria de GEOGloWS y el campo `siguiendo`. La PWA quedó
+> reducida a login, catálogo, suscripción, push y simulación para `ADMIN`; ya no
+> muestra el panel hidrológico. La suite tiene **79 pruebas en verde**. El
+> estado vigente está en `docs/CONTINUIDAD_SESION.md` y el contrato actual en
+> `docs/INTEGRACION_FRONTEND.md`. Las secciones siguientes conservan la historia
+> del avance del 50 % y la refactorización del 22/10.
+>
 > **Actualización 22/10/2026 (refactorización de clientes):** este documento
 > conserva la historia del avance del 50 %. Sobre esa base se agregaron monitoreo
 > periódico, evaluación de lluvia, eventos persistentes, notificaciones FCM, PWA
-> de pruebas y una consola cliente de la API. En la refactorización actual:
+> de pruebas y una consola cliente de la API. En la refactorización de esa fecha:
 >
 > - `ConsolaDemoRunner` dejó de acceder a repositorios y servicios internos; usa
 >   `BackendApiClient` contra la API REST (`ALERTA_API_BASE_URL`).
 > - La consola es opcional (`ALERTA_DEMO_CONSOLA_HABILITADA`) y añade la opción
 >   `0` para enviar la notificación push de demostración.
-> - La PWA dejó de ser un panel de monitoreo; ahora es una página mínima para
->   activar y verificar notificaciones.
+> - La PWA quedó temporalmente como una página mínima para activar y verificar
+>   notificaciones; hoy incluye login, catálogo, suscripción y simulación admin,
+>   sin panel hidrológico.
 > - El frontend definitivo será construido por otro equipo desde cero y no debe
 >   basarse obligatoriamente en la PWA de pruebas.
 >
 > Las reglas de arquitectura vigentes están en
 > `docs/ARQUITECTURA.md`. Para retomar el trabajo en otra sesión o computadora,
-> leer `docs/CONTINUIDAD_SESION.md`. El estado actual, las pruebas y los
-> pendientes están en `INFORME_ALERTAS_INUNDACION.md`. El contrato para frontend
-> está en `docs/INTEGRACION_FRONTEND.md`; la configuración operativa, en
-> `docs/CONFIGURACION_PUSH.md`. Este documento es histórico: conserva la
-> implementación anterior y no describe el avance de autenticación/catálogo.
+> leer `docs/CONTINUIDAD_SESION.md`. El estado actual y los pendientes están en
+> `docs/CONTINUIDAD_SESION.md`; `INFORME_ALERTAS_INUNDACION.md` es un registro
+> histórico. El contrato para frontend está en `docs/INTEGRACION_FRONTEND.md`; la
+> configuración operativa, en `docs/CONFIGURACION_PUSH.md`. Este documento es
+> histórico: conserva la implementación anterior.
 
 ## 1. Resumen
 Se completó la integración funcional del backend en Spring Boot para el avance del 50 % del sistema de alerta temprana de inundaciones con GEOGLOWS. 
@@ -249,7 +259,12 @@ Endpoints disponibles para el frontend:
 ---
 
 ## 11. Pendientes para avances posteriores
-- Desarrollo de la interfaz gráfica web en React / PWA.
-- Envío real de correos electrónicos (JavaMailSender) o notificaciones por SMS/WhatsApp.
-- Selección dinámica de tramos mediante mapa geográfico.
-- Autenticación y roles de usuarios (administradores vs. suscriptores comunitarios).
+- ~~Desarrollo de la interfaz gráfica web en React / PWA.~~ La PWA de prueba ya
+  existe con login, catálogo, suscripción y push; el frontend definitivo sigue
+  siendo otro equipo.
+- ~~Selección dinámica de tramos mediante mapa geográfico.~~ Implementada con
+  `GET /api/rios/mapa` y el clic por `properties.rioId`.
+- ~~Autenticación y roles de usuarios (administradores vs. suscriptores
+  comunitarios).~~ Implementada con JWT y roles `USER`/`ADMIN`.
+- Envío real de correos electrónicos (JavaMailSender) o notificaciones por
+  SMS/WhatsApp. El canal implementado es push FCM.

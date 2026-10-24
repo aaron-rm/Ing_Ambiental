@@ -97,14 +97,10 @@ public class BackendApiClient {
         return get("/api/alertas/tramo/" + reachId, AlertaRioDTO.class);
     }
 
-    public AlertaRioDTO simular(long reachId, double caudal) {
+    public ResultadoSimulacionApi simular(long reachId, double caudal) {
         String ruta = String.format(java.util.Locale.US,
                 "/api/alertas/simular?reachId=%d&caudal=%.2f", reachId, caudal);
-        return post(ruta, null, AlertaRioDTO.class);
-    }
-
-    public ResultadoEvaluacionApi evaluar(long reachId) {
-        return post("/api/alertas/evaluar/" + reachId, null, ResultadoEvaluacionApi.class);
+        return post(ruta, null, ResultadoSimulacionApi.class);
     }
 
     public ResultadoDemoPush enviarDemoPush() {
@@ -242,9 +238,8 @@ public class BackendApiClient {
     public record SeleccionApi(Long rioId, boolean seguido, String mensaje) {
     }
 
-    public record ResultadoEvaluacionApi(Long reachId, Long eventoId, String nivel,
-                                         boolean datosConfiables, boolean notificado,
-                                         String mensaje) {
+    public record ResultadoSimulacionApi(AlertaRioDTO alerta, int dispositivos,
+                                         int enviados, int fallidos) {
     }
 
     /** Error HTTP o de conexion con el backend, con el codigo disponible. */

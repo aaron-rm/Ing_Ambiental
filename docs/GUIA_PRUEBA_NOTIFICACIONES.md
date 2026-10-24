@@ -7,8 +7,8 @@ comprobar la PWA, ejecutar la demo push y verificar que la arquitectura no
 depende de la consola.
 
 > La PWA de `src/main/resources/static/` **no es el frontend definitivo**. Sirve
-> para probar el flujo completo (login, mapa, panel y notificaciones). El
-> frontend definitivo lo construirá otro equipo desde cero.
+> para probar el flujo mínimo (login, catálogo, suscripción y notificaciones).
+> El frontend definitivo lo construirá otro equipo desde cero.
 
 ---
 
@@ -60,9 +60,11 @@ DB_USERNAME=postgres
 DB_PASSWORD=tu_contraseña_local
 ALERTA_JWT_SECRET=un-secreto-de-al-menos-32-caracteres
 ALERTA_ADMIN_IDENTIFICADOR=admin
-ALERTA_ADMIN_PASSWORD=una_contraseña_local
+ALERTA_ADMIN_PASSWORD=admin-local-clave
 FIREBASE_ENABLED=false
 ```
+
+> **Credencial de desarrollo:** `admin-local-clave` se usa por convención únicamente para desarrollo y pruebas locales. Para producción debe cambiarse y proveerse de forma segura.
 
 Deja las variables de Firebase vacías. El backend arrancará igual; solo
 deshabilitará FCM.
@@ -110,7 +112,7 @@ $env:DB_USERNAME = "postgres"
 $env:DB_PASSWORD = "tu_contraseña_local"
 $env:ALERTA_JWT_SECRET = "un-secreto-de-al-menos-32-caracteres"
 $env:ALERTA_ADMIN_IDENTIFICADOR = "admin"
-$env:ALERTA_ADMIN_PASSWORD = "tu_contraseña_local"
+$env:ALERTA_ADMIN_PASSWORD = "admin-local-clave"
 .\mvnw.cmd spring-boot:run
 ```
 
@@ -172,13 +174,13 @@ Tras iniciar sesión con una cuenta `USER`, el menú es:
 Con una cuenta `ADMIN` aparecen además:
 
 ```text
-  6. Simular una crecida (no envia push)
-  7. Evaluar rios con datos reales (puede enviar push)
-  8. Enviar notificacion push de demostracion
+  6. Simular una crecida y enviar push a sus seguidores
+  7. Enviar notificacion push de demostracion
 ```
 
-La opción `8` es la demostración push. El menú se repite hasta cerrar sesión o
-salir.
+La opción `6` es la prueba principal: simula una crecida en un río y envía el
+push solo a los dispositivos de quienes lo siguen. La opción `7` es el simulacro
+global. El menú se repite hasta cerrar sesión o salir.
 
 ---
 
@@ -189,10 +191,10 @@ Esta prueba no necesita Firebase ni celular.
 1. Abre `http://localhost:8081`.
 2. Inicia sesión o crea una cuenta; el registro siempre crea un `USER`.
 3. Comprueba que la PWA muestra:
-   - el mapa y la lista de los cuatro ríos del catálogo;
-   - el panel de caudal y lluvia al elegir cualquier río, esté o no seguido;
-   - botones para seguir o dejar de seguir un río;
-   - una sección para activar notificaciones.
+   - la lista de los cuatro ríos del catálogo;
+   - botones para suscribirse o dejar de seguir un río;
+   - una sección para activar notificaciones;
+   - ninguna vista de caudal, lluvia, hidrograma ni recomendaciones.
 4. Como Firebase no está configurado, al pulsar **Activar notificaciones** es
    normal ver:
 
@@ -219,9 +221,9 @@ Resultados esperados:
   configurado. La respuesta **ya no incluye `reachId`**: el dispositivo se
   registra con JWT y las alertas se enrutan según los ríos que sigue el usuario.
 
-### Comprobar la opción 8 sin Firebase
+### Comprobar la opción 7 sin Firebase
 
-Inicia sesión en la consola con la cuenta `ADMIN` y elige `8`.
+Inicia sesión en la consola con la cuenta `ADMIN` y elige `7`.
 
 - Si falta `ALERTA_ADMIN_PASSWORD`, no se crea el administrador y verás una
   advertencia al arrancar; usa una cuenta `USER` o configura la contraseña.
@@ -245,6 +247,10 @@ un contenedor Podman. Resultados obtenidos, útiles como referencia:
 - Panel de Río Abajo con datos reales de GEOGloWS y Open-Meteo: nivel `NORMAL`,
   0.9 m³/s, máximo pronosticado 13.5 m³/s, lluvia 13.9 mm (24 h) y 33.4 mm
   (72 h), y 2 recomendaciones.
+- `GET /api/alertas/rio/{rioId}` con JWT devolvió `siguiendo: true` para el río
+  seleccionado; sin JWT devolvió `siguiendo: null`.
+- La segunda consulta del mismo panel dentro de los 15 minutos usó la caché de
+  GEOGloWS (no se repitió la llamada externa).
 
 Queda pendiente repetir la misma verificación en Windows con
 `scripts/iniciar-demo.ps1`.
@@ -349,9 +355,26 @@ En el celular:
 Android: usa Chrome.  
 iPhone/iPad: requiere iOS 16.4+ y agregar la página a la pantalla de inicio.
 
-### 6.4 Enviar la demostración
+### 6.4 Simular una crecida por río
 
-En la consola del backend, inicia sesión con la cuenta `ADMIN` y elige `8`.
+La forma principal de probar el push es simular una crecida sobre un río que
+tenga seguidores:
+
+1. En la PWA, suscríbete a un río con la cuenta que recibirá la notificación.
+2. En la consola, inicia sesión con `ADMIN` y elige la opción `6`.
+3. Selecciona el mismo río. El caudal por defecto del menú es `75.0 m³/s`.
+4. La consola debe mostrar cuántos dispositivos siguen el río, cuántos envíos
+   salieron y cuántos fallaron.
+5. La notificación debe llegar solo a los dispositivos de los usuarios que
+   siguen ese río. Si nadie lo sigue, la simulación se ejecuta pero no envía.
+6. En la PWA, el administrador también puede pulsar **Simular crecida** en la
+   sección de administración, sin usar la consola. Si FCM no está configurado,
+   la PWA muestra el aviso y no ofrece el botón: no tiene sentido simular un
+   envío que no puede salir.
+
+### 6.5 Enviar la demostración global
+
+En la consola del backend, inicia sesión con la cuenta `ADMIN` y elige `7`.
 
 Debe aparecer algo similar a:
 
@@ -366,11 +389,14 @@ La notificación debe llegar al dispositivo. Si no llega:
 - revisa que la PWA muestre **Activadas**;
 - revisa el permiso de notificaciones del sistema;
 - revisa que no esté activo el modo concentración o No molestar;
+- en Brave, activa **«Usar servicios de Google para la mensajería push»** en
+  `brave://settings/privacy` y recarga la PWA: Brave bloquea FCM por defecto, así
+  que FCM puede aceptar el envío sin que la notificación llegue;
 - confirma que `FIREBASE_CREDENTIALS_PATH` y las claves públicas son del mismo
   proyecto;
 - mira los logs de `FirebasePushSender` y `PushService`.
 
-### 6.5 Alternativa por API
+### 6.6 Alternativa por API
 
 ```powershell
 $cuerpo = @{ identificador = "admin"; password = "tu_contraseña_local" } | ConvertTo-Json
@@ -378,12 +404,19 @@ $sesion = Invoke-RestMethod -Method Post `
   -Uri "http://localhost:8081/api/auth/login" `
   -ContentType "application/json" -Body $cuerpo
 
+# Simulación dirigida a los seguidores de un río (reachId real del catálogo)
+Invoke-RestMethod -Method Post `
+  -Uri "http://localhost:8081/api/alertas/simular?reachId=710039498" `
+  -Headers @{ Authorization = "Bearer $($sesion.token)" }
+
+# Demostración global
 Invoke-RestMethod -Method Post `
   -Uri "http://localhost:8081/api/admin/push/demo" `
   -Headers @{ Authorization = "Bearer $($sesion.token)" }
 ```
 
-Respuesta esperada:
+La simulación responde con `alerta`, `dispositivos`, `enviados` y `fallidos`.
+La demostración global responde:
 
 ```json
 {
@@ -418,7 +451,7 @@ FIREBASE_ENABLED=false
 Reinicia el backend. Debe ocurrir:
 
 - no aparece el menú interactivo;
-- `http://localhost:8081` sigue mostrando la PWA (login, mapa y panel);
+- `http://localhost:8081` sigue mostrando la PWA (login, catálogo y push);
 - `/api/rios` y `/api/push/config` siguen respondiendo;
 - el monitoreo sigue funcionando si se deja habilitado, y los endpoints siguen
   disponibles.
@@ -443,7 +476,7 @@ en `8081`.
 Resultado esperado:
 
 ```text
-Tests run: 67, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 79, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -503,7 +536,20 @@ Invoke-RestMethod -Uri "http://localhost:8081/api/usuarios/me/rios" `
 # Seguir un río (idempotente)
 Invoke-RestMethod -Method Post -Uri "http://localhost:8081/api/usuarios/me/rios/1" `
   -Headers @{ Authorization = "Bearer $($sesion.token)" }
+
+# Panel con JWT: debe incluir siguiendo = true/false
+Invoke-RestMethod -Uri "http://localhost:8081/api/alertas/rio/1" `
+  -Headers @{ Authorization = "Bearer $($sesion.token)" }
+
+# Panel sin JWT: siguiendo = null y la consulta sigue siendo pública
+Invoke-RestMethod -Uri "http://localhost:8081/api/alertas/rio/1"
 ```
+
+Para comprobar la caché, consulta dos veces el mismo panel dentro de
+`GEOGLOWS_CACHE_MINUTOS` (15 por defecto). La segunda respuesta debe conservar la
+misma `fechaEmisionCaudal` y el log no debe repetir la llamada externa. Si
+GEOGloWS falla, el backend reutiliza la última respuesta y registra una
+advertencia.
 
 Mantenimiento del catálogo (solo rol `ADMIN`). Antes hay que iniciar sesión con
 la cuenta administradora:
@@ -559,13 +605,16 @@ ríos configurados. Las rutas heredadas `POST /api/push/demo` y
 | `No se pudieron cargar las credenciales de Firebase: C:\ruta\segura\...` | Ruta de ejemplo sin cambiar | Completar `FIREBASE_CREDENTIALS_PATH` o dejar FCM deshabilitado |
 | Página vieja o «Sin conexión» | Service Worker anterior | Desregistrar el SW y limpiar datos del sitio |
 | `401` en la consola o en la PWA | Token ausente o vencido (24 h) | Volver a iniciar sesión |
-| `403` en opción 6, 7 u 8 | La cuenta no tiene rol `ADMIN` | Iniciar sesión con la cuenta administradora |
+| `403` en opción 6 o 7 | La cuenta no tiene rol `ADMIN` | Iniciar sesión con la cuenta administradora |
+| `403` en el celular o al entrar por el túnel | El origen del túnel no está autorizado; Spring responde `Invalid CORS request` | Agregar la URL exacta o `https://*.trycloudflare.com` (solo demo) y reiniciar. El script se detiene si `8081` está ocupado para no dejar un túnel sin autorizar |
 | `403` en las rutas heredadas | `ALERTA_ADMIN_TOKEN` ausente o distinto | Definir el mismo token en backend y cliente; no aplica al resto de la API |
-| `409` en `/api/admin/push/demo` | FCM no configurado | Configurar Firebase; es esperado sin credenciales |
+| `409` en `/api/admin/push/demo` o `/api/alertas/simular` | FCM no configurado | Configurar Firebase; es esperado sin credenciales |
 | `409` al registrar token | Token asociado a otro `deviceId` | Limpiar datos del sitio o usar el dispositivo original |
 | `410` | Token FCM inválido | Volver a activar notificaciones |
 | `429` | Límite de 60 s entre pruebas | Esperar y reintentar |
-| No llega la notificación | Permiso, FCM o dispositivo | Revisar permisos, claves y logs; probar con la app en segundo plano |
+| La simulación informa 0 dispositivos | El dispositivo se desactivó al cerrar sesión o se borró el token | Volver a iniciar sesión: la PWA reactiva el push si el permiso sigue concedido; si no, pulsar «Activar notificaciones» |
+| No llega la notificación | Permiso, FCM o dispositivo | Revisar permisos, claves y logs; con la pestaña visible debe aparecer un aviso flotante y «Notificación recibida en este dispositivo» |
+| No llega en Brave | Brave bloquea FCM por defecto | `brave://settings/privacy` → activar «Usar servicios de Google para la mensajería push», recargar y repetir |
 | `8081` ocupado | Proceso anterior | Detener el proceso y volver a arrancar |
 | `localhost` funciona, celular no | Falta HTTPS | Usar la URL del túnel, no la IP local |
 
@@ -578,16 +627,22 @@ ríos configurados. Las rutas heredadas `POST /api/push/demo` y
       geometría real.
 - [ ] El login `ADMIN` devuelve un JWT; el registro público crea solo `USER`.
 - [ ] `GET /api/push/config` responde sin `reachId`.
-- [ ] La PWA pide iniciar sesión y muestra el mapa y el panel de cualquier río.
+- [ ] La PWA pide iniciar sesión y muestra el catálogo con botones de suscripción.
 - [ ] Seguir un río es idempotente y se refleja en `/api/usuarios/me/rios`.
+- [ ] El panel devuelve `siguiendo` con JWT y `null` sin sesión.
+- [ ] La segunda consulta del panel dentro del TTL usa la caché de GEOGloWS.
 - [ ] El Service Worker viejo fue eliminado.
 - [ ] Sin Firebase, la PWA muestra «No disponibles» y el backend sigue vivo.
-- [ ] La opción `8` existe para el rol `ADMIN`.
+- [ ] Sin Firebase, la sección de administración avisa que no se puede simular y
+      no muestra botones de envío.
+- [ ] La opción `6` y el botón **Simular crecida** existen para el rol `ADMIN`.
 - [ ] Con Firebase, `/api/push/config` devuelve `habilitado: true`.
 - [ ] El dispositivo muestra «Activadas».
-- [ ] La opción `8` informa dispositivos, enviados y fallidos.
+- [ ] La simulación informa dispositivos, enviados y fallidos y solo notifica a
+      los seguidores del río.
+- [ ] La opción `7` envía el simulacro global a todos los dispositivos.
 - [ ] Con `ALERTA_DEMO_CONSOLA_HABILITADA=false` el backend sigue funcionando.
-- [ ] `.\mvnw.cmd package` termina con 67 pruebas y `BUILD SUCCESS`.
+- [ ] `.\mvnw.cmd package` termina con 79 pruebas y `BUILD SUCCESS`.
 - [ ] `node --check` no reporta errores.
 - [ ] No se versionaron `.env.demo` ni credenciales.
 
@@ -601,7 +656,8 @@ expone contratos HTTP que el equipo de frontend puede consumir:
 - `POST /api/auth/registro`, `POST /api/auth/login` y `GET /api/auth/me`;
 - `GET /api/rios` y `GET /api/rios/mapa` (GeoJSON con `properties.rioId`);
 - `GET /api/usuarios/me/rios` y `POST`/`DELETE /api/usuarios/me/rios/{rioId}`;
-- `GET /api/alertas/rio/{rioId}` y `/tramo/{reachId}`;
+- `GET /api/alertas/rio/{rioId}` y `/tramo/{reachId}` (incluyen `siguiendo` con
+  JWT);
 - historial, detalle, configuración de riesgo y endpoints push con JWT;
 - mantenimiento del catálogo bajo `/api/admin/rios` (JWT + rol `ADMIN`).
 

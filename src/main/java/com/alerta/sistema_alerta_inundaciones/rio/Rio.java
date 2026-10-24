@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 
 @Entity
@@ -24,8 +23,12 @@ public class Rio {
 
     private Double longitud;
 
-    /** Geometría GeoJSON simplificada en WGS84 (LineString o MultiLineString). */
-    @Lob
+    /**
+     * Geometría GeoJSON simplificada en WGS84 (LineString o MultiLineString).
+     * Se mapea como TEXT, no como LOB: en PostgreSQL un LOB puede quedar ligado
+     * a la conexión y fallar con «Unable to access lob stream» al leerlo desde
+     * una transacción ya cerrada.
+     */
     @Column(columnDefinition = "TEXT")
     private String geometria;
 

@@ -109,6 +109,27 @@ class BackendApiClientTest {
     }
 
     @Test
+    void simularLeeElResultadoDeLaSimulacionYElResumenPush() {
+        AtomicReference<String> consulta = new AtomicReference<>();
+        servidor.createContext("/api/alertas/simular", intercambio -> {
+            consulta.set(intercambio.getRequestURI().getQuery());
+            responder(intercambio, 200,
+                    "{\"alerta\":{\"reachId\":710039498,\"nombreRio\":\"Río Abajo\","
+                            + "\"nivelAlerta\":\"EMERGENCIA\",\"simulacion\":true},"
+                            + "\"dispositivos\":2,\"enviados\":2,\"fallidos\":0}");
+        });
+
+        BackendApiClient cliente = cliente();
+        BackendApiClient.ResultadoSimulacionApi resultado = cliente.simular(710039498L, 75.0);
+
+        assertEquals(710039498L, resultado.alerta().getReachId());
+        assertEquals("EMERGENCIA", resultado.alerta().getNivelAlerta());
+        assertEquals(2, resultado.dispositivos());
+        assertEquals(2, resultado.enviados());
+        assertTrue(consulta.get().contains("reachId=710039498"));
+    }
+
+    @Test
     void enviarDemoPushUsaElEndpointDeAdministracionConBearer() {
         AtomicReference<String> autorizacion = new AtomicReference<>();
         AtomicReference<String> metodo = new AtomicReference<>();

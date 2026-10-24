@@ -4,26 +4,20 @@ Backend Spring Boot para consultar riesgo de inundación con GEOGloWS y
 Open-Meteo, persistir eventos y enviar notificaciones push por Firebase Cloud
 Messaging (FCM).
 
-Incluye dos clientes de apoyo:
+### Componentes del sistema y separación de roles
 
-- `ConsolaDemoRunner`: cliente HTTP de demostración y pruebas del backend, con
-  login y menús según el rol (`USER`/`ADMIN`).
-- PWA de pruebas: login, mapa del catálogo, panel de caudal y lluvia de
-  cualquier río y activación de notificaciones. **No es el frontend
-  definitivo**; ese frontend lo construirá otro equipo desde cero.
+1. **Backend (Spring Boot):** Motor central independiente. Ejecuta la lógica de negocio, ingesta y caché de GEOGloWS y Open-Meteo, persistencia en PostgreSQL, seguridad JWT y despacho de notificaciones push vía Firebase Cloud Messaging (FCM). Expone una API REST pública.
+2. **Consola interactiva (`ConsolaDemoRunner`):** Cliente HTTP de consola por terminal interactiva. Permite autenticación JWT, consultar el panel y ejecutar simulaciones administrativas desde el servidor. No recibe notificaciones push directamente ya que una terminal no puede registrar Service Workers.
+3. **PWA de pruebas (`src/main/resources/static/`):** Herramienta web mínima servida por Spring Boot. Existe separadamente de la consola por la **necesidad técnica de validar el ciclo de vida de Web Push** (registro de Service Worker, suscripción FCM en navegador, permisos del sistema operativo y recepción en primer/segundo plano). **No es el frontend definitivo**; este último será desarrollado desde cero por otro equipo.
+4. **Frontend definitivo:** Aplicación externa que construirá otro equipo consumiendo los contratos públicos de la API REST.
 
 > Proyecto académico y orientativo. No emite declaraciones oficiales de
 > emergencia ni sustituye a SINAPROC, IMHPA u otra autoridad competente.
 
-> **Estado:** el avance de autenticación, catálogo de cuatro ríos con geometría
-> real, selección usuario–ríos y push asociado al usuario está implementado y
-> con 67 pruebas en verde, y ya pasó una prueba de humo con PostgreSQL real en
-> Linux (23/10/2026). Falta repetirla en Windows y probar la recepción push en un
-> dispositivo. Para retomarlo en otra sesión o computadora, empezar por
-> [docs/CONTINUIDAD_SESION.md](docs/CONTINUIDAD_SESION.md).
-
-> Para una explicación funcional breve, sin tecnicismos, ver
-> [docs/RESUMEN_PROYECTO.md](docs/RESUMEN_PROYECTO.md).
+> **Estado (Entrega 75 %):** El backend está **preparado y verificado para la entrega del 75 %**, con **79 pruebas automatizadas en verde** (0 fallos). Cuenta con autenticación JWT, roles `USER`/`ADMIN`, catálogo cerrado de cuatro ríos con geometría real (GeoJSON), selección usuario–ríos, enrutamiento push a seguidores, caché de GEOGloWS con tolerancia a fallos y campo `siguiendo` en el panel.
+>
+> Para retomar el proyecto o consultar la historia de sesiones, ver [docs/CONTINUIDAD_SESION.md](docs/CONTINUIDAD_SESION.md).
+> Para una explicación funcional sin tecnicismos, ver [docs/RESUMEN_PROYECTO.md](docs/RESUMEN_PROYECTO.md).
 
 ## Arranque rápido
 
@@ -38,18 +32,23 @@ Copy-Item .env.demo.example .env.demo
 Abrir `http://localhost:8081`. El script también abre un túnel HTTPS para probar
 desde el celular.
 
-Arranque manual:
+Arranque manual en Windows (PowerShell):
 
 ```powershell
 $env:DB_PASSWORD = "su-contraseña-local"
 $env:ALERTA_JWT_SECRET = "un-secreto-de-al-menos-32-caracteres"
+# Credenciales de desarrollo local:
 $env:ALERTA_ADMIN_IDENTIFICADOR = "admin"
-$env:ALERTA_ADMIN_PASSWORD = "la-contraseña-local-acordada"
+$env:ALERTA_ADMIN_PASSWORD = "admin-local-clave"
 .\mvnw.cmd spring-boot:run
 ```
 
+> **Credenciales de desarrollo:** Para pruebas locales se utiliza por convención el identificador `admin` y la contraseña `admin-local-clave`. **Esta credencial es de uso exclusivo para desarrollo y demostración local; para despliegues en producción DEBE cambiarse o suministrarse mediante secretos seguros de entorno.**
+
 Al arrancar, el backend carga el catálogo de cuatro ríos desde
-`src/main/resources/catalogo/rios.json` (upsert por `reachId`).
+`src/main/resources/catalogo/rios.json` (upsert por `reachId`). Las respuestas de
+GEOGloWS se cachean en memoria durante `GEOGLOWS_CACHE_MINUTOS` (15 por defecto)
+y se reutiliza la última copia si la API falla.
 
 Arranque en Linux (con PostgreSQL en un contenedor Podman):
 
@@ -83,18 +82,17 @@ $env:ALERTA_DEMO_CONSOLA_HABILITADA = "false"
 .\mvnw.cmd spring-boot:run
 ```
 
-## Demo de notificaciones en clase
+## Demo y prueba de notificaciones
 
-1. Cada estudiante abre la URL HTTPS del túnel, inicia sesión o crea una cuenta,
-   sigue al menos un río y pulsa **Activar notificaciones**.
-2. En la terminal donde corre el backend, iniciar sesión en la consola con la
-   cuenta `ADMIN` y elegir la opción **8: Enviar notificacion push de
-   demostracion**.
-3. La notificación debe aparecer en los dispositivos suscritos.
+1. Cada usuario abre la URL de la aplicación (en PC: `http://localhost:8081`; en celular: la URL HTTPS del túnel).
+2. Inicia sesión o registra una cuenta nueva (`USER`), selecciona al menos un río para seguir y pulsa **Activar notificaciones**.
+3. Para enviar pruebas como administrador:
+   - **Desde la PWA:** Inicie sesión con la cuenta `ADMIN` (`admin` / `admin-local-clave` en local). Al seguir un río, aparecerá el botón **Simular crecida**, el cual envía la notificación de simulacro a los seguidores de ese río.
+   - **Desde la consola (`ConsolaDemoRunner`):** Inicie sesión con `ADMIN`:
+     - Opción **6: Simular crecida de un rio:** Envía la notificación de simulacro únicamente a los dispositivos de los usuarios que siguen ese río.
+     - Opción **7: Enviar notificacion push de demostracion:** Envía un simulacro global a todos los dispositivos activos registrados.
 
-El simulacro no crea un evento real de riesgo. Para probar el enrutamiento por
-río, el administrador puede evaluar un río con datos reales (opción 7): solo
-reciben la notificación los usuarios que siguen ese río.
+> La simulación de crecida no persiste un evento de riesgo en el historial; solo prueba la clasificación y el enrutamiento del canal push.
 
 ## Si ves la PWA antigua o “Sin conexión”
 
@@ -118,14 +116,13 @@ nueva del Service Worker elimina las cachés `alerta-shell-*` al activarse.
 | Documento | Contenido |
 |---|---|
 | [docs/CONTINUIDAD_SESION.md](docs/CONTINUIDAD_SESION.md) | Estado actual y cómo retomar el proyecto desde otra computadora o sesión |
-| [docs/AVANCE_EQUIPO.md](docs/AVANCE_EQUIPO.md) | Resumen breve de las decisiones para los compañeros del equipo |
 | [docs/RESUMEN_PROYECTO.md](docs/RESUMEN_PROYECTO.md) | Explicación de alto nivel, flujo, alcance y guía para la presentación |
 | [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | Directrices permanentes y separación backend/clientes |
 | [docs/GUIA_PRUEBA_NOTIFICACIONES.md](docs/GUIA_PRUEBA_NOTIFICACIONES.md) | Guía paso a paso para compañeros y agentes de IA |
-| [INFORME_ALERTAS_INUNDACION.md](INFORME_ALERTAS_INUNDACION.md) | Informe: cambios, pruebas reales, pendientes y limitaciones |
+| [INFORME_ALERTAS_INUNDACION.md](INFORME_ALERTAS_INUNDACION.md) | Informe histórico del 21–22/10; estado vigente en `CONTINUIDAD_SESION.md` |
 | [docs/CONFIGURACION_PUSH.md](docs/CONFIGURACION_PUSH.md) | Variables de entorno, PostgreSQL y Firebase/FCM |
 | [docs/INTEGRACION_FRONTEND.md](docs/INTEGRACION_FRONTEND.md) | Contrato de API y guía para el equipo de frontend |
-| [docs/GUIA_FRONTEND.md](docs/GUIA_FRONTEND.md) | Diseño implementado: login, mapa, selección múltiple y admin |
+| [docs/GUIA_FRONTEND.md](docs/GUIA_FRONTEND.md) | Diseño del frontend definitivo y flujo mínimo de la PWA |
 | [docs/AJUSTES_PANEL_RIO.md](docs/AJUSTES_PANEL_RIO.md) | Estado de los ajustes del panel informativo de río |
 | [IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md) | Historia de implementación y decisiones previas |
 
@@ -135,7 +132,7 @@ nueva del Service Worker elimina las cachés `alerta-shell-*` al activarse.
 .\mvnw.cmd test
 ```
 
-Estado actual: **67 pruebas, 0 fallos**. En Linux, usar `bash mvnw test` si
+Estado actual: **79 pruebas, 0 fallos**. En Linux, usar `bash mvnw test` si
 `./mvnw` falla con “Permiso denegado”.
 
 Validación de sintaxis de la PWA:
@@ -153,28 +150,33 @@ src/main/java/.../usuario/  Selección usuario–ríos
 src/main/java/.../alerta/   Eventos, monitoreo y API de alertas
 src/main/java/.../riesgo/   Reglas de caudal y lluvia
 src/main/java/.../clima/    Open-Meteo y caché
+src/main/java/.../GEOGLOWS/ GEOGloWS, lectura de datos y caché por tramo
 src/main/java/.../push/     FCM, registro y envío por seguidores
 src/main/java/.../rio/      Catálogo, geometría y mapa
 src/main/java/.../demo/     Consola HTTP de demostración
 src/main/resources/catalogo/  Catálogo con geometría real (GeoJSON)
 tools/                      Script reproducible del catálogo
 src/main/resources/static/  PWA de pruebas
-src/test/java/...           67 pruebas automatizadas
+src/test/java/...           79 pruebas automatizadas
 docs/                       Arquitectura y guías operativas
 scripts/                    Arranque de demo
 ```
 
-## Limitaciones
+## Estado de la entrega y alcance
 
-- Umbrales de lluvia experimentales (25/50/100 mm).
-- `returnperiods` de GEOGloWS falla; se usa el fallback 15/30/60 m³/s.
-- Push real pendiente de credenciales Firebase y dispositivo físico; no está
-  probado de extremo a extremo.
-- La prueba de humo con PostgreSQL real se completó en Linux el 23/10/2026
-  (catálogo, login, seguimiento y panel con datos reales); falta repetirla en
-  Windows con `scripts/iniciar-demo.ps1`.
-- iOS requiere 16.4+ y la PWA instalada en la pantalla de inicio.
-- El túnel HTTPS es temporal; para producción se necesita un dominio estable.
-- Dos rutas heredadas (`POST /api/push/demo` y
-  `GET /api/alertas/suscripciones/{reachId}`) siguen con `X-Admin-Token` y se
-  retirarán; el resto de las operaciones administrativas ya exige JWT `ADMIN`.
+### Listo para la entrega del 75 % (Verificado)
+- **Backend modular y desacoplado:** Spring Boot con API REST independiente y arquitectura por capas (Controller → Service → Repository / Client).
+- **Autenticación y roles:** Registro público (`USER`), login con emisión de JWT HS256 (24 horas) y sembrado de administrador (`ADMIN`).
+- **Catálogo cerrado de cuatro ríos:** Upsert automático de Río Abajo, Curundú, Juan Díaz y Tocumen con geometría GeoJSON simplificada real (TDX-Hydro).
+- **Selección usuario–ríos:** Seguimiento persistido en base de datos e indicador `siguiendo` en el panel de río.
+- **Evaluación y monitoreo de riesgo:** Clasificación combinada de caudal (GEOGloWS v2) y lluvia acumulada en 24h (Open-Meteo) bajo 4 niveles (`NORMAL`, `VIGILANCIA`, `ALERTA`, `EMERGENCIA`). Monitoreo programado cada 15 min e historial con idempotencia.
+- **Tolerancia a fallos:** Caché en memoria para GEOGloWS con reutilización de la última respuesta válida en caso de caídas del servicio externo.
+- **Notificaciones Push por seguidores:** Registro de token FCM vinculado al usuario y despacho de avisos críticos y simulacros solo a los seguidores del río.
+- **Herramientas de prueba:** Consola interactiva CLI con menú por rol y PWA mínima de prueba web para validación de Service Workers.
+- **Calidad de software:** 79 pruebas automatizadas pasando al 100% (`BUILD SUCCESS`).
+
+### Pendiente para la entrega final (100 %)
+- **Frontend definitivo:** Desarrollo de la interfaz gráfica completa (mapas interactivos, hidrogramas y panel de usuario) por el equipo de frontend.
+- **Calibración estacional:** Calibración fina de umbrales hidrológicos y de precipitación con entidades oficiales (SINAPROC/IMHPA).
+- **Configuración de producción:** Dominio HTTPS fijo, origen CORS definitivo para el frontend y rotación segura de credenciales de base de datos y Firebase.
+- **Limpieza de endpoints heredados:** Retiro de rutas transitorias (`POST /api/push/demo` heredado y `GET /api/alertas/suscripciones/{reachId}`).

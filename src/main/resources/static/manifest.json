@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Alertas de inundación (prueba)",
   "short_name": "Alertas",
-  "description": "PWA de prueba del sistema de alerta temprana de inundaciones: login, catálogo de ríos, panel de caudal y lluvia, y notificaciones push.",
+  "description": "PWA de prueba del sistema de alerta temprana de inundaciones: login, suscripción a ríos y notificaciones push.",
   "lang": "es-PA",
   "start_url": "/",
   "scope": "/",

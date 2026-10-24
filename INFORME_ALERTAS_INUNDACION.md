@@ -1,12 +1,28 @@
 # Informe final: alertas de inundación con GEOGloWS, lluvia y notificaciones push
 
-**Fecha:** 21 de octubre de 2026  
-**Proyecto:** Sistema académico de alerta temprana de inundaciones  
-**Alcance:** backend Spring Boot + consola cliente HTTP + PWA mínima de prueba + Firebase Cloud Messaging (FCM)
+**Fecha del informe:** 21 de octubre de 2026<br>
+**Proyecto:** Sistema académico de alerta temprana de inundaciones<br>
+**Alcance:** backend Spring Boot + consola cliente HTTP + PWA de prueba + Firebase Cloud Messaging (FCM)
 
-> **Actualización 22/10/2026:** la PWA dejó de ser un panel de monitoreo y ahora
-> solo verifica notificaciones. La consola consume la API pública. El frontend
-> definitivo será construido por otro equipo desde cero. Las reglas vigentes
+> **Informe histórico.** Este documento registra el estado del sistema entre el
+> 21 y el 22 de octubre de 2026. Se conserva como evidencia de las pruebas de esa
+> iteración. El estado vigente está en
+> [`docs/CONTINUIDAD_SESION.md`](docs/CONTINUIDAD_SESION.md) y el contrato actual
+> en [`docs/INTEGRACION_FRONTEND.md`](docs/INTEGRACION_FRONTEND.md).
+>
+> **Estado vigente (23/10/2026):** autenticación con roles, catálogo de cuatro
+> ríos, selección múltiple, caché en memoria de GEOGloWS y campo `siguiendo` **ya
+> implementados**. La PWA quedó reducida a login, catálogo, suscripción, push y
+> simulación para `ADMIN`; el panel de caudal y lluvia sigue disponible en la API
+> para el frontend definitivo, pero ya no se muestra en la PWA. La suite tiene
+> **79 pruebas en verde**. Las referencias a 51 pruebas y a una PWA que solo
+> verificaba notificaciones describen esta iteración histórica, no el estado
+> actual.
+
+> **Actualización 23/10/2026:** la PWA quedó limitada a login, catálogo,
+> suscripción con activación de push y simulación de crecida para `ADMIN`. Ya no
+> muestra mapa, panel, caudal, lluvia ni hidrogramas; esas vistas pertenecen al
+> frontend definitivo. La consola consume la API pública. Las reglas vigentes
 > están en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md).
 
 > Este sistema es académico y orientativo. No emite declaraciones oficiales de
@@ -77,10 +93,13 @@ Se conservaron los cambios locales existentes y no se hicieron commits.
   - El endpoint de prueba push devolvía 429 también para una suscripción
     inactiva; ahora el límite de 60 s devuelve 429 y los estados inválidos 409.
 
-### 2.2 PWA de pruebas (estado actual)
+### 2.2 PWA de pruebas (estado en esta iteración, 22/10/2026)
 
-La PWA incluida en `src/main/resources/static/` ya **no es un panel de
-monitoreo**. Fue reducida a una página mínima para verificar notificaciones:
+En esta iteración la PWA incluida en `src/main/resources/static/` quedó reducida
+temporalmente a una página para verificar notificaciones. **El estado actual es
+distinto:** la PWA volvió a incluir login, catálogo, suscripción, push y
+simulación para `ADMIN`, pero sin panel hidrológico. Se conserva este registro
+histórico:
 
 - `index.html`, `styles.css` y `app.js` con título, explicación breve, estado,
   botón de activación y mensaje de éxito/error.
@@ -161,7 +180,7 @@ Abrir `http://localhost:8081`.
 .\mvnw.cmd package
 ```
 
-Resultado de la suite tras la refactorización:
+Resultado de la suite en esa fecha (registro histórico; hoy son 79 pruebas):
 
 ```text
 Tests run: 51, Failures: 0, Errors: 0, Skipped: 0
@@ -223,7 +242,8 @@ La aplicación siguió funcionando; este es el comportamiento tolerante previsto
 > **Verificación de independencia (22/10/2026):** se levantó una segunda
 > instancia aislada en `8082` con `ALERTA_DEMO_CONSOLA_HABILITADA=false`,
 > `ALERTA_MONITOREO_HABILITADO=false`, `ALERTA_CREAR_RIO_INICIAL=false` y
-> `FIREBASE_ENABLED=false`. La aplicación arrancó, `/` sirvió la PWA mínima y
+> `FIREBASE_ENABLED=false`. La aplicación arrancó, `/` sirvió la PWA de esa
+> iteración y
 > `/api/rios` respondió; no apareció el menú de la consola. El proceso se detuvo
 > al terminar y no se tocó la instancia del usuario en `8081`.
 
@@ -279,7 +299,7 @@ Con un token ficticio (no se intentó un envío real):
 - Baja correcta: `204`.
 - Prueba push sobre suscripción inactiva: `409` (corregido; antes devolvía 429).
 
-### 4.6 PWA de prueba (estado actual)
+### 4.6 PWA de prueba (estado en esta iteración)
 
 Después de la refactorización se validó la sintaxis de `app.js` y
 `firebase-messaging-sw.js` con `node --check`. También se renderizó la página con
@@ -288,11 +308,11 @@ Chrome headless usando un viewport móvil de 390×844: la tarjeta midió 358 px 
 de error esperado al no existir un backend en ese servidor estático. No se
 probaron permisos ni recepción push en un navegador real en esta sesión.
 
-La PWA ya no consulta ríos, estado, historial ni lluvia, y ya no guarda datos
-para funcionamiento offline. Esa lógica se eliminó de forma intencional para
-dejar una herramienta mínima de verificación. La prueba de la iteración anterior
-que mostraba datos hidrológicos y caché se conserva como registro histórico,
-pero ya no describe el código actual.
+En esta iteración la PWA no consultaba ríos, estado, historial ni lluvia, y no
+guardaba datos para funcionamiento offline. Esa reducción fue temporal: el
+código actual incluye login, catálogo, suscripción, push y simulación para
+`ADMIN`, pero sigue sin mostrar datos hidrológicos. Las pruebas de la iteración
+anterior que mostraban datos hidrológicos se conservan como registro histórico.
 
 ## 5. Prueba manual pendiente
 
@@ -302,9 +322,10 @@ credenciales Firebase ni un dispositivo físico en este entorno. Queda pendiente
 1. Configurar un proyecto Firebase real y las variables de
    [`docs/CONFIGURACION_PUSH.md`](docs/CONFIGURACION_PUSH.md).
 2. Publicar la app en HTTPS (o probar en `localhost`).
-3. En Android/Chrome: activar notificaciones desde la PWA y ejecutar la opción
-   `0` de la consola o `POST /api/push/demo`; comprobar la recepción en primer y
-   segundo plano.
+3. En Android/Chrome: activar notificaciones desde la PWA y simular una crecida
+   con la opción `6` de la consola o `POST /api/alertas/simular`; comprobar la
+   recepción en primer y segundo plano. La opción `7` sigue disponible para el
+   simulacro global.
 4. En iPhone/iPad: instalar la PWA en la pantalla de inicio con iOS 16.4+,
    activar notificaciones y repetir la prueba.
 5. Hacer clic en una notificación y verificar que abre la URL del payload. La
@@ -329,8 +350,9 @@ credenciales Firebase ni un dispositivo físico en este entorno. Queda pendiente
   se puede afirmar que la entrega real funcione. La lógica está cubierta con
   mocks y las APIs responden, pero la prueba física es obligatoria antes de una
   demostración.
-- **PWA de prueba:** no muestra información hidrológica ni es el frontend
-  definitivo; su alcance es únicamente verificar notificaciones.
+- **PWA de prueba (en esta iteración):** no mostraba información hidrológica y
+  no era el frontend definitivo. El código actual mantiene esa decisión: solo
+  cubre login, catálogo, suscripción, push y simulación admin.
 - **Gestión de ríos sin token:** `POST` y `PUT /api/rios` aún no están
   protegidos; deben restringirse antes de producción.
 - **Entrega push del navegador:** el sistema operativo y el navegador deciden si
@@ -369,8 +391,8 @@ credenciales Firebase ni un dispositivo físico en este entorno. Queda pendiente
 - `src/main/java/.../demo/BackendApiClient.java`: cliente HTTP de la consola.
 - `src/main/java/.../demo/ConsolaDemoRunner.java`: consola cliente de la API.
 - `src/main/resources/application.properties`: configuración por entorno.
-- `src/main/resources/static/`: PWA mínima de prueba de notificaciones.
-- `src/test/java/...`: 51 pruebas automatizadas.
+- `src/main/resources/static/`: PWA de prueba.
+- `src/test/java/...`: 79 pruebas automatizadas (51 en la fecha de este informe).
 - `docs/ARQUITECTURA.md`: directrices permanentes.
 - `docs/CONFIGURACION_PUSH.md`: guía de configuración operativa.
 - `docs/INTEGRACION_FRONTEND.md`: contrato para el frontend definitivo.
@@ -379,14 +401,15 @@ credenciales Firebase ni un dispositivo físico en este entorno. Queda pendiente
 
 El backend conserva el flujo principal: datos de GEOGloWS y Open-Meteo,
 evaluación de riesgo, eventos persistentes, historial, detalle y registro de
-dispositivos push. La consola ahora consume la API HTTP y la PWA quedó reducida
-a una herramienta mínima de verificación de notificaciones.
+dispositivos push. La consola consume la API HTTP. La PWA quedó como una
+herramienta mínima de prueba del canal push: login, catálogo, suscripción,
+simulación para `ADMIN` y recepción de notificaciones.
 
-La compilación, las **51 pruebas automatizadas**, el arranque local con
-PostgreSQL y la validación de sintaxis de la PWA pasan. La entrega queda
-condicionada a:
+En la fecha del informe pasaban la compilación y las **51 pruebas automatizadas**.
+El estado vigente (23/10/2026) tiene **79 pruebas en verde**, caché de GEOGloWS y
+el campo `siguiendo`. La entrega sigue condicionada a:
 
-- repetir el arranque en un entorno limpio y con credenciales reales;
+- repetir el arranque en Windows con PostgreSQL y credenciales reales;
 - probar la recepción push con credenciales Firebase y un dispositivo real;
 - validar localmente los umbrales de lluvia antes de usar el sistema fuera del
   ámbito académico;

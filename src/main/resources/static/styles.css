@@ -44,359 +44,29 @@ body {
     margin: 0 auto;
 }
 
-.app .card {
-    margin: 0 auto;
-}
-
+.card,
 .panel {
     width: 100%;
-    padding: clamp(1.4rem, 4vw, 2.2rem);
+    padding: clamp(1.6rem, 5vw, 2.4rem);
     background: var(--superficie);
     border: 1px solid rgba(219, 229, 232, 0.9);
     border-radius: var(--radio);
     box-shadow: var(--sombra);
+}
+
+.card {
+    max-width: 30rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 6vw, 3rem);
+    text-align: center;
+}
+
+.panel {
     text-align: left;
 }
 
 .panel h1 {
     font-size: clamp(1.4rem, 4vw, 1.8rem);
-}
-
-.app-header {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.8rem;
-    align-items: flex-start;
-    justify-content: space-between;
-    margin-bottom: 0.6rem;
-}
-
-.sesion {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-}
-
-.usuario {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: var(--principal);
-    background: var(--principal-suave);
-    border-radius: 999px;
-    padding: 0.35rem 0.7rem;
-}
-
-.bloque {
-    margin-top: 1.6rem;
-    padding-top: 1.2rem;
-    border-top: 1px solid var(--borde);
-}
-
-.bloque h2 {
-    margin: 0 0 0.6rem;
-    font-size: 1.05rem;
-    letter-spacing: -0.01em;
-}
-
-.bloque h3 {
-    margin: 1.3rem 0 0.5rem;
-    font-size: 0.95rem;
-}
-
-.ayuda {
-    margin: 0 0 0.8rem;
-    font-size: 0.86rem;
-    line-height: 1.55;
-    color: var(--texto-suave);
-}
-
-.formulario {
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
-    margin-top: 1.4rem;
-    text-align: left;
-}
-
-.formulario label {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: var(--texto-suave);
-}
-
-.formulario input {
-    width: 100%;
-    padding: 0.8rem 0.9rem;
-    border: 1px solid var(--borde);
-    border-radius: 0.7rem;
-    font: inherit;
-    color: var(--texto);
-    background: #fbfdfd;
-}
-
-.formulario input:focus {
-    outline: 3px solid rgba(15, 118, 110, 0.25);
-    border-color: var(--principal);
-}
-
-.formulario .button {
-    margin-top: 0.55rem;
-}
-
-.button.secundario {
-    background: var(--principal-suave);
-    color: var(--principal-hover);
-    box-shadow: none;
-}
-
-.button.secundario:hover:not(:disabled) {
-    background: #d7ebe8;
-    box-shadow: none;
-}
-
-.button.compacto {
-    width: auto;
-    margin-top: 0;
-    padding: 0.5rem 0.85rem;
-    font-size: 0.84rem;
-    border-radius: 0.65rem;
-}
-
-.mapa {
-    border: 1px solid var(--borde);
-    border-radius: 0.9rem;
-    background: linear-gradient(180deg, #eef7f9, #e7f1f3);
-    padding: 0.4rem;
-    overflow: hidden;
-}
-
-.mapa-svg {
-    width: 100%;
-    height: auto;
-    display: block;
-}
-
-.rio-linea {
-    fill: none;
-    stroke: #2b7a8c;
-    stroke-width: 3;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    cursor: pointer;
-    transition: stroke 160ms ease, stroke-width 160ms ease;
-}
-
-.rio-linea:hover,
-.rio-linea:focus-visible {
-    stroke: #0b5f59;
-    stroke-width: 5;
-    outline: none;
-}
-
-.rio-linea.seguido {
-    stroke: #b45309;
-    stroke-width: 5;
-}
-
-.rio-linea.seguido:hover,
-.rio-linea.seguido:focus-visible {
-    stroke: #92400e;
-    stroke-width: 6;
-}
-
-.lista-rios {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-}
-
-.rio-item {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem 0.85rem;
-    border: 1px solid var(--borde);
-    border-radius: 0.8rem;
-    background: #fbfdfd;
-}
-
-.rio-datos {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.rio-detalle {
-    font-size: 0.78rem;
-    color: var(--texto-suave);
-}
-
-.rio-acciones {
-    display: flex;
-    gap: 0.45rem;
-    flex-wrap: wrap;
-}
-
-.panel-fila {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-bottom: 0.7rem;
-}
-
-.chip {
-    display: inline-block;
-    padding: 0.28rem 0.6rem;
-    border-radius: 999px;
-    font-size: 0.74rem;
-    font-weight: 700;
-    background: #eef2f3;
-    border: 1px solid var(--borde);
-    color: var(--texto-suave);
-    text-transform: capitalize;
-}
-
-.chip.nivel-normal {
-    background: #e8f6ef;
-    border-color: #c3e8d6;
-    color: var(--exito);
-}
-
-.chip.nivel-vigilancia {
-    background: #fef7e6;
-    border-color: #f4dfae;
-    color: #92610a;
-}
-
-.chip.nivel-alerta {
-    background: #fff0e6;
-    border-color: #f5cfa9;
-    color: #b45309;
-}
-
-.chip.nivel-emergencia {
-    background: var(--error-suave);
-    border-color: #f5c9c4;
-    color: var(--error);
-}
-
-.cifras {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
-    gap: 0.6rem;
-    margin: 0.9rem 0;
-}
-
-.cifra {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    padding: 0.7rem 0.8rem;
-    background: #f7fafb;
-    border: 1px solid var(--borde);
-    border-radius: 0.75rem;
-}
-
-.cifra-valor {
-    font-size: 1.25rem;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-}
-
-.cifra-etiqueta {
-    font-size: 0.72rem;
-    line-height: 1.35;
-    color: var(--texto-suave);
-}
-
-.grafico {
-    margin-top: 0.4rem;
-}
-
-.grafico-svg {
-    width: 100%;
-    height: auto;
-    display: block;
-    background: #fbfdfd;
-    border: 1px solid var(--borde);
-    border-radius: 0.8rem;
-}
-
-.grafico-area {
-    fill: rgba(43, 122, 140, 0.16);
-    stroke: none;
-}
-
-.grafico-curva {
-    fill: none;
-    stroke: #1f6f80;
-    stroke-width: 2.4;
-    stroke-linejoin: round;
-    stroke-linecap: round;
-}
-
-.grafico-eje {
-    stroke: #b6c6ca;
-    stroke-width: 1;
-}
-
-.grafico-umbral {
-    stroke-width: 1.6;
-    stroke-dasharray: 6 5;
-}
-
-.grafico-umbral.umbral-vigilancia {
-    stroke: #b7791f;
-}
-
-.grafico-umbral.umbral-alerta {
-    stroke: #dd6b20;
-}
-
-.grafico-umbral.umbral-emergencia {
-    stroke: #c53030;
-}
-
-.grafico-etiqueta {
-    font-size: 11px;
-    fill: #5c7078;
-}
-
-.lista-texto {
-    margin: 0;
-    padding-left: 1.15rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-    font-size: 0.9rem;
-    line-height: 1.5;
-}
-
-.panel-mensaje {
-    margin: 1rem 0 0;
-    padding: 0.75rem 0.85rem;
-    background: var(--principal-suave);
-    border-radius: 0.7rem;
-    font-size: 0.9rem;
-    line-height: 1.5;
-}
-
-.card {
-    width: 100%;
-    max-width: 30rem;
-    min-width: 0;
-    padding: clamp(2rem, 6vw, 3rem);
-    background: var(--superficie);
-    border: 1px solid rgba(219, 229, 232, 0.9);
-    border-radius: var(--radio);
-    box-shadow: var(--sombra);
-    text-align: center;
 }
 
 .brand {
@@ -437,6 +107,128 @@ h1 {
     font-size: 0.98rem;
     line-height: 1.6;
     color: var(--texto-suave);
+}
+
+.app-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+}
+
+.sesion {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.usuario {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--principal);
+    background: var(--principal-suave);
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem;
+}
+
+.formulario {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin-top: 1.4rem;
+    text-align: left;
+}
+
+.formulario label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--texto-suave);
+}
+
+.formulario input {
+    width: 100%;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid var(--borde);
+    border-radius: 0.7rem;
+    font: inherit;
+    color: var(--texto);
+    background: #fbfdfd;
+}
+
+.formulario input:focus {
+    outline: 3px solid rgba(15, 118, 110, 0.25);
+    border-color: var(--principal);
+}
+
+.formulario .button {
+    margin-top: 0.55rem;
+}
+
+.bloque {
+    margin-top: 1.6rem;
+    padding-top: 1.2rem;
+    border-top: 1px solid var(--borde);
+}
+
+.bloque h2 {
+    margin: 0 0 0.6rem;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+}
+
+.bloque-admin {
+    padding: 1.2rem;
+    border: 1px solid #c4e6e1;
+    border-radius: 0.9rem;
+    background: #f6fbfa;
+}
+
+.ayuda {
+    margin: 0 0 0.8rem;
+    font-size: 0.86rem;
+    line-height: 1.55;
+    color: var(--texto-suave);
+}
+
+.lista-rios {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.rio-item {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--borde);
+    border-radius: 0.8rem;
+    background: #fbfdfd;
+}
+
+.rio-datos {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.rio-detalle {
+    font-size: 0.78rem;
+    color: var(--texto-suave);
+}
+
+.rio-acciones {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
 }
 
 .status {
@@ -530,6 +322,25 @@ h1 {
     background: var(--exito);
 }
 
+.button.secundario {
+    background: var(--principal-suave);
+    color: var(--principal-hover);
+    box-shadow: none;
+}
+
+.button.secundario:hover:not(:disabled) {
+    background: #d7ebe8;
+    box-shadow: none;
+}
+
+.button.compacto {
+    width: auto;
+    margin-top: 0;
+    padding: 0.5rem 0.85rem;
+    font-size: 0.84rem;
+    border-radius: 0.65rem;
+}
+
 .message {
     margin: 1.1rem 0 0;
     padding: 0.8rem 0.9rem;
@@ -560,14 +371,50 @@ h1 {
     color: #7d9097;
 }
 
+.aviso-push {
+    position: fixed;
+    left: 50%;
+    bottom: 1.5rem;
+    z-index: 20;
+    width: min(28rem, calc(100vw - 2rem));
+    transform: translateX(-50%);
+    padding: 1rem 1.1rem;
+    border-left: 4px solid #34d399;
+    border-radius: 0.85rem;
+    background: #0f3a42;
+    color: #fff;
+    box-shadow: 0 18px 40px rgba(15, 58, 66, 0.35);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    cursor: pointer;
+}
+
+.aviso-push strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.95rem;
+}
+
+.aviso-push-cerrar {
+    display: block;
+    margin-top: 0.55rem;
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.68);
+}
+
 @media (max-width: 420px) {
     body {
         padding: 1rem;
     }
 
-    .card {
+    .card,
+    .panel {
         padding: 1.8rem 1.4rem;
         border-radius: 1.1rem;
+    }
+
+    .bloque-admin {
+        padding: 1rem;
     }
 }
 

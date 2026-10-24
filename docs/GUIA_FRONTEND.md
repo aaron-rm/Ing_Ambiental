@@ -3,8 +3,8 @@
 **Estado:** **implementado**. Este documento describe el diseño del avance de
 autenticación, mapa y selección múltiple de ríos que ya está en la rama
 `backend`, y cómo debe integrarse el frontend definitivo. Se conserva como
-referencia de decisiones; los endpoints listados existen tal como se describen
-salvo lo indicado en la sección 8.
+referencia de decisiones; los endpoints listados existen tal como se describen,
+con las rutas heredadas marcadas en la sección 8.
 
 **Contrato vigente:** [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md)
 resume la API que existe hoy.
@@ -319,8 +319,9 @@ los umbrales de alerta. El clic en el mapa no debe disparar por sí solo una
 suscripción si el diseño pide confirmación. El backend solo recibe la intención
 cuando el frontend llama al endpoint correspondiente.
 
-> Los ajustes pendientes del backend para que este panel funcione sin fricción
-> están en [`AJUSTES_PANEL_RIO.md`](AJUSTES_PANEL_RIO.md).
+> Los ajustes del backend para que este panel funcione sin fricción están en
+> [`AJUSTES_PANEL_RIO.md`](AJUSTES_PANEL_RIO.md); ya están implementados la caché,
+> `rioId`, `siguiendo`, las recomendaciones y la geometría.
 
 ### 4.4. Resaltar los ríos que el usuario sigue
 
@@ -346,6 +347,15 @@ Respuesta:
 
 El frontend cruza esta lista con el catálogo y resalta las features cuyo
 `rioId` esté en la lista. El backend no necesita saber qué color usa el mapa.
+
+**Alternativa más simple:** al consultar el panel con JWT,
+`GET /api/alertas/rio/{rioId}` devuelve `siguiendo` (`true`/`false`, o `null` sin
+sesión). El frontend puede usar ese campo para el botón y para resaltar el río
+seleccionado, sin una llamada adicional a `/api/usuarios/me/rios`.
+
+La caché de GEOGloWS es transparente para el cliente: el backend reutiliza la
+respuesta por `reachId` durante `GEOGLOWS_CACHE_MINUTOS` y, si la API falla,
+sirve la última copia disponible.
 
 ---
 
@@ -479,19 +489,20 @@ Recomendaciones:
 - no mantener dos usuarios asociados al mismo token, porque el teléfono
   recibiría alertas de ambos.
 
-### 6.7. PWA de prueba con login mínimo
+### 6.7. PWA de prueba con flujo mínimo
 
-La PWA de prueba ya quedó actualizada con un flujo mínimo:
+La PWA de prueba quedó reducida a lo necesario para demostrar el canal push:
 
 1. pantalla de login o registro;
-2. mapa y lista de los cuatro ríos del catálogo con selección múltiple;
-3. panel de caudal y lluvia para cualquier río, esté o no seguido;
-4. botón para activar notificaciones;
-5. registro del token FCM con el JWT (sin `reachId`);
-6. opción para cerrar sesión y desactivar el dispositivo.
+2. lista de los cuatro ríos con botón para suscribirse o dejar de seguir;
+3. activación de notificaciones y registro del token FCM con el JWT (sin
+   `reachId`);
+4. si el usuario es `ADMIN`, un botón **Simular crecida** por cada río seguido;
+5. cierre de sesión con desactivación del dispositivo.
 
-No es el frontend definitivo ni tiene panel de administración. Solo permite
-probar en el celular el mismo flujo de usuario que ya existe en la consola.
+No muestra caudal, lluvia, hidrogramas, mapas ni recomendaciones, y no pretende
+ser el frontend definitivo. Al suscribirse intenta activar el push; si el
+navegador lo impide, la suscripción se guarda y se muestra el aviso.
 
 ---
 
@@ -527,6 +538,18 @@ Respuesta:
 
 El endpoint envía a todos los dispositivos activos, sin crear un evento real de
 riesgo. Es el equivalente del actual `POST /api/push/demo` de la consola.
+
+### 7.2.1. Simular una crecida por río
+
+```http
+POST /api/alertas/simular?reachId=710039498
+Authorization: Bearer <jwt-de-admin>
+```
+
+El parámetro `caudal` es opcional. Sin él, el backend usa un caudal superior al
+umbral de emergencia del tramo. La respuesta incluye `alerta`, `dispositivos`,
+`enviados` y `fallidos`. El push se envía **solo a los seguidores de ese río** y
+no se persiste un evento de riesgo.
 
 ### 7.3. Relación con la consola
 
@@ -613,7 +636,8 @@ frontend debe tolerar tanto texto como JSON.
       aunque el río no esté seguido.
 - [ ] Seguir o dejar de seguir solo cambia las notificaciones, no la consulta.
 - [ ] El usuario puede seguir y dejar de seguir varios ríos.
-- [ ] Los ríos seguidos se resaltan usando `/api/usuarios/me/rios`.
+- [ ] Los ríos seguidos se resaltan usando `siguiendo` del panel o
+      `/api/usuarios/me/rios`.
 - [ ] El registro push requiere sesión y no envía `reachId`.
 - [ ] El panel admin solo se muestra para `rol === "ADMIN"`.
 - [ ] El panel admin llama a `/api/admin/push/demo`, nunca a `/api/push/demo`
@@ -636,7 +660,9 @@ Decisiones tomadas:
    protegidos para mantenimiento.
 3. Las suscripciones heredadas por correo/teléfono se retiran del flujo de
    usuario y de la consola.
-4. La PWA de prueba tendrá un login mínimo para registrar el push en el celular.
+4. La PWA de prueba se limitó a login, catálogo, suscripción, push y simulación
+   para `ADMIN`; seguirá siendo solo una herramienta de prueba y no duplica el
+   panel del frontend definitivo.
 5. La duración inicial del JWT será de 24 horas, configurable, sin refresh
    token.
 6. La geometría se obtiene de GEOGloWS V2 y se guarda simplificada como
@@ -650,14 +676,20 @@ Decisiones tomadas:
    líneas de umbral. La representación del nivel del agua, si se incluye, será
    ilustrativa y derivada del caudal; no se mostrarán metros ni bordes reales
    del cauce, porque no hay curva de gasto ni batimetría.
+10. GEOGloWS se cachea en memoria por endpoint y `reachId` durante
+    `GEOGLOWS_CACHE_MINUTOS` (15 min por defecto). Ante un fallo se reutiliza la
+    última respuesta cacheada.
+11. El panel devuelve `siguiendo` cuando la petición trae JWT; sin sesión es
+    `null`. Evita que el frontend tenga que cruzar la lista de ríos seguidos.
 
 Pendientes antes de cerrar el avance:
 
 1. Definir la URL exacta del frontend para CORS (`ALERTA_CORS_ORIGENES`).
 2. Investigar y calibrar umbrales de lluvia por temporada (invierno/verano).
    No se implementará con valores inventados.
-3. Probar con PostgreSQL real y verificar la recepción push en un dispositivo
-   físico. No afirmar que el push funciona de extremo a extremo sin esa prueba.
+3. Repetir la prueba de humo con PostgreSQL en Windows y verificar la recepción
+   push en un dispositivo físico. No afirmar que el push funciona de extremo a
+   extremo sin esa prueba.
 
-Hasta que termine la implementación, este documento es una guía de diseño y no
-un contrato implementado.
+Este documento describe el contrato ya implementado. El resumen operativo para
+el equipo de frontend está en [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md).

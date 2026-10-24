@@ -32,7 +32,7 @@ class EvaluacionRiesgoServiceTest {
         AlertaService service = new AlertaService(
                 null, null, null,
                 new EvaluadorRiesgo(new PropiedadesRiesgo()),
-                cliente, null);
+                cliente, null, null);
 
         AlertaRioDTO normal = service.simularInundacion(REACH_ID, 10.0);
         assertEquals("NORMAL", normal.getNivelAlerta());
@@ -62,7 +62,7 @@ class EvaluacionRiesgoServiceTest {
         AlertaService service = new AlertaService(
                 null, null, null,
                 new EvaluadorRiesgo(new PropiedadesRiesgo()),
-                cliente, null);
+                cliente, null, null);
 
         AlertaRioDTO alerta = service.simularInundacion(REACH_ID, 250.0);
         assertEquals("ALERTA", alerta.getNivelAlerta());
@@ -75,6 +75,27 @@ class EvaluacionRiesgoServiceTest {
     }
 
     @Test
+    void simulacionSinCaudalUsaElUmbralDeEmergencia() throws Exception {
+        ClienteApiGeoglows cliente = mock(ClienteApiGeoglows.class);
+        LectorDatosIngresados.UmbralAlerta umbrales = new LectorDatosIngresados.UmbralAlerta();
+        umbrales.reachId = REACH_ID;
+        umbrales.caudalVigilancia = 100.0;
+        umbrales.caudalAlerta = 200.0;
+        umbrales.caudalEmergencia = 300.0;
+        when(cliente.obtenerUmbrales(REACH_ID)).thenReturn(umbrales);
+
+        AlertaService service = new AlertaService(
+                null, null, null,
+                new EvaluadorRiesgo(new PropiedadesRiesgo()),
+                cliente, null, null);
+
+        AlertaRioDTO simulacion = service.simularInundacion(REACH_ID, null);
+
+        assertEquals("EMERGENCIA", simulacion.getNivelAlerta());
+        assertTrue(simulacion.getCaudalActualOInicial() > 300.0);
+    }
+
+    @Test
     void simulacionNoSePresentaComoDatoReal() throws Exception {
         ClienteApiGeoglows cliente = mock(ClienteApiGeoglows.class);
         when(cliente.obtenerUmbrales(anyLong())).thenThrow(new IOException("sin red"));
@@ -82,7 +103,7 @@ class EvaluacionRiesgoServiceTest {
         AlertaService service = new AlertaService(
                 null, null, null,
                 new EvaluadorRiesgo(new PropiedadesRiesgo()),
-                cliente, null);
+                cliente, null, null);
 
         AlertaRioDTO sim = service.simularInundacion(REACH_ID, 150.0);
         assertTrue(sim.isSimulacion());

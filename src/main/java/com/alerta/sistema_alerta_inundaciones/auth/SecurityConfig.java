@@ -75,7 +75,9 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource(
             @Value("${alerta.cors.origenes:http://localhost:3000,http://localhost:5173,http://localhost:8081,http://127.0.0.1:8081}") String origenes) {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(Arrays.stream(origenes.split(","))
+        // Se aceptan origenes exactos y, opcionalmente, patrones como
+        // https://*.trycloudflare.com para la demo con tuneles temporales.
+        config.setAllowedOriginPatterns(Arrays.stream(origenes.split(","))
                 .map(String::trim)
                 .filter(origen -> !origen.isBlank())
                 .toList());

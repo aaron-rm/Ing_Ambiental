@@ -15,7 +15,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -35,15 +40,69 @@ import org.springframework.stereotype.Component;
 @Component
 public class ClienteApiGeoglows {
 
+    private static final Logger log = LoggerFactory.getLogger(ClienteApiGeoglows.class);
     private static final String BASE_URL = "https://geoglows.ecmwf.int/api/v2/";
-    private final HttpClient http = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(4))
-            .build();
 
-    /** Llama un endpoint de GEOGloWS y devuelve el JSON ya parseado como Map. */
+    private final String baseUrl;
+    private final HttpClient http;
+    private final Duration cacheTtl;
+    private final Map<String, EntradaCache> cache = new ConcurrentHashMap<>();
+
+    @Autowired
+    public ClienteApiGeoglows(@Value("${geoglows.cache-minutos:15}") long cacheMinutos) {
+        this(BASE_URL, Duration.ofMinutes(Math.max(1, cacheMinutos)));
+    }
+
+    /** Constructor sin argumentos para usos heredados fuera de Spring. */
+    public ClienteApiGeoglows() {
+        this(15);
+    }
+
+    /** Constructor para pruebas con un servidor HTTP local y un TTL explícito. */
+    ClienteApiGeoglows(String baseUrl, Duration cacheTtl) {
+        this.baseUrl = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
+        this.http = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(4))
+                .build();
+        this.cacheTtl = cacheTtl;
+    }
+
+    /**
+     * Llama un endpoint de GEOGloWS y devuelve el JSON ya parseado como Map.
+     *
+     * Las respuestas se cachean en memoria por endpoint + reachId durante
+     * {@code geoglows.cache-minutos}. Si GEOGloWS falla y existe una respuesta
+     * anterior, se reutiliza esa respuesta marcando la advertencia en el log:
+     * el objetivo es que una caída breve del servicio no deje el panel sin datos.
+     */
     @SuppressWarnings("unchecked")
     private Map<String, Object> get(String path, String query) throws IOException, InterruptedException {
-        String url = BASE_URL + path + (query.isEmpty() ? "" : "?" + query);
+        String clave = path + (query.isEmpty() ? "" : "?" + query);
+        EntradaCache entrada = cache.get(clave);
+        Instant ahora = Instant.now();
+
+        if (entrada != null && entrada.fechaConsulta.plus(cacheTtl).isAfter(ahora)) {
+            log.debug("GEOGloWS: respuesta en caché para {}", clave);
+            return entrada.respuesta;
+        }
+
+        try {
+            Map<String, Object> respuesta = consultar(path, query);
+            cache.put(clave, new EntradaCache(Instant.now(), respuesta));
+            return respuesta;
+        } catch (IOException e) {
+            if (entrada != null) {
+                log.warn("GEOGloWS falló para {} ({}). Se reutiliza la respuesta cacheada de {}.",
+                        clave, e.getMessage(), entrada.fechaConsulta);
+                return entrada.respuesta;
+            }
+            throw e;
+        }
+    }
+
+    private Map<String, Object> consultar(String path, String query)
+            throws IOException, InterruptedException {
+        String url = baseUrl + path + (query.isEmpty() ? "" : "?" + query);
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(4))
                 .GET()
@@ -297,6 +356,9 @@ public class ClienteApiGeoglows {
                 return Instant.now();
             }
         }
+    }
+
+    private record EntradaCache(Instant fechaConsulta, Map<String, Object> respuesta) {
     }
 
     /**

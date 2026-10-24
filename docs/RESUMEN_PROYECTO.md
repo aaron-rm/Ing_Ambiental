@@ -63,8 +63,8 @@ suscritos cuando el nivel cambia.
 5. **Expone el estado y el historial** mediante una API HTTP.
 6. **Envía notificaciones push** a los dispositivos registrados cuando el riesgo
    es alto.
-7. **Permite probar el flujo** con una consola y una PWA mínima, sin convertirlas
-   en el producto final.
+7. **Permite probar el flujo** con una consola y una PWA de prueba, sin
+   convertirlas en el producto final.
 
 ---
 
@@ -120,7 +120,7 @@ los datos y umbrales disponibles.
 
 | Fuente | Qué aporta | Consideración |
 |---|---|---|
-| **GEOGloWS** | Pronóstico de caudal por tramo de río. | Si no entrega periodos de retorno utilizables, se usan umbrales de referencia de 15/30/60 m³/s y se muestra una advertencia. |
+| **GEOGloWS** | Pronóstico de caudal por tramo de río. | Se cachea en memoria por tramo durante 15 minutos; si la API falla, se reutiliza la última respuesta. Si no entrega periodos de retorno utilizables, se usan umbrales de referencia de 15/30/60 m³/s y se muestra una advertencia. |
 | **Open-Meteo** | Lluvia prevista y acumulados de 24/72 h. | Se guarda una caché de 15 minutos para no consultar en exceso. |
 | **PostgreSQL** | Ríos, eventos, estado por tramo y dispositivos push. | Es la memoria del sistema. |
 | **Firebase Cloud Messaging** | Entrega de notificaciones push. | Si faltan credenciales, el resto del backend sigue funcionando; el envío queda deshabilitado. |
@@ -188,7 +188,7 @@ El proyecto tiene un **backend central** y varios clientes que se comunican con
 Backend (lógica, datos y notificaciones)
    ├── API REST
    ├── Consola de demostración
-   ├── PWA mínima de prueba de notificaciones
+   ├── PWA de prueba (login, catálogo, suscripción y push)
    └── Frontend definitivo (otro equipo)
 ```
 
@@ -207,12 +207,13 @@ envío de notificaciones.
 | **Base de datos** | Conserva ríos, historial, estado por tramo y dispositivos. |
 | **API REST** | Contrato para que cualquier cliente consulte o registre información. |
 | **Consola** | Cliente HTTP para demostrar y probar el backend desde la terminal. |
-| **PWA de prueba** | Página mínima para activar notificaciones y comprobar su recepción. No muestra datos hidrológicos ni es el frontend final. |
+| **PWA de prueba** | Cliente de prueba con login, catálogo, suscripción, push y simulación admin. No muestra datos hidrológicos ni es el frontend definitivo. |
 | **Frontend definitivo** | Lo construirá otro equipo desde cero usando la API. |
 
 ### Qué es demostración y qué es producto
 
-- La **consola** y la **PWA mínima** existen para probar y exponer el proyecto.
+- La **consola** y la **PWA de prueba** existen para probar y exponer el
+  proyecto.
 - El **backend**, la base de datos, las reglas de riesgo y el envío push son el
   núcleo funcional.
 - El **frontend definitivo** es una entrega separada. Puede usar otra tecnología
@@ -231,8 +232,14 @@ El trabajo se organizó en tres bloques:
    caudal y lluvia, integración con Open-Meteo, monitoreo periódico, eventos,
    historial e idempotencia.
 3. **Notificaciones y separación de clientes:** registro de dispositivos,
-   integración con Firebase, consola como cliente HTTP, PWA mínima y pruebas
+   integración con Firebase, consola como cliente HTTP, PWA de prueba y pruebas
    automatizadas.
+4. **Autenticación y catálogo:** login con roles, cuatro ríos con geometría real,
+   selección múltiple, panel de caudal y lluvia en la API, push por usuario,
+   caché de GEOGloWS y campo `siguiendo`.
+5. **Cierre del avance:** PWA reducida a login, catálogo, suscripción, push y
+   simulación admin; la simulación envía el simulacro solo a los seguidores del
+   río.
 
 ### Decisiones importantes
 
@@ -259,14 +266,16 @@ El trabajo se organizó en tres bloques:
 | Historial y detalle de eventos | Implementado. |
 | Registro de dispositivos y lógica push | Implementado y probado con mocks. |
 | Push real de extremo a extremo | Pendiente de credenciales Firebase y dispositivo físico. |
-| PWA de prueba | Con login, mapa, panel y push por usuario; falta probar la recepción en un dispositivo real. |
+| PWA de prueba | Con login, catálogo, suscripción, push y simulación admin; falta probar la recepción en un dispositivo real. |
 | Frontend definitivo | Lo desarrolla otro equipo. |
 | Umbrales | Experimentales; requieren calibración local. La calibración estacional (invierno/verano) está pendiente de investigación y no se implementará con valores inventados. |
 | Autenticación | Implementada: login con identificador, JWT de 24 horas y roles `USER`/`ADMIN`. |
 | Gestión de ríos | Catálogo cerrado de cuatro ríos con geometría real: Abajo, Curundú, Juan Díaz y Tocumen. La escritura está protegida bajo `/api/admin/rios`. |
-| Consulta de ríos | Implementada: al hacer clic en cualquier río del catálogo se muestra su caudal y su lluvia. No hace falta estar suscrito; la suscripción solo controla el push. |
+| Consulta de ríos | Implementada en la API: el frontend definitivo puede mostrar caudal y lluvia de cualquier río. La PWA mínima ya no la muestra. |
 | Selección múltiple | Implementada: cada usuario sigue los ríos que quiera y el push se envía según sus selecciones. |
-| Pruebas automatizadas | 67 pruebas, 0 fallos. |
+| Caché de caudal | Implementada en memoria por endpoint y tramo (15 min por defecto); si GEOGloWS falla, se reutiliza la última respuesta. |
+| Estado de suscripción en el panel | Implementado: `siguiendo` es `true`/`false` con JWT y `null` sin sesión. |
+| Pruebas automatizadas | 79 pruebas, 0 fallos. |
 
 Otras limitaciones conocidas:
 
@@ -292,10 +301,10 @@ Otras limitaciones conocidas:
    datos → API/push. Explicar que el nivel final es el más alto entre caudal y
    lluvia.
 4. **Demostración (60 s).** Iniciar sesión en la consola como usuario, mostrar
-   el catálogo, abrir el panel de caudal/lluvia de cualquier río y seguir varios.
-   Aclarar que seguir un río solo controla las notificaciones. Si hay una cuenta
-   administradora, mostrar la simulación y el envío de prueba. Si no
-   hay Firebase configurado, explicar que el envío real está pendiente de
+   el catálogo y seguir varios ríos. Aclarar que seguir un río solo controla las
+   notificaciones. Si hay una cuenta administradora, simular una crecida y
+   mostrar que el push llega solo a los seguidores de ese río. Si no hay
+   Firebase configurado, explicar que el envío real está pendiente de
    credenciales y dispositivo.
 5. **Resultados y límites (90 s).** Mencionar las pruebas, el historial de
    eventos, la separación del frontend y los umbrales experimentales.
@@ -351,7 +360,7 @@ Otras limitaciones conocidas:
 | **Caudal** | Cantidad de agua que pasa por el río por segundo (m³/s). |
 | **Umbral** | Valor límite que marca el paso a un nivel de riesgo. |
 | **FCM** | Servicio de Firebase para enviar notificaciones push. |
-| **PWA** | Página web instalable; aquí se usa para probar el flujo completo (login, mapa, panel y notificaciones). No es el frontend definitivo. |
+| **PWA** | Página web instalable; aquí se usa para probar el flujo mínimo (login, catálogo, suscripción y notificaciones). No es el frontend definitivo. |
 | **Idempotencia** | Evitar que una misma operación se registre o notifique dos veces. |
 
 ---
@@ -386,13 +395,12 @@ Reglas que no se deben romper:
 | Documento | Para qué sirve |
 |---|---|
 | [`CONTINUIDAD_SESION.md`](CONTINUIDAD_SESION.md) | Estado actual y cómo retomar el trabajo en otra sesión. |
-| [`AVANCE_EQUIPO.md`](AVANCE_EQUIPO.md) | Resumen breve para los compañeros del equipo. |
 | [`ARQUITECTURA.md`](ARQUITECTURA.md) | Reglas de separación y responsabilidades. |
 | [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md) | Contrato de API que existe hoy. |
-| [`GUIA_FRONTEND.md`](GUIA_FRONTEND.md) | Guía del avance: login, mapa, selección múltiple y admin. |
+| [`GUIA_FRONTEND.md`](GUIA_FRONTEND.md) | Diseño del frontend definitivo y flujo mínimo de la PWA. |
 | [`AJUSTES_PANEL_RIO.md`](AJUSTES_PANEL_RIO.md) | Correcciones necesarias para el panel informativo de cada río. |
 | [`GUIA_PRUEBA_NOTIFICACIONES.md`](GUIA_PRUEBA_NOTIFICACIONES.md) | Cómo ejecutar y verificar la demo. |
 | [`CONFIGURACION_PUSH.md`](CONFIGURACION_PUSH.md) | Variables, PostgreSQL y Firebase. |
-| [`../INFORME_ALERTAS_INUNDACION.md`](../INFORME_ALERTAS_INUNDACION.md) | Estado, pruebas y limitaciones del avance. |
+| [`../INFORME_ALERTAS_INUNDACION.md`](../INFORME_ALERTAS_INUNDACION.md) | Informe histórico del avance del 21–22/10 |
 | [`../IMPLEMENTATION_NOTES.md`](../IMPLEMENTATION_NOTES.md) | Historia de decisiones de implementación. |
 | [`../README.md`](../README.md) | Arranque rápido y comandos. |

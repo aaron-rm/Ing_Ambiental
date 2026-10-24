@@ -1,8 +1,12 @@
 package com.alerta.sistema_alerta_inundaciones.alerta;
 
 import com.alerta.sistema_alerta_inundaciones.config.PropiedadesRiesgo;
+import com.alerta.sistema_alerta_inundaciones.push.PushService;
+import com.alerta.sistema_alerta_inundaciones.push.ResultadoDemoPush;
+import com.alerta.sistema_alerta_inundaciones.usuario.Usuario;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -18,24 +22,29 @@ public class AlertaController {
 
     private final AlertaService alertaService;
     private final AlertaMonitoreoService monitoreoService;
+    private final PushService pushService;
     private final PropiedadesRiesgo propiedadesRiesgo;
     private final String adminToken;
 
     public AlertaController(AlertaService alertaService,
                             AlertaMonitoreoService monitoreoService,
+                            PushService pushService,
                             PropiedadesRiesgo propiedadesRiesgo,
                             @Value("${alerta.admin.token:}") String adminToken) {
         this.alertaService = alertaService;
         this.monitoreoService = monitoreoService;
+        this.pushService = pushService;
         this.propiedadesRiesgo = propiedadesRiesgo;
         this.adminToken = adminToken;
     }
 
     /** Consulta el estado de alerta y pronóstico de un tramo directamente por reachId de GEOGloWS. */
     @GetMapping("/tramo/{reachId}")
-    public ResponseEntity<?> consultarAlertaPorTramo(@PathVariable Long reachId) {
+    public ResponseEntity<?> consultarAlertaPorTramo(@PathVariable Long reachId,
+                                                     @AuthenticationPrincipal Usuario usuario) {
         try {
-            AlertaRioDTO alerta = alertaService.consultarAlertaTramo(reachId, "Tramo GEOGLOWS " + reachId);
+            AlertaRioDTO alerta = alertaService.consultarAlertaTramo(
+                    reachId, "Tramo GEOGLOWS " + reachId, usuario);
             return ResponseEntity.ok(alerta);
         } catch (IOException | InterruptedException e) {
             return ResponseEntity.status(502).body("Error al consultar GEOGLOWS: " + e.getMessage());
@@ -44,9 +53,10 @@ public class AlertaController {
 
     /** Consulta el estado de alerta a partir del ID de un Río persistido en la BD. */
     @GetMapping("/rio/{rioId}")
-    public ResponseEntity<?> consultarAlertaPorRio(@PathVariable Long rioId) {
+    public ResponseEntity<?> consultarAlertaPorRio(@PathVariable Long rioId,
+                                                   @AuthenticationPrincipal Usuario usuario) {
         try {
-            return ResponseEntity.ok(alertaService.consultarAlertaPorRioId(rioId));
+            return ResponseEntity.ok(alertaService.consultarAlertaPorRioId(rioId, usuario));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(404).body(e.getMessage());
         } catch (IOException | InterruptedException e) {
@@ -129,16 +139,25 @@ public class AlertaController {
     }
 
     /**
-     * Simulación de caudal. No persiste eventos ni envía push reales; el
-     * resultado se marca explícitamente como simulación.
+     * Simulación de crecida. No persiste un evento, pero envía un push de
+     * simulacro a los dispositivos de los usuarios que siguen el río. Si no se
+     * indica caudal, se usa uno superior al umbral de emergencia del tramo.
      */
     @PostMapping("/simular")
-    public ResponseEntity<?> simularInundacion(@RequestParam Long reachId, @RequestParam double caudal) {
+    public ResponseEntity<?> simularInundacion(@RequestParam Long reachId,
+                                               @RequestParam(required = false) Double caudal) {
         try {
-            AlertaRioDTO resultado = alertaService.simularInundacion(reachId, caudal);
-            return ResponseEntity.ok(resultado);
+            AlertaRioDTO alerta = alertaService.simularInundacion(reachId, caudal);
+            ResultadoDemoPush push = pushService.enviarSimulacion(alerta);
+            return ResponseEntity.ok(ResultadoSimulacionDTO.desde(alerta, push));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(409).body(e.getMessage());
         } catch (IOException | InterruptedException e) {
             return ResponseEntity.status(502).body("Error al ejecutar simulación: " + e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(502).body("No se pudo enviar la simulación: " + e.getMessage());
         }
     }
 
