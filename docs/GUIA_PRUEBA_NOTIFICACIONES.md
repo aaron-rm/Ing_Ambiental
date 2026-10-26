@@ -1,7 +1,7 @@
 # Guía para ejecutar la prueba de notificaciones
 
 **Dirigida a:** compañeros del equipo y agentes de IA que retomen el proyecto.  
-**Última actualización:** 23/10/2026.  
+**Última actualización:** 25/10/2026.<br>
 **Alcance:** arrancar el backend con el catálogo de cuatro ríos, iniciar sesión,
 comprobar la PWA, ejecutar la demo push y verificar que la arquitectura no
 depende de la consola.
@@ -181,6 +181,14 @@ Con una cuenta `ADMIN` aparecen además:
 La opción `6` es la prueba principal: simula una crecida en un río y envía el
 push solo a los dispositivos de quienes lo siguen. La opción `7` es el simulacro
 global. El menú se repite hasta cerrar sesión o salir.
+
+> **Texto visible de las notificaciones:** desde el 25/10/2026 las simulaciones
+> (opción `6`, botón **Simular crecida** y opción `7`) usan el mismo texto
+> visible que una alerta real, con emojis. La notificación ya no dice
+> «simulacro» ni «prueba». La consola, la PWA y la URL
+> (`/?simulacion=...`, `/?demo=1`) siguen identificando la operación como
+> simulacro. Es un comportamiento deliberado para la demostración en clase;
+> antes de producción debe revisarse si conviene volver a etiquetarlas.
 
 ---
 
@@ -367,6 +375,9 @@ tenga seguidores:
    salieron y cuántos fallaron.
 5. La notificación debe llegar solo a los dispositivos de los usuarios que
    siguen ese río. Si nadie lo sigue, la simulación se ejecuta pero no envía.
+   El texto visible usa el formato de una alerta real con emojis
+   (`🚨 ALERTA DE INUNDACIÓN 🌊` o `⚠️ AVISO DE CRECIDA...` según el nivel
+   simulado); no incluye «simulacro» ni «prueba».
 6. En la PWA, el administrador también puede pulsar **Simular crecida** en la
    sección de administración, sin usar la consola. Si FCM no está configurado,
    la PWA muestra el aviso y no ofrece el botón: no tiene sentido simular un
@@ -384,7 +395,9 @@ Enviados:             1
 Fallidos:             0
 ```
 
-La notificación debe llegar al dispositivo. Si no llega:
+La notificación debe llegar al dispositivo. Usa el mismo formato visible de una
+emergencia real (`🚨 ALERTA DE INUNDACIÓN 🌊`) y tampoco incluye «simulacro» ni
+«demostración» en el texto. Si no llega:
 
 - revisa que la PWA muestre **Activadas**;
 - revisa el permiso de notificaciones del sistema;
@@ -476,7 +489,7 @@ en `8081`.
 Resultado esperado:
 
 ```text
-Tests run: 79, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 82, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -640,9 +653,11 @@ ríos configurados. Las rutas heredadas `POST /api/push/demo` y
 - [ ] El dispositivo muestra «Activadas».
 - [ ] La simulación informa dispositivos, enviados y fallidos y solo notifica a
       los seguidores del río.
+- [ ] La notificación de simulación y la demo global usan el texto realista con
+      emojis y no incluyen «simulacro» ni «prueba» en el texto visible.
 - [ ] La opción `7` envía el simulacro global a todos los dispositivos.
 - [ ] Con `ALERTA_DEMO_CONSOLA_HABILITADA=false` el backend sigue funcionando.
-- [ ] `.\mvnw.cmd package` termina con 79 pruebas y `BUILD SUCCESS`.
+- [ ] `.\mvnw.cmd package` termina con 82 pruebas y `BUILD SUCCESS`.
 - [ ] `node --check` no reporta errores.
 - [ ] No se versionaron `.env.demo` ni credenciales.
 
@@ -664,6 +679,12 @@ expone contratos HTTP que el equipo de frontend puede consumir:
 El frontend definitivo elige cualquier río llamando a `/api/rios` y usa su
 `rioId`. El push se registra con JWT (sin `reachId`) y el backend lo enruta
 según los ríos que sigue cada usuario.
+
+Las notificaciones de simulación usan el mismo texto visible que una alerta
+real, con emojis, por requisito de la demostración en clase. El frontend puede
+distinguirlas por la URL (`/?simulacion={reachId}` o `/?demo=1`) y mostrar un
+aviso de simulación si lo considera necesario. Antes de producción debe
+decidirse si se vuelven a etiquetar como simulacro en el texto visible.
 
 Fricciones conocidas para la integración:
 

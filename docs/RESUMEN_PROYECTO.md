@@ -239,7 +239,7 @@ El trabajo se organizó en tres bloques:
    caché de GEOGloWS y campo `siguiendo`.
 5. **Cierre del avance:** PWA reducida a login, catálogo, suscripción, push y
    simulación admin; la simulación envía el simulacro solo a los seguidores del
-   río.
+   río y usa el texto visible de una alerta real con emojis.
 
 ### Decisiones importantes
 
@@ -264,9 +264,9 @@ El trabajo se organizó en tres bloques:
 | Backend, API, PostgreSQL y monitoreo | Implementado. |
 | Evaluación de caudal y lluvia | Implementada con reglas y pruebas. |
 | Historial y detalle de eventos | Implementado. |
-| Registro de dispositivos y lógica push | Implementado y probado con mocks. |
-| Push real de extremo a extremo | Pendiente de credenciales Firebase y dispositivo físico. |
-| PWA de prueba | Con login, catálogo, suscripción, push y simulación admin; falta probar la recepción en un dispositivo real. |
+| Registro de dispositivos y lógica push | Implementado; recepción real verificada en Windows y Android. |
+| Push real de extremo a extremo | Verificado en Windows y Android; falta confirmar en iOS. |
+| PWA de prueba | Con login, catálogo, suscripción, push y simulación admin; recepción verificada en Windows y Android. |
 | Frontend definitivo | Lo desarrolla otro equipo. |
 | Umbrales | Experimentales; requieren calibración local. La calibración estacional (invierno/verano) está pendiente de investigación y no se implementará con valores inventados. |
 | Autenticación | Implementada: login con identificador, JWT de 24 horas y roles `USER`/`ADMIN`. |
@@ -275,7 +275,7 @@ El trabajo se organizó en tres bloques:
 | Selección múltiple | Implementada: cada usuario sigue los ríos que quiera y el push se envía según sus selecciones. |
 | Caché de caudal | Implementada en memoria por endpoint y tramo (15 min por defecto); si GEOGloWS falla, se reutiliza la última respuesta. |
 | Estado de suscripción en el panel | Implementado: `siguiendo` es `true`/`false` con JWT y `null` sin sesión. |
-| Pruebas automatizadas | 79 pruebas, 0 fallos. |
+| Pruebas automatizadas | 82 pruebas, 0 fallos. |
 
 Otras limitaciones conocidas:
 
@@ -303,14 +303,15 @@ Otras limitaciones conocidas:
 4. **Demostración (60 s).** Iniciar sesión en la consola como usuario, mostrar
    el catálogo y seguir varios ríos. Aclarar que seguir un río solo controla las
    notificaciones. Si hay una cuenta administradora, simular una crecida y
-   mostrar que el push llega solo a los seguidores de ese río. Si no hay
-   Firebase configurado, explicar que el envío real está pendiente de
-   credenciales y dispositivo.
+   mostrar que el push llega solo a los seguidores de ese río. La notificación
+   visible usa el texto de una alerta real con emojis. Si no hay Firebase
+   configurado, explicar que el envío real requiere credenciales y un
+   dispositivo; en la demo local ya se verificó con Firebase.
 5. **Resultados y límites (90 s).** Mencionar las pruebas, el historial de
    eventos, la separación del frontend y los umbrales experimentales.
 6. **Cierre (30 s).** “Es un apoyo académico y orientativo; no sustituye a las
-   autoridades. El siguiente paso es calibrar los umbrales y validar el push en
-   dispositivos reales”.
+   autoridades. El siguiente paso es calibrar los umbrales y completar la
+   validación en iOS”.
 
 ### Frases clave
 
@@ -333,15 +334,15 @@ Otras limitaciones conocidas:
 | ¿Cómo evitan notificaciones repetidas? | Solo se notifica un cambio de nivel y se usa una clave de idempotencia. |
 | ¿La lluvia por sí sola puede generar una alerta? | Sí, el nivel final es el mayor entre caudal y lluvia, siempre que el pronóstico de caudal sea reciente y confiable. |
 | ¿Se ajustan los umbrales para invierno o verano? | Todavía no. Los umbrales son fijos y experimentales; la calibración estacional es una mejora pendiente. |
-| ¿Qué falta para producción? | Calibrar umbrales, probar el push real en dispositivos, construir el frontend definitivo y retirar los endpoints heredados. |
+| ¿Qué falta para producción? | Calibrar umbrales, confirmar el push en iOS, construir el frontend definitivo y retirar los endpoints heredados. |
 | ¿Se puede usar en el celular? | Sí, mediante HTTPS y una PWA; en iOS requiere 16.4+ e instalación en la pantalla de inicio. |
 
 ### Qué no afirmar
 
 - Que el sistema es una alerta oficial.
 - Que los umbrales están calibrados para Panamá.
-- Que el push ya fue probado de extremo a extremo si no hay credenciales y un
-  dispositivo real.
+- Que el push ya fue probado de extremo a extremo en todos los sistemas: se
+  verificó en Windows y Android, pero falta iOS.
 - Que la PWA actual es el frontend definitivo.
 - Que el sistema garantiza que una inundación ocurrirá o no ocurrirá.
 

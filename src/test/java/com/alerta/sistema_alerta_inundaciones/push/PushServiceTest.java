@@ -13,6 +13,7 @@ import com.alerta.sistema_alerta_inundaciones.usuario.UsuarioRioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -20,6 +21,7 @@ import org.mockito.quality.Strictness;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,6 +35,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -259,6 +262,14 @@ class PushServiceTest {
         assertEquals(2, resultado.dispositivos());
         assertEquals(2, resultado.enviados());
         assertEquals(0, resultado.fallidos());
+
+        ArgumentCaptor<NotificacionPush> captor = ArgumentCaptor.forClass(NotificacionPush.class);
+        verify(pushSender, times(2)).enviar(captor.capture(), anyString());
+        NotificacionPush enviada = captor.getAllValues().get(0);
+        assertEquals("🚨 ALERTA DE INUNDACIÓN 🌊", enviada.titulo());
+        assertTrue(enviada.critico());
+        assertFalse(enviada.titulo().toLowerCase(Locale.ROOT).contains("demostración"));
+        assertFalse(enviada.cuerpo().toLowerCase(Locale.ROOT).contains("simulacro"));
     }
 
     @Test
@@ -289,7 +300,10 @@ class PushServiceTest {
         assertEquals(1, resultado.enviados());
         assertEquals(0, resultado.fallidos());
         verify(pushSender).enviar(
-                argThat(notificacion -> notificacion.titulo().contains("SIMULACRO")
+                argThat(notificacion -> notificacion.titulo().equals("🚨 ALERTA DE INUNDACIÓN 🌊")
+                        && notificacion.cuerpo().contains("Río de prueba")
+                        && !notificacion.titulo().toLowerCase(Locale.ROOT).contains("simulacro")
+                        && !notificacion.cuerpo().toLowerCase(Locale.ROOT).contains("simulación")
                         && notificacion.reachId() == REACH_ID
                         && notificacion.eventoId() == 0L),
                 eq("token-1"));

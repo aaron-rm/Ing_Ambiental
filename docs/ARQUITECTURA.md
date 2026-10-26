@@ -150,6 +150,9 @@ Paquete base: `com.alerta.sistema_alerta_inundaciones`.
 - Suscribirse a un río solo controla las notificaciones.
 - Para `ADMIN`, botón **Simular crecida** por cada río seguido; envía un push de
   simulacro solo a los dispositivos de quienes siguen ese río.
+- Las notificaciones de simulación y la demo global usan el mismo texto visible
+  de una alerta real con emojis; `NotificacionFactory` centraliza las plantillas.
+  La consola, la PWA y la URL conservan la marca de simulación.
 - No muestra caudal, lluvia, hidrogramas, mapas ni recomendaciones.
 - No es el frontend definitivo.
 

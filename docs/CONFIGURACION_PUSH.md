@@ -91,6 +91,11 @@ global de demostración; con una cuenta `USER` solo consulta el catálogo, el pa
 y sus ríos seguidos. `ALERTA_ADMIN_TOKEN` ya no es necesario para la consola:
 solo se usa en las dos rutas heredadas de la tabla anterior.
 
+Las notificaciones de simulación usan el mismo texto visible que una alerta real,
+con emojis, y no dicen «simulacro» ni «prueba». La consola y la PWA siguen
+marcando la operación como simulacro; el cambio es deliberado para la
+demostración en clase.
+
 ## 3. Variables de monitoreo y riesgo
 
 | Variable | Defecto | Descripción |
@@ -229,6 +234,11 @@ evento y notificar según las reglas normales.
    `ADMIN` y elegir la opción **6** para simular una crecida sobre un río
    seguido, o la opción **7** para el simulacro global.
 
+Las notificaciones visibles usan el formato de una alerta real con emojis
+(`🚨 ALERTA DE INUNDACIÓN 🌊`, `⚠️ AVISO DE CRECIDA...`) y no incluyen
+«simulacro» ni «prueba». La consola y la PWA siguen identificando la operación
+como simulacro.
+
 La PWA solo puede pedir una notificación de prueba para su propio dispositivo;
 el envío masivo se hace desde la consola o directamente contra el endpoint.
 
@@ -246,6 +256,11 @@ dispositivos activos sin crear un evento de riesgo. Requiere JWT con rol
   la notificación. El clic abre la URL indicada en el payload (`/?alerta={id}`,
   `/?simulacion={reachId}` o `/?demo=1`). La PWA de prueba muestra un aviso
   breve; no presenta el detalle del evento.
+- Las simulaciones (opción 6, botón **Simular crecida** y opción 7) reutilizan
+  las plantillas de una alerta real, con emojis, y no incluyen «simulacro» ni
+  «prueba» en el texto visible. El payload conserva el nivel y la URL
+  `/?simulacion=...` o `/?demo=1`. Antes de producción debe decidirse si se
+  vuelven a etiquetar como simulacro.
 - Si el navegador no soporta Service Workers, notificaciones o Push API, la PWA
   lo indica y deshabilita el botón. El backend y la consola siguen funcionando
   con normalidad.
@@ -306,7 +321,7 @@ no bloqueen el sitio y que los servicios push de Google estén habilitados; para
 la demostración se recomienda Chrome en Android. También revise VPN, proxy o
 antivirus.
 
-### La notificación de prueba no aparece en la PC
+### La notificación no aparece en la PC
 
 Verifique que el dispositivo esté activo (la PWA debe mostrar «Activadas»), que
 la simulación (opción 6) o el simulacro global (opción 7) informen `Enviados`

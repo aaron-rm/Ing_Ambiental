@@ -196,22 +196,7 @@ public class PushService {
             return new ResultadoDemoPush(0, 0, 0);
         }
 
-        NotificacionPush notificacion = new NotificacionPush(
-                "ALERTA DE INUNDACIÓN (DEMOSTRACIÓN)",
-                "Simulacro del sistema de alertas. No hay una emergencia real. "
-                        + "Esta notificación se envió a todos los dispositivos suscritos.",
-                "EMERGENCIA",
-                0L,
-                0L,
-                "/?demo=1",
-                "demo-push",
-                "/icons/icon-192.png",
-                "/icons/badge-72.png",
-                true,
-                false,
-                true,
-                Instant.now().toEpochMilli()
-        );
+        NotificacionPush notificacion = NotificacionFactory.paraDemoGlobal();
 
         ResultadoDemoPush resultado = enviarADispositivos(dispositivos, notificacion);
         log.info("Demostración push: {} dispositivos, {} enviados, {} fallidos.",
@@ -240,31 +225,7 @@ public class PushService {
             return new ResultadoDemoPush(0, 0, 0);
         }
 
-        String nivel = alerta.getNivelAlerta() == null ? "SIMULACION" : alerta.getNivelAlerta();
-        boolean critico = "EMERGENCIA".equalsIgnoreCase(nivel);
-        String nombreRio = alerta.getNombreRio() == null || alerta.getNombreRio().isBlank()
-                ? "el río seleccionado" : alerta.getNombreRio();
-        String titulo = critico
-                ? "SIMULACRO: alerta de inundación"
-                : "SIMULACRO: prueba de alerta";
-        String cuerpo = "Simulación para probar las notificaciones de " + nombreRio
-                + ". Nivel simulado: " + nivel + ". No es una emergencia real.";
-
-        NotificacionPush notificacion = new NotificacionPush(
-                titulo,
-                cuerpo,
-                nivel,
-                alerta.getReachId(),
-                0L,
-                "/?simulacion=" + alerta.getReachId(),
-                "simulacion-" + alerta.getReachId(),
-                "/icons/icon-192.png",
-                "/icons/badge-72.png",
-                critico,
-                critico,
-                true,
-                Instant.now().toEpochMilli()
-        );
+        NotificacionPush notificacion = NotificacionFactory.paraSimulacion(alerta);
 
         ResultadoDemoPush resultado = enviarADispositivos(dispositivos, notificacion);
         log.info("Simulación del tramo {}: {} dispositivos, {} enviados, {} fallidos.",

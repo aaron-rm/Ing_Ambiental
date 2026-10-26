@@ -14,7 +14,7 @@ Messaging (FCM).
 > Proyecto académico y orientativo. No emite declaraciones oficiales de
 > emergencia ni sustituye a SINAPROC, IMHPA u otra autoridad competente.
 
-> **Estado (Entrega 75 %):** La parte correspondiente al **backend está completamente lista y verificada para la entrega del 75 %**, con **79 pruebas automatizadas en verde** (0 fallos). Cuenta con autenticación JWT, roles `USER`/`ADMIN`, catálogo cerrado de cuatro ríos con geometría real (GeoJSON), selección usuario–ríos, enrutamiento push a seguidores, caché de GEOGloWS con tolerancia a fallos y campo `siguiendo` en el panel. **Para completar la presentación del 75 % solo resta que el equipo de frontend construya y entregue sus pantallas iniciales consumiendo esta base.**
+> **Estado (Entrega 75 %):** La parte correspondiente al **backend está completamente lista y verificada para la entrega del 75 %**, con **82 pruebas automatizadas en verde** (0 fallos). Cuenta con autenticación JWT, roles `USER`/`ADMIN`, catálogo cerrado de cuatro ríos con geometría real (GeoJSON), selección usuario–ríos, enrutamiento push a seguidores, caché de GEOGloWS con tolerancia a fallos y campo `siguiendo` en el panel. **Para completar la presentación del 75 % solo resta que el equipo de frontend construya y entregue sus pantallas iniciales consumiendo esta base.**
 >
 > Para retomar el proyecto o consultar la historia de sesiones, ver [docs/CONTINUIDAD_SESION.md](docs/CONTINUIDAD_SESION.md).
 > Para una explicación funcional sin tecnicismos, ver [docs/RESUMEN_PROYECTO.md](docs/RESUMEN_PROYECTO.md).
@@ -87,12 +87,12 @@ $env:ALERTA_DEMO_CONSOLA_HABILITADA = "false"
 1. Cada usuario abre la URL de la aplicación (en PC: `http://localhost:8081`; en celular: la URL HTTPS del túnel).
 2. Inicia sesión o registra una cuenta nueva (`USER`), selecciona al menos un río para seguir y pulsa **Activar notificaciones**.
 3. Para enviar pruebas como administrador:
-   - **Desde la PWA:** Inicie sesión con la cuenta `ADMIN` (`admin` / `admin-local-clave` en local). Al seguir un río, aparecerá el botón **Simular crecida**, el cual envía la notificación de simulacro a los seguidores de ese río.
+   - **Desde la PWA:** Inicie sesión con la cuenta `ADMIN` (`admin` / `admin-local-clave` en local). Al seguir un río, aparecerá el botón **Simular crecida**, el cual envía una notificación con el mismo texto visible de una alerta real (con emojis) a los seguidores de ese río.
    - **Desde la consola (`ConsolaDemoRunner`):** Inicie sesión con `ADMIN`:
-     - Opción **6: Simular crecida de un rio:** Envía la notificación de simulacro únicamente a los dispositivos de los usuarios que siguen ese río.
-     - Opción **7: Enviar notificacion push de demostracion:** Envía un simulacro global a todos los dispositivos activos registrados.
+     - Opción **6: Simular crecida de un rio:** Envía la notificación únicamente a los dispositivos de los usuarios que siguen ese río.
+     - Opción **7: Enviar notificacion push de demostracion:** Envía el simulacro global a todos los dispositivos activos registrados.
 
-> La simulación de crecida no persiste un evento de riesgo en el historial; solo prueba la clasificación y el enrutamiento del canal push.
+> La simulación de crecida no persiste un evento de riesgo en el historial; solo prueba la clasificación y el enrutamiento del canal push. La notificación visible usa el formato de alerta real por requisito de la demostración en clase; la PWA y la consola siguen identificando la operación como simulacro.
 
 ## Si ves la PWA antigua o “Sin conexión”
 
@@ -131,7 +131,7 @@ nueva del Service Worker elimina las cachés `alerta-shell-*` al activarse.
 .\mvnw.cmd test
 ```
 
-Estado actual: **79 pruebas, 0 fallos**. En Linux, usar `bash mvnw test` si
+Estado actual: **82 pruebas, 0 fallos**. En Linux, usar `bash mvnw test` si
 `./mvnw` falla con “Permiso denegado”.
 
 Validación de sintaxis de la PWA:
@@ -156,7 +156,7 @@ src/main/java/.../demo/     Consola HTTP de demostración
 src/main/resources/catalogo/  Catálogo con geometría real (GeoJSON)
 tools/                      Script reproducible del catálogo
 src/main/resources/static/  PWA de pruebas
-src/test/java/...           79 pruebas automatizadas
+src/test/java/...           82 pruebas automatizadas
 docs/                       Arquitectura y guías operativas
 scripts/                    Arranque de demo
 ```
@@ -172,7 +172,7 @@ scripts/                    Arranque de demo
 - **Tolerancia a fallos:** Caché en memoria para GEOGloWS con reutilización de la última respuesta válida en caso de caídas del servicio externo.
 - **Notificaciones Push por seguidores:** Registro de token FCM vinculado al usuario y despacho de avisos críticos y simulacros solo a los seguidores del río.
 - **Herramientas de prueba:** Consola interactiva CLI con menú por rol y PWA mínima de prueba web para validación técnica de Service Workers y Push.
-- **Calidad de software:** 79 pruebas automatizadas pasando al 100% (`BUILD SUCCESS`). Base completa lista para ser consumida.
+- **Calidad de software:** 82 pruebas automatizadas pasando al 100% (`BUILD SUCCESS`). Base completa lista para ser consumida.
 
 ### Pendiente para completar la presentación del 75 % (Equipo de Frontend)
 - **Pantallas iniciales del frontend:** Desarrollo y entrega de las primeras pantallas funcionales por parte del equipo de frontend (autenticación, catálogo/mapa de ríos, seguimiento y visualización del panel de riesgo) utilizando los endpoints provistos por el backend.

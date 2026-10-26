@@ -262,8 +262,10 @@ log. El frontend no necesita hacer nada: sigue recibiendo el mismo contrato, y
 
 Requiere JWT con rol `ADMIN`. El parámetro `caudal` es opcional; si se omite, el
 backend usa un valor superior al umbral de emergencia del tramo. No crea un
-evento persistido, pero envía un push de simulacro solo a los dispositivos de
-los usuarios que siguen el río.
+evento persistido, pero envía un push solo a los dispositivos de los usuarios
+que siguen el río. La notificación visible usa el mismo texto que una alerta
+real (con emojis); la respuesta conserva `simulacion: true` y la URL del push es
+`/?simulacion={reachId}`.
 
 ```json
 {
@@ -355,8 +357,8 @@ El backend envía mensajes **data-only**. Campos:
 
 | Campo | Ejemplo | Uso |
 |---|---|---|
-| `title` | `ALERTA DE INUNDACIÓN` | Título |
-| `body` | `Nivel ALERTA en Río Juan Díaz...` | Cuerpo |
+| `title` | `🚨 ALERTA DE INUNDACIÓN 🌊` | Título |
+| `body` | `🔴 EMERGENCIA: desbordamiento inminente en Río Juan Díaz...` | Cuerpo |
 | `nivel` | `ALERTA` / `EMERGENCIA` / `PRUEBA` | Lógica de UI |
 | `reachId` | `710051399` | Tramo |
 | `eventoId` | `12` | Deep link |
@@ -368,11 +370,19 @@ El backend envía mensajes **data-only**. Campos:
 | `vibrar` | `true`/`false` | Vibración (si el SO lo permite) |
 | `timestamp` | epoch ms | Orden |
 
+Las notificaciones reales y las simulaciones comparten el mismo formato visible.
+En una simulación, `nivel` corresponde al nivel simulado, `eventoId` es `0` y la
+URL es `/?simulacion=...` o `/?demo=1`. El frontend debe usar esa URL para saber
+que el aviso es una simulación; no confíe solo en el texto.
+
 ### 5.3 Deep links
 
 - `/?alerta={id}`: el frontend puede abrir el detalle del evento.
-- `/?prueba=1`: aviso de prueba.
-- `/?demo=1`: aviso de simulacro.
+- `/?prueba=1`: aviso de prueba del dispositivo.
+- `/?simulacion={reachId}`: simulacro de crecida; el texto visible es de alerta
+  real, pero la URL identifica la simulación.
+- `/?demo=1`: demostración global; el texto visible es de emergencia real, pero
+  la URL identifica la demostración.
 
 La PWA de pruebas solo muestra un mensaje breve; el frontend definitivo decide
 cómo presentar esos destinos.
@@ -416,6 +426,11 @@ Respuesta:
 El endpoint envía a todos los dispositivos activos sin crear un evento de
 riesgo. Para probar el simulacro de crecida asociado a un río:
 `POST /api/alertas/simular?reachId=710039498` (envía solo a los seguidores de ese río).
+
+En ambos casos la notificación visible usa el texto de una alerta real con
+emojis. La respuesta y la URL del push conservan la marca de simulación; el
+frontend puede mostrar un aviso adicional al abrir `/?simulacion=...` o
+`/?demo=1`.
 
 ---
 
@@ -532,7 +547,7 @@ async function registrarDispositivoPush(tokenFcm, deviceId) {
 ## 9. Estado para la entrega del 75 % y pendientes para el 100 %
 
 ### 9.1 Parte del Backend (Listo y verificado para la entrega del 75 %)
-- Contratos REST estables y verificados con 79 pruebas automatizadas (0 fallos).
+- Contratos REST estables y verificados con 82 pruebas automatizadas (0 fallos).
 - Flujo completo de registro, login, roles (`USER`/`ADMIN`) y emisión de JWT.
 - Catálogo de 4 ríos con geometría GeoJSON real de GEOGloWS v2 (TDX-Hydro).
 - Selección de ríos por usuario y atributo `siguiendo` integrado en la respuesta del panel.

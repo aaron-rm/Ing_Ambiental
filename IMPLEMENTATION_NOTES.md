@@ -1,11 +1,17 @@
 # Registro de Implementación (Avance 50 % — Backend y Demo GEOGLOWS)
 
+> **Actualización 25/10/2026:** las notificaciones usan plantillas con emojis
+> centralizadas en `NotificacionFactory`. Las simulaciones (consola, PWA y demo
+> global) reutilizan el mismo texto visible que una alerta real; la marca de
+> simulación queda en la URL (`/?simulacion=...`, `/?demo=1`) y en el payload.
+> La suite tiene **82 pruebas en verde**.
+>
 > **Actualización 23/10/2026:** el avance de autenticación, catálogo de cuatro
 > ríos, selección múltiple y panel de caudal/lluvia **ya está implementado**, al
 > igual que la caché en memoria de GEOGloWS y el campo `siguiendo`. La PWA quedó
 > reducida a login, catálogo, suscripción, push y simulación para `ADMIN`; ya no
-> muestra el panel hidrológico. La suite tiene **79 pruebas en verde**. El
-> estado vigente está en `docs/CONTINUIDAD_SESION.md` y el contrato actual en
+> muestra el panel hidrológico. El estado vigente está en
+> `docs/CONTINUIDAD_SESION.md` y el contrato actual en
 > `docs/INTEGRACION_FRONTEND.md`. Las secciones siguientes conservan la historia
 > del avance del 50 % y la refactorización del 22/10.
 >

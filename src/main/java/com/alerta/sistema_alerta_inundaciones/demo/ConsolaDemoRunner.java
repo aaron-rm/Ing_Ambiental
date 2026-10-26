@@ -411,11 +411,13 @@ public class ConsolaDemoRunner implements CommandLineRunner {
             System.out.println("\nLa notificacion de simulacro debe aparecer en los dispositivos suscritos.");
         }
         System.out.println("Esta simulacion no representa una condicion real.");
+        System.out.println("El texto visible de la notificacion usa el formato de una alerta real.");
     }
 
     private void enviarPushDemo() {
         System.out.println("\n--- NOTIFICACION PUSH DE DEMOSTRACION ---");
         System.out.println("Se enviara a todos los dispositivos activos, sin crear un evento real.");
+        System.out.println("El texto visible usa el formato de una alerta real de emergencia.");
         ResultadoDemoPush resultado = backend.enviarDemoPush();
         System.out.println("Dispositivos activos: " + resultado.dispositivos());
         System.out.println("Enviados:             " + resultado.enviados());

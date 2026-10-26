@@ -1,9 +1,9 @@
 # Continuidad de sesión y traspaso de contexto
 
-**Última actualización:** 24/10/2026<br>
+**Última actualización:** 25/10/2026<br>
 **Rama de trabajo:** `backend`<br>
 **Último commit de referencia:** cierre de revisión y preparación del backend para la entrega del 75 % (`git log -1`).<br>
-**Estado:** **Parte del backend lista y verificada para la entrega del 75 %**, con **79 pruebas en verde (0 fallos)**, contratos de API estables y base lista. Para la presentación del 75 % resta que el equipo de frontend construya y entregue sus pantallas iniciales sobre esta base.<br>
+**Estado:** **Parte del backend lista y verificada para la entrega del 75 %**, con **82 pruebas en verde (0 fallos)**, contratos de API estables y base lista. Para la presentación del 75 % resta que el equipo de frontend construya y entregue sus pantallas iniciales sobre esta base.<br>
 **Objetivo de este documento:** permitir que otra persona o una sesión nueva de IA
 retome el proyecto desde otra computadora sin necesitar el historial del chat.
 
@@ -135,6 +135,11 @@ carga el catálogo desde `catalogo/rios.json` y la consola pide inicio de sesió
 - La simulación llama a `POST /api/alertas/simular` y muestra cuántos
   dispositivos recibieron el simulacro. El push se envía solo a quienes siguen
   el río simulado.
+- Desde el 25/10/2026 las notificaciones de simulación y la demo global usan las
+  plantillas de una alerta real con emojis (`NotificacionFactory`). No incluyen
+  «simulacro» ni «prueba» en el texto visible; la URL y el payload conservan la
+  marca de simulación. Es deliberado para la demostración en clase y debe
+  revisarse antes de producción.
 - Activación de push con JWT (sin `reachId`) y desactivación del dispositivo al
   cerrar sesión.
 - Al reanudar la sesión con el push ya activado, la PWA vuelve a registrar el
@@ -183,7 +188,7 @@ carga el catálogo desde `catalogo/rios.json` y la consola pide inicio de sesió
 
 ### 2.8. Pruebas
 
-- `.\mvnw.cmd test` (Windows): **79 pruebas, 0 fallos**.
+- `.\mvnw.cmd test` (Windows): **82 pruebas, 0 fallos**.
 - Nuevas: `UsuarioRioServiceTest`, `InicializadorCatalogoTest`, `RioServiceTest`,
   `AuthServiceTest`, `ClienteApiGeoglowsTest` (4) y `AlertaServiceTest` (3);
   reescritas `PushServiceTest` y `BackendApiClientTest`.
@@ -203,8 +208,12 @@ carga el catálogo desde `catalogo/rios.json` y la consola pide inicio de sesió
 - Prueba de humo Windows (24/10/2026): con FCM deshabilitado,
   `POST /api/alertas/simular` devolvió `409` sin el error de LOB; con
   `FIREBASE_ENABLED=true` y las credenciales reales, `/api/push/config` devolvió
-  `habilitado=true` y Firebase Admin inicializó correctamente. Falta confirmar
-  la recepción real en el navegador.
+  `habilitado=true` y Firebase Admin inicializó correctamente. La recepción real
+  se confirmó en la PC y en un Android mediante la PWA y el túnel HTTPS.
+- Notificaciones con emojis (25/10/2026): `NotificacionFactory` centraliza las
+  plantillas de emergencia, alerta, vigilancia y normalización. Las simulaciones
+  y la demo global usan el mismo texto visible que una alerta real; la marca de
+  simulación queda en la URL y el payload. Cubierto por pruebas unitarias.
 
 ---
 
@@ -336,7 +345,7 @@ git check-ignore .env.demo
 .\mvnw.cmd test
 ```
 
-Esperado: **79 pruebas, 0 fallos**.
+Esperado: **82 pruebas, 0 fallos**.
 
 6. Para regenerar el catálogo (opcional; no hace falta para arrancar):
 
@@ -420,14 +429,14 @@ bash scripts/iniciar-demo.sh   # backend, menú y navegador
 6. **Tolerancia a fallos:** Caché en memoria para GEOGloWS (`GEOGLOWS_CACHE_MINUTOS=15`) con reutilización de la última respuesta válida ante caídas de la API externa.
 7. **Notificaciones Push FCM:** Registro de dispositivos vinculado al usuario, despacho automático a seguidores según cambio de nivel con control de idempotencia y simulación de crecida administrativa (`POST /api/alertas/simular`).
 8. **Clientes de apoyo:** Consola interactiva CLI (`ConsolaDemoRunner`) y PWA mínima de prueba web para validar Service Worker y notificaciones push.
-9. **Pruebas automatizadas:** 79 pruebas pasando al 100 % sin fallos (`mvnw.cmd test`). Base lista para que el frontend la consuma.
+9. **Pruebas automatizadas:** 82 pruebas pasando al 100 % sin fallos (`mvnw.cmd test`). Base lista para que el frontend la consuma.
 
 ### 8.2 Parte del Frontend (Pendiente para completar la presentación del 75 %)
 1. **Pantallas iniciales del frontend:** El equipo de frontend debe construir y entregar las pantallas iniciales requeridas para la presentación del 75 % (login, catálogo/mapa de ríos, seguimiento de ríos y visualización del panel hidrológico), consumiendo la API provista por este backend.
 
 ### 8.3 Pendiente para la entrega final (100 %)
 1. **Frontend definitivo completo:** Construcción y pulido del producto final por el equipo de frontend desde cero consumiendo la API REST.
-2. **Push real en dispositivo físico:** Confirmar recepción física en smartphone (requiere credenciales reales de Firebase y túnel HTTPS activo).
+2. **Push real en iOS:** confirmar la recepción en iPhone/iPad (iOS 16.4+ y app agregada a la pantalla de inicio). En Windows y Android ya se verificó.
 3. **Calibración estacional de umbrales:** Ajuste hidrológico y de precipitación con datos oficiales de SINAPROC / IMHPA.
 4. **Configuración definitiva de producción:** Definir dominio oficial, ajustar `ALERTA_CORS_ORIGENES` y rotar credenciales sensibles fuera de entornos locales.
 5. **Retiro de endpoints heredados:** Eliminar rutas transitorias que aún usan `X-Admin-Token` (`POST /api/push/demo` y `GET /api/alertas/suscripciones/{reachId}`).

@@ -16,11 +16,14 @@ Stack principal:
 
 El proyecto es académico y actualmente existe una fecha de entrega cercana.
 
-> **Estado actual (23/10/2026):** el backend, el monitoreo, las notificaciones
+> **Estado actual (25/10/2026):** el backend, el monitoreo, las notificaciones
 > push, la autenticación con roles, el catálogo de cuatro ríos, la selección
 > múltiple, la consola con login y la PWA de pruebas **están implementados**.
 > También están la caché en memoria de GEOGloWS y el campo `siguiendo` en el
-> contrato del panel. Hay **79 pruebas en verde**. La PWA sigue siendo una
+> contrato del panel. Hay **82 pruebas en verde**. Las notificaciones usan
+> plantillas con emojis en `NotificacionFactory`; las simulaciones y la demo
+> global reutilizan el texto visible de una alerta real y solo conservan la
+> marca de simulación en la URL y el payload. La PWA sigue siendo una
 > herramienta de prueba; el frontend definitivo lo construirá otro equipo desde
 > cero. Antes de modificar algo, leer primero
 > `docs/CONTINUIDAD_SESION.md`, luego `docs/RESUMEN_PROYECTO.md`,
@@ -247,6 +250,10 @@ No es el frontend definitivo ni una referencia obligatoria de diseño.
   seguidores del río. El simulacro global sigue en la consola y en
   `/api/admin/push/demo`. `X-Admin-Token` se conserva por ahora para las rutas
   heredadas.
+- Las simulaciones y la demo global usan las plantillas de `NotificacionFactory`
+  con el mismo texto visible de una alerta real, emojis incluidos. La marca de
+  simulación queda en la URL (`/?simulacion=...`, `/?demo=1`) y en el payload,
+  no en el texto que ve el dispositivo.
 
 El **frontend definitivo** lo desarrollará otro equipo desde cero. Es libre de
 elegir diseño, tecnología, estructura y forma de presentar los datos, siempre
