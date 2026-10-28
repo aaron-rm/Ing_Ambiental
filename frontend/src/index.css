@@ -1,0 +1,94 @@
+:root {
+  --ink: #12302f;
+  --bg: #f4f7f6;
+  --linea: #d5e0dc;
+  --sec: #51605f;
+  --peligro: #a61b1b;
+  --hdr: 56px;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--ink);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+button, input { font: inherit; }
+a { color: var(--ink); }
+:focus-visible { outline: 3px solid #2a7db5; outline-offset: 2px; }
+
+/* Encabezado */
+.cab { height: var(--hdr); display: flex; align-items: center; gap: 12px; padding: 0 14px; background: var(--ink); color: #fff; }
+.cab__marca { font-weight: 800; }
+.cab__nav { display: flex; gap: 4px; margin-right: auto; }
+.cab__nav a { color: #fff; text-decoration: none; padding: 8px 10px; border-radius: 8px; }
+.cab__nav a.active { background: rgba(255, 255, 255, 0.18); font-weight: 700; }
+.cab__usuario { display: none; font-size: 14px; opacity: 0.85; }
+.cab__salir { background: none; border: 1px solid rgba(255, 255, 255, 0.6); color: #fff; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+
+/* Textos y botones comunes */
+.k { margin: 0; font-size: 13px; color: var(--sec); }
+.v { margin: 2px 0 0; font-size: 22px; font-weight: 700; }
+.v--chico { font-size: 18px; }
+.aviso { color: var(--sec); }
+.centrado { text-align: center; margin-top: 40px; }
+.error { color: var(--peligro); font-weight: 600; margin: 8px 0; }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 18px; border: 2px solid var(--ink); border-radius: 10px; background: var(--ink); color: #fff; font-weight: 700; cursor: pointer; text-decoration: none; width: 100%; }
+.btn:disabled { opacity: 0.6; cursor: wait; }
+.btn--sec { background: #fff; color: var(--ink); }
+.btn--peligro { background: var(--peligro); border-color: var(--peligro); }
+.btn--chico { min-height: 40px; width: auto; font-size: 14px; padding: 0 12px; }
+
+/* Login */
+.login { max-width: 420px; margin: 0 auto; padding: 32px 20px; }
+.login h1 { margin: 0 0 4px; font-size: 26px; }
+.pestanas { display: flex; margin: 20px 0 12px; border-bottom: 2px solid var(--linea); }
+.pestanas button { flex: 1; background: none; border: 0; padding: 12px; cursor: pointer; font-weight: 600; color: var(--sec); border-bottom: 3px solid transparent; margin-bottom: -2px; }
+.pestanas button[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--ink); }
+.login form { display: flex; flex-direction: column; gap: 8px; }
+.login label { font-size: 14px; font-weight: 600; margin-top: 8px; }
+.login input { height: 48px; padding: 0 14px; border: 1px solid #9fb2ad; border-radius: 10px; background: #fff; }
+.login .btn { margin-top: 12px; }
+
+/* Mapa + panel (móvil primero: el panel es una hoja inferior) */
+.mapa-layout { position: relative; height: calc(100dvh - var(--hdr)); display: flex; overflow: hidden; }
+.mapa-wrap { position: relative; flex: 1; min-width: 0; }
+.mapa { position: absolute; inset: 0; }
+.buscador { position: absolute; top: 12px; left: 12px; right: 12px; z-index: 1050; max-width: 440px; }
+.buscador input { width: 100%; height: 48px; padding: 0 18px; border: 1px solid #b9c9c4; border-radius: 24px; background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); }
+.sugerencias { list-style: none; margin: 6px 0 0; padding: 4px; background: #fff; border-radius: 14px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2); }
+.sugerencias button { width: 100%; text-align: left; background: none; border: 0; padding: 12px 14px; border-radius: 10px; cursor: pointer; }
+.sugerencias button:hover { background: #eef3f1; }
+.error--mapa { position: absolute; top: 72px; left: 12px; right: 12px; z-index: 1050; background: #fff; padding: 10px 14px; border-radius: 10px; }
+
+.panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1100; max-height: 72%; overflow-y: auto; background: #fff; border-radius: 18px 18px 0 0; box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.25); transform: translateY(105%); transition: transform 0.25s ease; padding-bottom: env(safe-area-inset-bottom); }
+.panel--abierto { transform: none; }
+.panel__vacio { display: none; }
+.panel__cerrar { position: absolute; top: 8px; right: 10px; width: 40px; height: 40px; border: 0; border-radius: 20px; background: #eef3f1; font-size: 24px; line-height: 1; cursor: pointer; }
+.panel__aviso { padding: 0 20px; }
+.panel__cuerpo { display: flex; flex-direction: column; gap: 14px; padding: 22px 20px 20px; }
+.panel__titulo { margin: 0; font-size: 26px; padding-right: 36px; }
+
+.insignia { align-self: flex-start; display: inline-block; padding: 6px 14px; border-radius: 16px; background: var(--est-fondo, #e7ecea); color: var(--est-color, #3f4b4a); font-weight: 700; font-size: 13px; }
+.insignia--sim { background: #e8e1f7; color: #4a2c8a; }
+.banner { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; background: var(--est-fondo); color: var(--est-color); font-weight: 800; font-size: 16px; }
+.cifras { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
+.medidor, .pronostico { width: 100%; height: auto; display: block; }
+.mensaje { margin: 0; line-height: 1.4; }
+.lista h3 { margin: 0 0 4px; font-size: 14px; color: var(--sec); }
+.lista ul { margin: 0; padding-left: 20px; line-height: 1.45; }
+.lista--peligro li { color: var(--peligro); font-weight: 700; }
+
+/* Mis ríos */
+.pagina { max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
+.pagina h1 { margin: 0 0 12px; }
+.tarjetas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.tarjeta { background: #fff; border: 1px solid var(--linea); border-radius: 14px; padding: 16px; }
+.tarjeta__cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.tarjeta__cab h2 { margin: 0; font-size: 20px; }
+.tarjeta__acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.tarjeta .panel__cuerpo { padding: 16px 0 0; }
+
+/* Escritorio: el panel queda fijo a la derecha */
+@media (min-width: 900px) {
+  .cab__usuario { display: inline; }
+  .panel { position: static; width: 420px; max-height: none; border-radius: 0; transform: none; box-shadow: -2px 0 12px rgba(0, 0, 0, 0.12); padding-bottom: 0; }
+  .panel__vacio { display: block; padding: 28px 24px; color: var(--sec); }
+}
