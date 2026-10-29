@@ -1,4 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { api } from '../api.js'
+import { useAuth } from '../auth.jsx'
 import { fechaCorta, fmt, visual } from '../estados.js'
 import Medidor from './Medidor.jsx'
 import Pronostico from './Pronostico.jsx'
@@ -18,6 +20,10 @@ function Lista({ titulo, items, clase }) {
 }
 
 export default function PanelRio({ nombre, estado: d, cargando, error, onReintentar, siguiendo, ocupado, onAlternar }) {
+  const { usuario, token } = useAuth()
+  const [simulando, setSimulando] = useState(false)
+  const [resultadoSimulacion, setResultadoSimulacion] = useState('')
+  const [errorSimulacion, setErrorSimulacion] = useState('')
   const v = visual(d)
   const diaPico = useMemo(
     () => (d?.pronosticoDiario ?? []).reduce((m, x) => (!m || x.caudalMaximo > m.caudalMaximo ? x : m), null),
@@ -41,6 +47,34 @@ export default function PanelRio({ nombre, estado: d, cargando, error, onReinten
 
   const peligro = d.nivelAlerta === 'ALERTA' || d.nivelAlerta === 'EMERGENCIA'
   const caudalGrafico = diaPico?.caudalMaximo ?? d.caudalMaximoPronosticado
+  const esAdmin = usuario?.rol === 'ADMIN'
+
+  const simular = async () => {
+    if (!d.reachId || simulando) return
+    const nombreSimulado = d.nombreRio || nombre
+    const confirmar = window.confirm(
+      `¿Simular una crecida en ${nombreSimulado}? Se enviará una notificación a los dispositivos que siguen este río.`,
+    )
+    if (!confirmar) return
+
+    setSimulando(true)
+    setResultadoSimulacion('')
+    setErrorSimulacion('')
+    try {
+      const r = await api(`/api/alertas/simular?reachId=${d.reachId}`, { method: 'POST', token })
+      if (r.dispositivos === 0) {
+        setResultadoSimulacion('Simulación ejecutada, pero no hay dispositivos con notificaciones activas para este río.')
+      } else {
+        setResultadoSimulacion(
+          `Simulación enviada a ${r.dispositivos} dispositivo(s): ${r.enviados} entregada(s), ${r.fallidos} fallida(s).`,
+        )
+      }
+    } catch (e) {
+      setErrorSimulacion(e.message)
+    } finally {
+      setSimulando(false)
+    }
+  }
 
   return (
     <div className="panel__cuerpo" style={{ '--est-color': v.color, '--est-fondo': v.fondo }}>
@@ -54,6 +88,19 @@ export default function PanelRio({ nombre, estado: d, cargando, error, onReinten
       {d.simulacion && <span className="insignia insignia--sim">SIMULACIÓN</span>}
       <h2 className="panel__titulo">{d.nombreRio || nombre}</h2>
 
+      {esAdmin && (
+        <>
+          <p className="k">
+            Administración: simular una crecida envía una notificación real a los dispositivos suscritos a este río.
+          </p>
+          <button type="button" className="btn btn--peligro" onClick={simular} disabled={simulando}>
+            {simulando ? 'Simulando crecida…' : 'Simular crecida y notificar'}
+          </button>
+          {resultadoSimulacion && <p className="aviso" role="status">{resultadoSimulacion}</p>}
+          {errorSimulacion && <p className="error" role="alert">{errorSimulacion}</p>}
+        </>
+      )}
+
       <div className="cifras">
         <div><p className="k">Caudal actual</p><p className="v">{fmt(d.caudalActualOInicial)} m³/s</p></div>
         <div><p className="k">Pico pronosticado</p><p className="v">{fmt(d.caudalMaximoPronosticado)} m³/s</p></div>
@@ -66,8 +113,6 @@ export default function PanelRio({ nombre, estado: d, cargando, error, onReinten
       </p>
       <Medidor caudal={caudalGrafico} t1={d.umbralVigilancia} t2={d.umbralAlerta} t3={d.umbralEmergencia} color={v.trazo} />
 
-      <p className="mensaje">{d.mensaje}</p>
-      <Lista titulo="Factores de riesgo" items={d.factoresRiesgo} />
       <Lista titulo="Advertencias" items={d.advertencias} />
       <Lista titulo="Recomendaciones" items={d.recomendaciones} clase={peligro ? 'lista--peligro' : ''} />
 
