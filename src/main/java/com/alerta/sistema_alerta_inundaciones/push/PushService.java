@@ -105,6 +105,19 @@ public class PushService {
             dispositivoRepository.save(anterior);
         }
 
+        // Si el mismo usuario ya tenía tokens activos en la misma plataforma (por ejemplo,
+        // al cambiar de túnel HTTPS temporal en desarrollo), se desactivan los anteriores
+        // para no acumular suscripciones huérfanas que disparen notificaciones duplicadas.
+        if (usuario != null && usuario.getId() != null) {
+            String plat = limpiarPlataforma(solicitud.getPlataforma());
+            for (DispositivoPush anteriorUsuario : dispositivoRepository.findByUsuarioIdAndActivoTrue(usuario.getId())) {
+                if (plat.equals(anteriorUsuario.getPlataforma()) && !token.equals(anteriorUsuario.getToken())) {
+                    anteriorUsuario.setActivo(false);
+                    dispositivoRepository.save(anteriorUsuario);
+                }
+            }
+        }
+
         DispositivoPush dispositivo = new DispositivoPush();
         dispositivo.setToken(token);
         dispositivo.setDeviceId(deviceId);

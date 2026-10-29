@@ -18,6 +18,8 @@ public interface DispositivoPushRepository extends JpaRepository<DispositivoPush
 
     List<DispositivoPush> findByUsuarioIdInAndActivoTrue(Collection<Long> usuarioIds);
 
+    List<DispositivoPush> findByUsuarioIdAndActivoTrue(Long usuarioId);
+
     @Query("select count(d) from DispositivoPush d where d.usuario.id = :usuarioId and d.activo = true")
     long countByUsuarioIdAndActivoTrue(@Param("usuarioId") Long usuarioId);
 }

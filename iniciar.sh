@@ -310,11 +310,21 @@ if [[ "$USAR_TUNEL" == "true" ]]; then
 
         if [[ -n "$URL_TUNEL" ]]; then
             log_ok "Túnel HTTPS establecido: $URL_TUNEL"
-            # Verificar túnel desde internet
-            if curl -sf -m 8 "$URL_TUNEL/api/push/config" >/dev/null 2>&1; then
-                log_ok "Conexión externa al túnel verificada con éxito."
+            printf "  Verificando propagación de DNS en Cloudflare"
+            dns_ok=false
+            for _ in {1..15}; do
+                if curl -sf -m 5 "$URL_TUNEL/api/push/config" >/dev/null 2>&1; then
+                    dns_ok=true
+                    break
+                fi
+                printf "."
+                sleep 1.5
+            done
+            echo ""
+            if [[ "$dns_ok" == "true" ]]; then
+                log_ok "Conexión externa y DNS verificados con éxito."
             else
-                log_aviso "El túnel está conectando; puede tardar unos segundos adicionales en propagar."
+                log_aviso "El túnel está propagando en la red; si el navegador muestra DNS_PROBE, espere unos segundos y recargue."
             fi
         else
             log_aviso "No se pudo extraer la URL del túnel. Revise: $dir_logs/tunnel.log"
