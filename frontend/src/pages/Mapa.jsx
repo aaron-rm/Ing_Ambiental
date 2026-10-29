@@ -20,6 +20,18 @@ function Enfocar({ destino }) {
   return null
 }
 
+// Leaflet programa un setTimeout de 250 ms para cerrar la animación de zoom.
+// Si se cambia de ruta antes de que termine, ese callback intenta mover un
+// mapPane que ya fue eliminado y lanza «Cannot read properties of undefined
+// (reading '_leaflet_pos')». Al desmontar se anula la animación pendiente.
+function LimpiarAnimacion() {
+  const map = useMap()
+  useEffect(() => () => {
+    map._animatingZoom = false
+  }, [map])
+  return null
+}
+
 export default function Mapa() {
   const { token } = useAuth()
   const [geo, setGeo] = useState(null)
@@ -139,6 +151,7 @@ export default function Mapa() {
 
         <MapContainer center={[9.0, -79.5]} zoom={10} className="mapa">
           <TileLayer attribution="&copy; colaboradores de OpenStreetMap" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          <LimpiarAnimacion />
           <Enfocar destino={destino} />
           {geo?.features?.map((f) => {
             const id = f.properties.rioId
@@ -179,6 +192,7 @@ export default function Mapa() {
               siguiendo={Boolean(est?.dto?.siguiendo)}
               ocupado={ocupado}
               onAlternar={() => alternar(sel)}
+              mostrarPush
             />
             {aviso && <p className="error panel__aviso" role="alert">{aviso}</p>}
           </>

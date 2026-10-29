@@ -2,15 +2,19 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
+import BotonPush from '../components/BotonPush.jsx'
+import BotonSimular from '../components/BotonSimular.jsx'
 import PanelRio from '../components/PanelRio.jsx'
 import { fmt, visual } from '../estados.js'
 
 export default function MisRios() {
-  const { token } = useAuth()
+  const { token, usuario } = useAuth()
   const [lista, setLista] = useState(null)
   const [estados, setEstados] = useState({})
   const [abierto, setAbierto] = useState(null)
   const [error, setError] = useState('')
+  const [mensajesSim, setMensajesSim] = useState({})
+  const esAdmin = usuario?.rol === 'ADMIN'
 
   const cargarEstado = useCallback(
     (rioId) => {
@@ -49,6 +53,7 @@ export default function MisRios() {
     <section className="pagina">
       <h1>Mis ríos</h1>
       {error && <p className="error" role="alert">{error}</p>}
+      <BotonPush />
       {lista === null && !error && <p className="aviso">Cargando…</p>}
       {lista?.length === 0 && (
         <p className="aviso">
@@ -75,7 +80,20 @@ export default function MisRios() {
                 </button>
                 <Link className="btn btn--sec btn--chico" to={`/?rio=${r.rioId}`}>Ver en el mapa</Link>
                 <button type="button" className="btn btn--sec btn--chico" onClick={() => dejar(r.rioId)}>Dejar de seguir</button>
+                {esAdmin && (
+                  <BotonSimular
+                    reachId={r.reachId}
+                    nombre={r.nombre}
+                    compacto
+                    onMensaje={(m) => setMensajesSim((x) => ({ ...x, [r.rioId]: m }))}
+                  />
+                )}
               </div>
+              {mensajesSim[r.rioId] && (
+                <p className={mensajesSim[r.rioId].tipo === 'error' ? 'error' : 'aviso'} role="status">
+                  {mensajesSim[r.rioId].texto}
+                </p>
+              )}
               {abre && (
                 <PanelRio
                   nombre={r.nombre}
@@ -83,6 +101,7 @@ export default function MisRios() {
                   cargando={e?.cargando}
                   error={e?.error}
                   onReintentar={() => cargarEstado(r.rioId)}
+                  mostrarSimulacion={false}
                 />
               )}
             </li>

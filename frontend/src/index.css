@@ -76,6 +76,16 @@ a { color: var(--ink); }
 .lista ul { margin: 0; padding-left: 20px; line-height: 1.45; }
 .lista--peligro li { color: var(--peligro); font-weight: 700; }
 
+/* Activación de notificaciones y simulación */
+.push { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--linea); border-radius: 10px; background: #f8fbfa; }
+.push h3 { margin: 0; font-size: 14px; color: var(--sec); }
+.push .aviso, .push .error { margin: 0; font-size: 14px; }
+.push .btn { width: auto; align-self: flex-start; }
+.pagina > .push { margin-bottom: 14px; }
+.simular { display: flex; flex-direction: column; gap: 8px; }
+.simular--compacto { display: inline-flex; align-items: flex-start; }
+.simular .aviso, .simular .error { margin: 0; }
+
 /* Mis ríos */
 .pagina { max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
 .pagina h1 { margin: 0 0 12px; }

@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react'
-import { api } from '../api.js'
+import { useMemo } from 'react'
 import { useAuth } from '../auth.jsx'
 import { fechaCorta, fmt, visual } from '../estados.js'
+import BotonPush from './BotonPush.jsx'
+import BotonSimular from './BotonSimular.jsx'
 import Medidor from './Medidor.jsx'
 import Pronostico from './Pronostico.jsx'
+import PronosticoLluvia from './PronosticoLluvia.jsx'
 
 function Lista({ titulo, items, clase }) {
   if (!items?.length) return null
@@ -19,11 +21,19 @@ function Lista({ titulo, items, clase }) {
   )
 }
 
-export default function PanelRio({ nombre, estado: d, cargando, error, onReintentar, siguiendo, ocupado, onAlternar }) {
-  const { usuario, token } = useAuth()
-  const [simulando, setSimulando] = useState(false)
-  const [resultadoSimulacion, setResultadoSimulacion] = useState('')
-  const [errorSimulacion, setErrorSimulacion] = useState('')
+export default function PanelRio({
+  nombre,
+  estado: d,
+  cargando,
+  error,
+  onReintentar,
+  siguiendo,
+  ocupado,
+  onAlternar,
+  mostrarPush = false,
+  mostrarSimulacion = true,
+}) {
+  const { usuario } = useAuth()
   const v = visual(d)
   const diaPico = useMemo(
     () => (d?.pronosticoDiario ?? []).reduce((m, x) => (!m || x.caudalMaximo > m.caudalMaximo ? x : m), null),
@@ -49,33 +59,6 @@ export default function PanelRio({ nombre, estado: d, cargando, error, onReinten
   const caudalGrafico = diaPico?.caudalMaximo ?? d.caudalMaximoPronosticado
   const esAdmin = usuario?.rol === 'ADMIN'
 
-  const simular = async () => {
-    if (!d.reachId || simulando) return
-    const nombreSimulado = d.nombreRio || nombre
-    const confirmar = window.confirm(
-      `¿Simular una crecida en ${nombreSimulado}? Se enviará una notificación a los dispositivos que siguen este río.`,
-    )
-    if (!confirmar) return
-
-    setSimulando(true)
-    setResultadoSimulacion('')
-    setErrorSimulacion('')
-    try {
-      const r = await api(`/api/alertas/simular?reachId=${d.reachId}`, { method: 'POST', token })
-      if (r.dispositivos === 0) {
-        setResultadoSimulacion('Simulación ejecutada, pero no hay dispositivos con notificaciones activas para este río.')
-      } else {
-        setResultadoSimulacion(
-          `Simulación enviada a ${r.dispositivos} dispositivo(s): ${r.enviados} entregada(s), ${r.fallidos} fallida(s).`,
-        )
-      }
-    } catch (e) {
-      setErrorSimulacion(e.message)
-    } finally {
-      setSimulando(false)
-    }
-  }
-
   return (
     <div className="panel__cuerpo" style={{ '--est-color': v.color, '--est-fondo': v.fondo }}>
       {peligro && d.datosConfiables !== false ? (
@@ -88,17 +71,8 @@ export default function PanelRio({ nombre, estado: d, cargando, error, onReinten
       {d.simulacion && <span className="insignia insignia--sim">SIMULACIÓN</span>}
       <h2 className="panel__titulo">{d.nombreRio || nombre}</h2>
 
-      {esAdmin && (
-        <>
-          <p className="k">
-            Administración: simular una crecida envía una notificación real a los dispositivos suscritos a este río.
-          </p>
-          <button type="button" className="btn btn--peligro" onClick={simular} disabled={simulando}>
-            {simulando ? 'Simulando crecida…' : 'Simular crecida y notificar'}
-          </button>
-          {resultadoSimulacion && <p className="aviso" role="status">{resultadoSimulacion}</p>}
-          {errorSimulacion && <p className="error" role="alert">{errorSimulacion}</p>}
-        </>
+      {esAdmin && mostrarSimulacion && (
+        <BotonSimular reachId={d.reachId} nombre={d.nombreRio || nombre} nota />
       )}
 
       <div className="cifras">
@@ -113,11 +87,14 @@ export default function PanelRio({ nombre, estado: d, cargando, error, onReinten
       </p>
       <Medidor caudal={caudalGrafico} t1={d.umbralVigilancia} t2={d.umbralAlerta} t3={d.umbralEmergencia} color={v.trazo} />
 
-      <Lista titulo="Advertencias" items={d.advertencias} />
       <Lista titulo="Recomendaciones" items={d.recomendaciones} clase={peligro ? 'lista--peligro' : ''} />
+      <Lista titulo="Nota sobre los datos" items={d.advertencias} />
 
       <p className="k">Caudal máximo previsto por día</p>
       <Pronostico dias={d.pronosticoDiario} t1={d.umbralVigilancia} t2={d.umbralAlerta} t3={d.umbralEmergencia} />
+
+      <p className="k">Lluvia total prevista por día (mm)</p>
+      <PronosticoLluvia puntos={d.pronosticoLluvia} />
 
       {onAlternar && (
         <button
@@ -129,6 +106,8 @@ export default function PanelRio({ nombre, estado: d, cargando, error, onReinten
           {ocupado ? 'Guardando…' : siguiendo ? 'Dejar de seguir este río' : 'Suscribirme a este río'}
         </button>
       )}
+
+      {mostrarPush && <BotonPush />}
     </div>
   )
 }
