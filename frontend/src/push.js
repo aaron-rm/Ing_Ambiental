@@ -23,13 +23,26 @@ export function comprobarSoportePush() {
       motivo: 'Esta página debe abrirse por HTTPS para activar notificaciones. En el celular usa la URL HTTPS del túnel, no la IP local.',
     }
   }
+  const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   if (!('serviceWorker' in navigator)) {
     return { ok: false, motivo: 'Este navegador no admite Service Workers.' }
   }
   if (!('Notification' in window)) {
+    if (esIOS) {
+      return {
+        ok: false,
+        motivo: 'En iPhone/iPad agrega esta app a la pantalla de inicio (botón Compartir ⎋ → "Agregar a inicio") y ábrela desde allí para activar notificaciones (requiere iOS 16.4+).',
+      }
+    }
     return { ok: false, motivo: 'Este navegador no admite notificaciones web.' }
   }
   if (!('PushManager' in window)) {
+    if (esIOS) {
+      return {
+        ok: false,
+        motivo: 'En iPhone/iPad agrega esta app a la pantalla de inicio (botón Compartir ⎋ → "Agregar a inicio") y ábrela desde allí para activar notificaciones (requiere iOS 16.4+).',
+      }
+    }
     return { ok: false, motivo: 'Este navegador no admite notificaciones push.' }
   }
   return { ok: true }

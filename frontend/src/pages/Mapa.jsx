@@ -163,7 +163,7 @@ export default function Mapa() {
                   key={`v-${id}-${v.trazo}-${elegido}`}
                   data={f}
                   interactive={false}
-                  style={{ color: v.trazo, weight: elegido ? 9 : 6, opacity: 1, fill: false, lineCap: 'round' }}
+                  style={{ color: v.trazo, weight: elegido ? 8 : 5, opacity: elegido ? 0.95 : 0.8, fill: false, lineCap: 'round' }}
                 />
                 <GeoJSON
                   key={`h-${id}`}
@@ -171,7 +171,10 @@ export default function Mapa() {
                   style={{ color: '#000000', weight: 28, opacity: 0.001, fill: false }}
                   eventHandlers={{ click: () => elegir(id) }}
                 >
-                  <Tooltip sticky>{f.properties.nombre}</Tooltip>
+                  <Tooltip sticky>
+                    {f.properties.nombre}
+                    {f.properties.reachId ? ` (Tramo GEOGLOWS #${f.properties.reachId})` : ''}
+                  </Tooltip>
                 </GeoJSON>
               </Fragment>
             )

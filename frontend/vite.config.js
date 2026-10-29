@@ -16,6 +16,7 @@ const proxyApi = {
 export default defineConfig({
   plugins: [react()],
   server: {
+    allowedHosts: true,
     proxy: {
       '/api': proxyApi,
     },
