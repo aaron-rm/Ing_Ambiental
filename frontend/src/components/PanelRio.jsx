@@ -70,6 +70,7 @@ export default function PanelRio({
       )}
       {d.simulacion && <span className="insignia insignia--sim">SIMULACIÓN</span>}
       <h2 className="panel__titulo">{d.nombreRio || nombre}</h2>
+      <p className="k">El pronóstico corresponde al punto de referencia del modelo GEOGLOWS (círculo en el mapa), no a todo el cauce.</p>
 
       {esAdmin && mostrarSimulacion && (
         <BotonSimular reachId={d.reachId} nombre={d.nombreRio || nombre} nota />

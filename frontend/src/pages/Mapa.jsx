@@ -1,7 +1,7 @@
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { GeoJSON, MapContainer, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
 import PanelRio from '../components/PanelRio.jsx'
@@ -179,7 +179,26 @@ export default function Mapa() {
               </Fragment>
             )
           })}
+          {rios
+            .filter((r) => r.latitud != null && r.longitud != null)
+            .map((r) => (
+              <CircleMarker
+                key={`p-${r.rioId}`}
+                center={[r.latitud, r.longitud]}
+                radius={9}
+                pathOptions={{ color: visual(estados[r.rioId]?.dto).trazo, weight: 4, fillColor: '#ffffff', fillOpacity: 1 }}
+                eventHandlers={{ click: () => elegir(r.rioId) }}
+              >
+                <Tooltip>Punto de referencia del pronóstico (GEOGLOWS): {r.nombre}</Tooltip>
+              </CircleMarker>
+            ))}
         </MapContainer>
+        <div
+          style={{ position: 'absolute', left: 12, bottom: 12, zIndex: 1000, background: '#fff', padding: '6px 10px', borderRadius: 8, fontSize: 12, boxShadow: '0 1px 6px rgba(0,0,0,.25)', display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <span aria-hidden="true" style={{ width: 12, height: 12, borderRadius: '50%', border: '3px solid #12302F', background: '#fff', display: 'inline-block' }} />
+          Punto de referencia del pronóstico (GEOGLOWS)
+        </div>
       </div>
 
       <aside className={`panel ${sel ? 'panel--abierto' : ''}`} aria-label="Información del río">
