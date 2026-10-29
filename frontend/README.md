@@ -17,6 +17,17 @@ npm run dev
 Vite reenvía `/api` al backend (`vite.config.js`), así que no hace falta CORS en desarrollo.
 Si el backend usa otro puerto: `VITE_BACKEND=http://localhost:PUERTO npm run dev`.
 
+Para probar desde un teléfono en la misma red:
+
+```
+npm run dev -- --host
+```
+
+y abrir `http://IP_DE_LA_LAPTOP:5173` en el teléfono. El proxy elimina el
+header `Origin`, por lo que el backend no rechaza la petición por CORS aunque
+la IP no esté en `ALERTA_CORS_ORIGENES`. El teléfono solo necesita alcanzar el
+puerto 5173 de la laptop; el backend puede seguir escuchando en localhost.
+
 ## Pantallas
 
 - `/login`: iniciar sesión y registro (`/api/auth/login`, `/api/auth/registro`).
