@@ -43,12 +43,31 @@ if [[ -f "$archivo_env" ]]; then
         linea="${linea%$'\r'}"
         [[ -z "${linea//[[:space:]]/}" || "${linea:0:1}" == "#" ]] && continue
         if [[ "$linea" == *=* ]]; then
-            export "${linea%%=*}=${linea#*=}"
+            clave="${linea%%=*}"
+            valor="${linea#*=}"
+            # Quita espacios alrededor de la clave y del valor.
+            clave="${clave#"${clave%%[![:space:]]*}"}"
+            clave="${clave%"${clave##*[![:space:]]}"}"
+            valor="${valor#"${valor%%[![:space:]]*}"}"
+            valor="${valor%"${valor##*[![:space:]]}"}"
+            # Quita comillas dobles o simples que envuelvan todo el valor.
+            if [[ ${#valor} -ge 2 && "$valor" == \"*\" ]]; then
+                valor="${valor:1:${#valor}-2}"
+            elif [[ ${#valor} -ge 2 && "$valor" == \'*\' ]]; then
+                valor="${valor:1:${#valor}-2}"
+            fi
+            export "$clave=$valor"
         fi
     done < "$archivo_env"
     echo "[OK] Variables cargadas desde .env.demo"
 else
     echo "[AVISO] No existe .env.demo; se usaran las variables de esta sesion."
+fi
+
+# La ruta de la credencial se interpreta relativa a la raiz del proyecto.
+if [[ -n "${FIREBASE_CREDENTIALS_PATH:-}" && "${FIREBASE_CREDENTIALS_PATH}" != /* ]]; then
+    FIREBASE_CREDENTIALS_PATH="$raiz/$FIREBASE_CREDENTIALS_PATH"
+    export FIREBASE_CREDENTIALS_PATH
 fi
 
 if [[ -z "${ALERTA_ADMIN_PASSWORD:-}" ]]; then
