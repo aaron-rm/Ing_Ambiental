@@ -171,10 +171,7 @@ export default function Mapa() {
                   style={{ color: '#000000', weight: 28, opacity: 0.001, fill: false }}
                   eventHandlers={{ click: () => elegir(id) }}
                 >
-                  <Tooltip sticky>
-                    {f.properties.nombre}
-                    {f.properties.reachId ? ` (Tramo GEOGLOWS #${f.properties.reachId})` : ''}
-                  </Tooltip>
+                  <Tooltip sticky>{f.properties.nombre}</Tooltip>
                 </GeoJSON>
               </Fragment>
             )
@@ -189,7 +186,10 @@ export default function Mapa() {
                 pathOptions={{ color: visual(estados[r.rioId]?.dto).trazo, weight: 4, fillColor: '#ffffff', fillOpacity: 1 }}
                 eventHandlers={{ click: () => elegir(r.rioId) }}
               >
-                <Tooltip>Punto de referencia del pronóstico (GEOGLOWS): {r.nombre}</Tooltip>
+                <Tooltip>
+                  {r.nombre}: punto de referencia del pronóstico (ubicación aproximada)
+                  {r.reachId ? ` · tramo GEOGLOWS #${r.reachId}` : ''}
+                </Tooltip>
               </CircleMarker>
             ))}
         </MapContainer>
@@ -197,7 +197,7 @@ export default function Mapa() {
           style={{ position: 'absolute', left: 12, bottom: 12, zIndex: 1000, background: '#fff', padding: '6px 10px', borderRadius: 8, fontSize: 12, boxShadow: '0 1px 6px rgba(0,0,0,.25)', display: 'flex', alignItems: 'center', gap: 6 }}
         >
           <span aria-hidden="true" style={{ width: 12, height: 12, borderRadius: '50%', border: '3px solid #12302F', background: '#fff', display: 'inline-block' }} />
-          Punto de referencia del pronóstico (GEOGLOWS)
+          Punto de referencia del pronóstico (ubicación aproximada)
         </div>
       </div>
 
