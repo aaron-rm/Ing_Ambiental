@@ -186,13 +186,31 @@ log_info "Node.js detectado: ${node_version:-desconocido}"
 reinstalar_frontend=false
 if [[ ! -d "$raiz/frontend/node_modules/react" ]]; then
     reinstalar_frontend=true
-elif [[ "$(uname -s)" == "Linux" ]] && ! compgen -G "$raiz/frontend/node_modules/@rolldown/binding-linux-*" >/dev/null; then
-    reinstalar_frontend=true
-    log_aviso "Las dependencias del frontend vienen de otra plataforma; se reinstalarán para Linux."
+elif [[ "$(uname -s)" == "Linux" ]]; then
+    # Detectar node_modules de Windows de múltiples formas (OneDrive sincroniza
+    # los binarios Windows al laptop Linux, que no pueden ejecutarse).
+    if grep -q 'node\.exe' "$raiz/frontend/node_modules/.bin/vite" 2>/dev/null; then
+        reinstalar_frontend=true
+        log_aviso "node_modules viene de Windows (node.exe en el wrapper de Vite); reinstalando para Linux."
+    elif find "$raiz/frontend/node_modules/.bin" -name '*.exe' -print -quit 2>/dev/null | grep -q .; then
+        reinstalar_frontend=true
+        log_aviso "node_modules contiene .exe de Windows; reinstalando para Linux."
+    elif ! compgen -G "$raiz/frontend/node_modules/@rolldown/binding-linux-*" >/dev/null 2>&1; then
+        reinstalar_frontend=true
+        log_aviso "No se encontraron binarios nativos de Rolldown para Linux; reinstalando node_modules."
+    elif ! "$raiz/frontend/node_modules/.bin/vite" --version >/dev/null 2>&1; then
+        reinstalar_frontend=true
+        log_aviso "El binario de Vite no es ejecutable en esta plataforma; reinstalando node_modules."
+    fi
 fi
 
 if [[ "$reinstalar_frontend" == "true" ]]; then
     log_info "Instalando dependencias del frontend (npm install)..."
+    # Borrar node_modules de Windows antes de reinstalar para evitar mezcla de plataformas
+    if [[ -d "$raiz/frontend/node_modules" ]]; then
+        log_info "Eliminando node_modules de la plataforma anterior..."
+        rm -rf "$raiz/frontend/node_modules"
+    fi
     if ! (cd "$raiz/frontend" && npm install); then
         log_error "No se pudieron instalar las dependencias del frontend."
         log_error "Revise frontend/package.json y la conexión a Internet."
