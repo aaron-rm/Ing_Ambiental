@@ -187,6 +187,12 @@ CREDENCIALES DE PRESENTACIÓN:
 Si el túnel falla, el lanzador sigue funcionando para la PC y avisa en la
 terminal. Revisa `target/logs/tunnel.log`.
 
+El túnel se probó el 11/11/2026 con el frontend en `5173`: `/` respondió `200`,
+`/api/rios` devolvió los cuatro ríos, `/api/push/config` devolvió
+`habilitado: true` y el login desde el origen `trycloudflare.com` respondió
+`200`. La primera resolución DNS del subdominio nuevo puede tardar hasta un
+minuto; si el celular muestra `DNS_PROBE`, espera y recarga.
+
 Para detener todo: `Ctrl + C` en la terminal del lanzador. Comprueba que los
 puertos quedaron libres:
 
@@ -267,6 +273,7 @@ URL (`/?simulacion=...`) y en el payload.
 | Maven falla con `Unable to find a single main class` | `target/` sincronizado con clases duplicadas | `bash mvnw clean`; el lanzador lo detecta si hay `*safeBackup*` |
 | `npm install` falla por archivos bloqueados | OneDrive/antivirus bloqueando `node_modules` | Cerrar OneDrive un momento, borrar `frontend/node_modules` y repetir; si persiste, copiar el proyecto a una carpeta local fuera de OneDrive |
 | El túnel responde `429 Too Many Requests` o `context deadline exceeded` | Límite temporal de Cloudflare para la IP | Esperar 5–10 minutos, cambiar de red (por ejemplo, hotspot del celular) y reintentar; para la PC usar `--sin-tunel` |
+| El túnel se crea pero el celular muestra `DNS_PROBE_FINISHED_NXDOMAIN` o la URL no abre al instante | Propagación DNS del subdominio nuevo | Esperar 30–60 segundos y recargar; el lanzador avisa si aún está propagando |
 | El celular muestra `403 Invalid CORS request` | El origen del túnel no está autorizado | Verificar que `ALERTA_CORS_ORIGENES` incluya `https://*.trycloudflare.com`; reiniciar el backend tras cambiarlo |
 | `/api/push/config` devuelve `habilitado: false` | Falta el JSON, la ruta es incorrecta o las claves públicas no coinciden | Revisar `FIREBASE_CREDENTIALS_PATH`, `FIREBASE_ENABLED` y las seis claves públicas; mirar `target/logs/backend.log` |
 | La simulación informa 0 dispositivos | El celular no está registrado, se usó la misma cuenta que el ADMIN o cambió la URL del túnel | Usar cuentas separadas, abrir la URL nueva y volver a pulsar **Activar notificaciones** |
