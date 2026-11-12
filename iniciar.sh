@@ -300,8 +300,12 @@ else
     fi
 fi
 
-# Validar las credenciales antes de arrancar Maven. Sin esto, una
-# contraseña incorrecta tarda 90 s en aparecer como un error de Hibernate.
+# Validar las credenciales antes de arrancar Maven.
+# IMPORTANTE: siempre se usa -h 127.0.0.1 (TCP explícito, nunca socket Unix)
+# y PGPASSFILE=/dev/null para evitar falsos positivos por ~/.pgpass o peer auth.
+# Si psql conecta por socket Unix, la validación pasa sin contraseña pero
+# Spring Boot (JDBC) siempre usa TCP y necesita la clave real.
+
 pg_pw_contenedor=""
 if [[ "$pg_contenedor_activo" == "true" ]]; then
     if [[ "$pg_contenedor" == "podman" ]]; then
@@ -314,65 +318,71 @@ if [[ "$pg_contenedor_activo" == "true" ]]; then
         log_aviso "La base '$db_name' no existe en el contenedor; creándola..."
         $pg_contenedor exec alerta-postgres createdb -U postgres "$db_name" >/dev/null 2>&1 || true
     fi
+    # Sincronizar la clave del contenedor con DB_PASSWORD de .env.demo
+    if [[ -n "${DB_PASSWORD:-}" && -n "$pg_pw_contenedor" && "${DB_PASSWORD}" != "$pg_pw_contenedor" ]]; then
+        escaped_pw="${DB_PASSWORD//\'/\'\'}"
+        if $pg_contenedor exec alerta-postgres psql -U postgres -c "ALTER USER postgres PASSWORD '$escaped_pw';" >/dev/null 2>&1; then
+            log_ok "Clave del contenedor sincronizada con DB_PASSWORD de .env.demo."
+        fi
+    fi
+    # Forzar 127.0.0.1 para evitar problemas de resolución IPv6
+    if [[ "$db_host" == "localhost" ]]; then
+        db_host="127.0.0.1"
+        DB_URL="${DB_URL:-jdbc:postgresql://localhost:$db_port/$db_name}"
+        DB_URL="${DB_URL/localhost/127.0.0.1}"
+        export DB_URL
+    fi
 fi
+
+# Siempre forzar TCP en la validación: -h 127.0.0.1 o -h $db_host.
+# PGPASSFILE=/dev/null impide que ~/.pgpass enmascare un fallo de contraseña.
+# Esto garantiza que si psql pasa, Spring Boot (JDBC/TCP) también pasará.
+pg_host_tcp="${db_host}"
+[[ "$pg_host_tcp" == "localhost" ]] && pg_host_tcp="127.0.0.1"
 
 pg_error="$(mktemp)"
 pg_ok=false
 
 probar_conexion_pg() {
     local h="$1"
-    local p="$2"
-    local u="$3"
-    local pass="$4"
-    local db="$5"
-
+    local pass="$2"
     if command -v psql >/dev/null 2>&1; then
-        PGCONNECT_TIMEOUT=5 PGPASSWORD="$pass" psql -w -h "$h" -p "$p" -U "$u" -d "$db" -c 'select 1;' >/dev/null 2>"$pg_error"
+        PGPASSFILE=/dev/null PGCONNECT_TIMEOUT=5 PGPASSWORD="$pass" \
+            psql -w -h "$h" -p "$db_port" -U "${DB_USERNAME:-postgres}" -d "$db_name" \
+            -c 'select 1;' >/dev/null 2>"$pg_error"
         return $?
     elif [[ "$pg_contenedor_activo" == "true" ]]; then
-        $pg_contenedor exec -e PGPASSWORD="$pass" alerta-postgres psql -w -h "$h" -p "$p" -U "$u" -d "$db" -c 'select 1;' >/dev/null 2>"$pg_error"
+        $pg_contenedor exec -e "PGPASSWORD=$pass" alerta-postgres \
+            psql -w -h 127.0.0.1 -p 5432 -U "${DB_USERNAME:-postgres}" -d "$db_name" \
+            -c 'select 1;' >/dev/null 2>"$pg_error"
         return $?
     else
         return 127
     fi
 }
 
-# 1. Probar con las variables actuales de .env.demo
-if probar_conexion_pg "$db_host" "$db_port" "${DB_USERNAME:-postgres}" "${DB_PASSWORD:-}" "$db_name"; then
+# 1. Probar con la contraseña de .env.demo vía TCP a 127.0.0.1
+if probar_conexion_pg "$pg_host_tcp" "${DB_PASSWORD:-}"; then
     pg_ok=true
-# 2. Si localhost falla por resolución IPv6 (::1), probar con 127.0.0.1
-elif [[ "$db_host" == "localhost" ]] \
-    && probar_conexion_pg "127.0.0.1" "$db_port" "${DB_USERNAME:-postgres}" "${DB_PASSWORD:-}" "$db_name"; then
-    if [[ -n "${DB_URL:-}" ]]; then
+    # Asegurarse de que DB_URL también use 127.0.0.1 para Spring Boot
+    if [[ "${DB_URL:-}" == *"localhost"* ]]; then
         DB_URL="${DB_URL/localhost/127.0.0.1}"
         export DB_URL
     fi
-    db_host="127.0.0.1"
-    pg_ok=true
-    log_aviso "localhost no conectaba; se usará 127.0.0.1 para la base de datos."
-# 3. Si hay contenedor y la contraseña de .env.demo difiere, probar con la contraseña del contenedor
+# 2. Si hay contenedor, probar con su contraseña original
 elif [[ "$pg_contenedor_activo" == "true" && -n "$pg_pw_contenedor" ]] \
-    && probar_conexion_pg "$db_host" "$db_port" "${DB_USERNAME:-postgres}" "$pg_pw_contenedor" "$db_name"; then
+    && probar_conexion_pg "$pg_host_tcp" "$pg_pw_contenedor"; then
     DB_PASSWORD="$pg_pw_contenedor"
     export DB_PASSWORD
+    DB_URL="${DB_URL:-jdbc:postgresql://127.0.0.1:$db_port/$db_name}"
+    DB_URL="${DB_URL/localhost/127.0.0.1}"
+    export DB_URL
     pg_ok=true
-    log_aviso "La contraseña de .env.demo no coincidía con el contenedor; se usará la del contenedor."
-# 4. Combinación: 127.0.0.1 + contraseña del contenedor
-elif [[ "$pg_contenedor_activo" == "true" && -n "$pg_pw_contenedor" && "$db_host" == "localhost" ]] \
-    && probar_conexion_pg "127.0.0.1" "$db_port" "${DB_USERNAME:-postgres}" "$pg_pw_contenedor" "$db_name"; then
-    if [[ -n "${DB_URL:-}" ]]; then
-        DB_URL="${DB_URL/localhost/127.0.0.1}"
-        export DB_URL
-    fi
-    db_host="127.0.0.1"
-    DB_PASSWORD="$pg_pw_contenedor"
-    export DB_PASSWORD
-    pg_ok=true
-    log_aviso "Se usará 127.0.0.1 y la contraseña del contenedor alerta-postgres."
+    log_aviso "La contraseña de .env.demo no coincide; se usará la del contenedor."
 fi
 
 if [[ "$pg_ok" == "true" ]]; then
-    log_ok "Conexión a PostgreSQL verificada (base $db_name)."
+    log_ok "Conexión a PostgreSQL verificada (base $db_name) vía TCP."
     rm -f "$pg_error"
 elif [[ "$pg_contenedor_activo" != "true" ]] && ! command -v psql >/dev/null 2>&1; then
     # Ni psql en host ni contenedor activo
@@ -381,16 +391,21 @@ elif [[ "$pg_contenedor_activo" != "true" ]] && ! command -v psql >/dev/null 2>&
     rm -f "$pg_error"
 else
     pg_detalle="$(tr '\n' ' ' < "$pg_error" | cut -c1-300)"
-    log_error "PostgreSQL responde, pero la conexión falló."
+    log_error "PostgreSQL responde, pero la conexión TCP con la contraseña de .env.demo falló."
     log_error "Detalle: $pg_detalle"
     if grep -qiE 'password authentication failed|no password supplied' "$pg_error"; then
-        log_error "La contraseña de DB_PASSWORD no es válida para el usuario ${DB_USERNAME:-postgres}."
+        log_error "DB_PASSWORD ('${DB_PASSWORD:0:2}****') no es la contraseña TCP del usuario ${DB_USERNAME:-postgres}."
+        log_error ""
         if [[ "$pg_contenedor_activo" == "true" ]]; then
-            log_error "Actualice DB_PASSWORD en .env.demo con la contraseña del contenedor."
-            log_error "Puede consultarla con: $pg_contenedor exec alerta-postgres printenv POSTGRES_PASSWORD"
+            log_error "Contenedor alerta-postgres activo. Para sincronizar:"
+            log_error "  $pg_contenedor exec alerta-postgres printenv POSTGRES_PASSWORD"
+            log_error "  (copie ese valor en DB_PASSWORD de .env.demo)"
         else
-            log_error "Si usa PostgreSQL del sistema, restablezca la clave:"
-            log_error "  sudo -u postgres psql -c \"ALTER USER postgres PASSWORD 'la-clave-de-.env.demo';\""
+            log_error "Usa PostgreSQL del sistema. Establece la clave de postgres para que coincida con DB_PASSWORD:"
+            log_error "  sudo -u postgres psql -c \"ALTER USER postgres PASSWORD '${DB_PASSWORD:-la-clave}';\""
+            log_error ""
+            log_error "O actualiza DB_PASSWORD en .env.demo con la clave actual de postgres:"
+            log_error "  nano .env.demo   # cambia DB_PASSWORD"
         fi
     elif grep -qiE 'database .* does not exist' "$pg_error"; then
         log_error "La base '$db_name' no existe."
@@ -400,10 +415,13 @@ else
             log_error "Créela con: sudo -u postgres createdb $db_name"
         fi
     elif grep -qiE 'Connection refused|could not connect' "$pg_error"; then
-        log_error "No se pudo conectar a $db_host:$db_port."
+        log_error "No se pudo conectar a 127.0.0.1:$db_port vía TCP."
     elif grep -qiE 'no pg_hba.conf entry' "$pg_error"; then
-        log_error "PostgreSQL rechazó la conexión por pg_hba.conf."
+        log_error "PostgreSQL rechazó la conexión TCP por pg_hba.conf."
+        log_error "Agrega en pg_hba.conf: host all all 127.0.0.1/32 scram-sha-256"
+        log_error "Ruta típica en Fedora: /var/lib/pgsql/data/pg_hba.conf"
     fi
+    log_error ""
     log_error "Diagnóstico ampliado: bash scripts/diagnosticar-postgres.sh"
     rm -f "$pg_error"
     exit 1

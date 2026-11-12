@@ -136,52 +136,49 @@ else
 fi
 echo
 
-echo "== Prueba de conexión =="
+echo "== Prueba de conexión TCP (127.0.0.1) =="
+echo "NOTA: se fuerza -h 127.0.0.1 y PGPASSFILE=/dev/null para simular cómo"
+echo "      conecta Spring Boot (JDBC/TCP, nunca socket Unix)."
 ejecutar_prueba() {
     local h="$1"
-    local p="$2"
-    local u="$3"
-    local pass="$4"
-    local db="$5"
+    local pass="$2"
+    local db="$3"
 
     if command -v psql >/dev/null 2>&1; then
-        PGCONNECT_TIMEOUT=5 PGPASSWORD="$pass" psql -w -h "$h" -p "$p" -U "$u" -d "$db" -c 'select 1;' 2>&1
+        PGPASSFILE=/dev/null PGCONNECT_TIMEOUT=5 PGPASSWORD="$pass" \
+            psql -w -h "$h" -p "$db_port" -U "${DB_USERNAME:-postgres}" -d "$db" -c 'select 1;' 2>&1
     elif [[ "$pg_contenedor_activo" == "true" ]]; then
-        $pg_contenedor exec -e PGPASSWORD="$pass" alerta-postgres psql -w -h "$h" -p "$p" -U "$u" -d "$db" -c 'select 1;' 2>&1
+        $pg_contenedor exec -e "PGPASSWORD=$pass" alerta-postgres \
+            psql -w -h 127.0.0.1 -p 5432 -U "${DB_USERNAME:-postgres}" -d "$db" -c 'select 1;' 2>&1
     else
         echo "NO_PSQL"
         return 127
     fi
 }
 
-salida="$(ejecutar_prueba "$db_host" "$db_port" "${DB_USERNAME:-postgres}" "${DB_PASSWORD:-}" "$db_name")"
+pg_host_tcp="${db_host}"
+[[ "$pg_host_tcp" == "localhost" ]] && pg_host_tcp="127.0.0.1"
+
+salida="$(ejecutar_prueba "$pg_host_tcp" "${DB_PASSWORD:-}" "$db_name")"
 codigo=$?
 
 if [[ "$salida" == "NO_PSQL" ]]; then
     echo "No se puede probar la conexión: psql no está instalado en el host y no hay contenedor activo."
     echo "Instale el cliente con: sudo dnf install postgresql"
 else
-    echo "Destino: $db_host:$db_port / base: $db_name / usuario: ${DB_USERNAME:-postgres}"
+    echo "Destino: $pg_host_tcp:$db_port / base: $db_name / usuario: ${DB_USERNAME:-postgres}"
     echo "$salida"
     echo "Código de salida: $codigo"
     if [[ $codigo -eq 0 ]]; then
-        echo "Conexión correcta con las credenciales de .env.demo."
+        echo "Conexión TCP correcta con las credenciales de .env.demo."
     else
-        # Si falló, intentar con 127.0.0.1 o con la clave del contenedor
-        if [[ "$db_host" == "localhost" ]]; then
-            echo
-            echo "Probando con 127.0.0.1 (evitar conflicto IPv6)..."
-            salida_ipv4="$(ejecutar_prueba "127.0.0.1" "$db_port" "${DB_USERNAME:-postgres}" "${DB_PASSWORD:-}" "$db_name")"
-            if [[ $? -eq 0 ]]; then
-                echo "127.0.0.1: CONEXIÓN EXITOSA. Use DB_URL=jdbc:postgresql://127.0.0.1:$db_port/$db_name en .env.demo"
-            fi
-        fi
+        # Si falló, intentar con la clave del contenedor
         if [[ "$pg_contenedor_activo" == "true" && -n "$pw_contenedor" && "$pw_contenedor" != "${DB_PASSWORD:-}" ]]; then
             echo
             echo "Probando con la contraseña del contenedor alerta-postgres..."
-            salida_cont="$(ejecutar_prueba "$db_host" "$db_port" "${DB_USERNAME:-postgres}" "$pw_contenedor" "$db_name")"
+            salida_cont="$(ejecutar_prueba "$pg_host_tcp" "$pw_contenedor" "$db_name")"
             if [[ $? -eq 0 ]]; then
-                echo "Contenedor: CONEXIÓN EXITOSA con la clave del contenedor. iniciar.sh la usará automáticamente."
+                echo "Contenedor: CONEXIÓN TCP EXITOSA con la clave del contenedor. iniciar.sh la usará automáticamente."
             fi
         fi
 
@@ -189,14 +186,16 @@ else
         echo "== Sugerencias =="
         case "$salida" in
             *"password authentication failed"*|*"no password supplied"*)
-                echo "- La contraseña de .env.demo no coincide con PostgreSQL."
+                echo "- DB_PASSWORD en .env.demo no coincide con la contraseña TCP de PostgreSQL."
                 if [[ "$pg_contenedor_activo" == "true" ]]; then
-                    echo "- Contenedor alerta-postgres activo. La clave del contenedor se obtiene con:"
+                    echo "- Contenedor alerta-postgres activo. La clave se obtiene con:"
                     echo "    $pg_contenedor exec alerta-postgres printenv POSTGRES_PASSWORD"
-                    echo "  iniciar.sh la detecta y utiliza automáticamente."
+                    echo "  iniciar.sh la detecta automáticamente."
                 else
-                    echo "- Si usa PostgreSQL del sistema:"
-                    echo "    sudo -u postgres psql -c \"ALTER USER postgres PASSWORD 'la-clave-de-.env.demo';\""
+                    echo "- PostgreSQL del sistema: establece la clave para que coincida:"
+                    echo "    sudo -u postgres psql -c \"ALTER USER postgres PASSWORD '$(cat /dev/null)SU_CLAVE_DE_.env.demo';\""
+                    echo "  Sustituye SU_CLAVE_DE_.env.demo por el valor de DB_PASSWORD en .env.demo"
+                    echo "  O edita .env.demo con la clave actual: nano .env.demo"
                 fi
                 ;;
             *"database"*"does not exist"*)
@@ -205,13 +204,15 @@ else
                 echo "- Sistema:   sudo -u postgres createdb $db_name"
                 ;;
             *"Connection refused"*|*"could not connect"*)
-                echo "- No hay un PostgreSQL escuchando en $db_host:$db_port."
+                echo "- No hay un PostgreSQL escuchando en $pg_host_tcp:$db_port."
                 echo "- Contenedor: podman start alerta-postgres"
                 echo "- Sistema:    sudo systemctl start postgresql"
                 ;;
             *"no pg_hba.conf entry"*)
-                echo "- PostgreSQL rechazó la conexión por pg_hba.conf."
-                echo "- Para la demo, use el contenedor alerta-postgres."
+                echo "- PostgreSQL rechazó la conexión TCP por pg_hba.conf."
+                echo "- Agrega: host all all 127.0.0.1/32 scram-sha-256"
+                echo "- Ruta en Fedora: /var/lib/pgsql/data/pg_hba.conf"
+                echo "- Luego: sudo systemctl reload postgresql"
                 ;;
             *)
                 echo "- Revise el mensaje anterior y target/logs/backend.log."
