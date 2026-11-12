@@ -145,6 +145,22 @@ fi
 # Deshabilitar la consola interactiva en el backend para que corra como servicio limpio
 export ALERTA_DEMO_CONSOLA_HABILITADA=false
 
+# Autorizar el patrón de los túneles temporales de Cloudflare. El frontend React
+# usa el proxy de Vite, pero esto también cubre accesos directos al backend.
+if ! printf '%s' ",${ALERTA_CORS_ORIGENES:-}," | grep -qF ',https://*.trycloudflare.com,'; then
+    ALERTA_CORS_ORIGENES="${ALERTA_CORS_ORIGENES:-http://localhost:3000,http://localhost:5173,http://localhost:8081,http://127.0.0.1:8081},https://*.trycloudflare.com"
+    export ALERTA_CORS_ORIGENES
+fi
+
+if [[ -z "${DB_PASSWORD:-}" ]]; then
+    log_aviso "DB_PASSWORD está vacío; el backend no podrá conectar con PostgreSQL."
+fi
+if [[ "${FIREBASE_ENABLED:-true}" != "false" ]]; then
+    if [[ -z "${FIREBASE_CREDENTIALS_PATH:-}" || ! -f "${FIREBASE_CREDENTIALS_PATH}" ]]; then
+        log_aviso "FIREBASE_CREDENTIALS_PATH no existe en esta máquina; FCM quedará deshabilitado."
+    fi
+fi
+
 # ------------------------------------------------------------------------------
 # 2. Comprobar Dependencias y Servicios Base
 # ------------------------------------------------------------------------------
@@ -156,6 +172,47 @@ fi
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
     log_error "Node.js o npm no están instalados."
     exit 1
+fi
+
+# Vite 8 requiere Node moderno. Se avisa, pero se deja que Vite dé el error
+# definitivo si la versión no es compatible.
+node_version="$(node -v 2>/dev/null || true)"
+log_info "Node.js detectado: ${node_version:-desconocido}"
+
+# Las dependencias del frontend no se versionan. En una laptop recién clonada
+# hay que instalarlas antes de arrancar Vite. Si la carpeta se sincronizó desde
+# Windows (por ejemplo, con OneDrive), los binarios nativos de Rolldown no
+# sirven en Linux y Vite falla al arrancar: se reinstalan para esta plataforma.
+reinstalar_frontend=false
+if [[ ! -x "$raiz/frontend/node_modules/.bin/vite" || ! -d "$raiz/frontend/node_modules/react" ]]; then
+    reinstalar_frontend=true
+elif [[ "$(uname -s)" == "Linux" ]] && ! compgen -G "$raiz/frontend/node_modules/@rolldown/binding-linux-*" >/dev/null; then
+    reinstalar_frontend=true
+    log_aviso "Las dependencias del frontend vienen de otra plataforma; se reinstalarán para Linux."
+fi
+
+if [[ "$reinstalar_frontend" == "true" ]]; then
+    log_info "Instalando dependencias del frontend (npm install)..."
+    if ! (cd "$raiz/frontend" && npm install); then
+        log_error "No se pudieron instalar las dependencias del frontend."
+        log_error "Revise frontend/package.json y la conexión a Internet."
+        exit 1
+    fi
+    log_ok "Dependencias del frontend instaladas."
+else
+    log_ok "Dependencias del frontend presentes."
+fi
+
+# Si target/ se sincronizó desde Windows con copias *-safeBackup-*, Maven puede
+# fallar con "Unable to find a single main class". Un clean lo resuelve.
+if find "$raiz/target/classes" -name '*safeBackup*' -print -quit 2>/dev/null | grep -q .; then
+    log_aviso "Se detectaron clases duplicadas de una sincronización anterior; limpiando target/..."
+    if ! (cd "$raiz" && bash mvnw -q clean); then
+        log_error "No se pudo limpiar target/. Ejecute: bash mvnw clean"
+        exit 1
+    fi
+    mkdir -p "$dir_logs"
+    log_ok "target/ limpio."
 fi
 
 # Verificar PostgreSQL en el puerto 5432
@@ -204,10 +261,11 @@ else
     (cd "$raiz" && bash mvnw spring-boot:run > "$dir_logs/backend.log" 2>&1) &
     PID_BACKEND=$!
 
-    # Esperar a que el backend responda en /api/push/config (hasta 45 s)
+    # Esperar a que el backend responda en /api/push/config (hasta 90 s;
+    # una laptop con Maven en frío puede tardar más que un equipo ya compilado).
     backend_listo=false
     printf "  Esperando backend"
-    for _ in {1..45}; do
+    for _ in {1..90}; do
         if curl -sf http://localhost:8081/api/push/config >/dev/null 2>&1; then
             backend_listo=true
             break
@@ -239,12 +297,12 @@ if (echo > /dev/tcp/127.0.0.1/5173) >/dev/null 2>&1; then
     fi
 else
     log_info "Iniciando frontend (React + Vite) en http://localhost:5173..."
-    (cd "$raiz/frontend" && npx vite --host 0.0.0.0 --port 5173 > "$dir_logs/frontend.log" 2>&1) &
+    (cd "$raiz/frontend" && npm run dev -- --host 0.0.0.0 --port 5173 --strictPort > "$dir_logs/frontend.log" 2>&1) &
     PID_FRONTEND=$!
 
     frontend_listo=false
     printf "  Esperando frontend"
-    for _ in {1..20}; do
+    for _ in {1..40}; do
         if curl -sf http://localhost:5173/ >/dev/null 2>&1; then
             frontend_listo=true
             break
@@ -278,8 +336,17 @@ else
     exit 1
 fi
 
-rios_resp=$(curl -s http://localhost:5173/api/rios || true)
-if [[ "$rios_resp" == *"Río Abajo"* ]]; then
+rios_ok=false
+rios_resp=""
+for _ in {1..20}; do
+    rios_resp=$(curl -s http://localhost:5173/api/rios || true)
+    if [[ "$rios_resp" == *"Río Abajo"* ]]; then
+        rios_ok=true
+        break
+    fi
+    sleep 0.5
+done
+if [[ "$rios_ok" == "true" ]]; then
     log_ok "Catálogo de ríos cargado correctamente a través del frontend."
 else
     log_aviso "Catálogo no verificado a través del frontend. Respuesta: $rios_resp"
@@ -296,17 +363,38 @@ if [[ "$USAR_TUNEL" == "true" ]]; then
 
     if command -v cloudflared >/dev/null 2>&1; then
         log_info "Iniciando túnel Cloudflare HTTPS para acceso móvil..."
-        cloudflared tunnel --url http://127.0.0.1:5173 > "$dir_logs/tunnel.log" 2>&1 &
-        PID_TUNEL=$!
+        for intento in 1 2 3; do
+            URL_TUNEL=""
+            : > "$dir_logs/tunnel.log"
+            cloudflared tunnel --url http://127.0.0.1:5173 --no-autoupdate > "$dir_logs/tunnel.log" 2>&1 &
+            PID_TUNEL=$!
 
-        printf "  Obteniendo URL pública HTTPS"
-        for _ in {1..20}; do
-            URL_TUNEL=$(grep -o "https://[a-zA-Z0-9-]\+\.trycloudflare\.com" "$dir_logs/tunnel.log" | head -n 1 || true)
-            [[ -n "$URL_TUNEL" ]] && break
-            printf "."
-            sleep 1
+            printf "  Obteniendo URL pública HTTPS"
+            for _ in {1..25}; do
+                # La URL real del quick tunnel tiene guiones; api.trycloudflare.com
+                # aparece en los mensajes de error de Cloudflare y no sirve.
+                URL_TUNEL=$(grep -Eo 'https://[a-zA-Z0-9]+(-[a-zA-Z0-9]+)+\.trycloudflare\.com' "$dir_logs/tunnel.log" | head -n 1 || true)
+                [[ -n "$URL_TUNEL" ]] && break
+                if grep -q 'failed to request quick Tunnel\|context deadline exceeded' "$dir_logs/tunnel.log"; then
+                    break
+                fi
+                if ! kill -0 "$PID_TUNEL" 2>/dev/null; then
+                    break
+                fi
+                printf "."
+                sleep 1
+            done
+            echo ""
+
+            if [[ -n "$URL_TUNEL" ]]; then
+                break
+            fi
+
+            log_aviso "El intento $intento del túnel falló; reintentando..."
+            detener_proceso "$PID_TUNEL" "Túnel Cloudflare"
+            PID_TUNEL=""
+            sleep 2
         done
-        echo ""
 
         if [[ -n "$URL_TUNEL" ]]; then
             log_ok "Túnel HTTPS establecido: $URL_TUNEL"
@@ -327,7 +415,7 @@ if [[ "$USAR_TUNEL" == "true" ]]; then
                 log_aviso "El túnel está propagando en la red; si el navegador muestra DNS_PROBE, espere unos segundos y recargue."
             fi
         else
-            log_aviso "No se pudo extraer la URL del túnel. Revise: $dir_logs/tunnel.log"
+            log_aviso "No se pudo abrir el túnel tras 3 intentos. Revise: $dir_logs/tunnel.log"
         fi
     else
         log_aviso "cloudflared no está disponible. Para acceso desde el celular instálelo o use la IP local (sin push)."
@@ -360,7 +448,7 @@ echo -e "  💻  En este ordenador:    ${C_CYAN}${C_BOLD}http://localhost:5173${
 if [[ -n "$URL_TUNEL" ]]; then
     echo -e "  📱  En el celular (HTTPS): ${C_MAGENTA}${C_BOLD}$URL_TUNEL${C_RESET}"
 else
-    echo -e "  📱  En el celular:         (Túnel no activo; use --tunel o verifique cloudflared)"
+    echo -e "  📱  En el celular:         (Túnel no activo; verifique cloudflared o use --sin-tunel solo para PC)"
 fi
 echo ""
 echo -e "${C_BOLD}CREDENCIALES DE PRESENTACIÓN:${C_RESET}"
@@ -369,15 +457,18 @@ echo -e "  • Rol USER  (Monitoreo):    Puedes registrarte libremente desde la 
 echo ""
 echo -e "${C_BOLD}INSTRUCCIONES PARA PROBAR NOTIFICACIONES EN EL CELULAR:${C_RESET}"
 echo -e "  1. En el teléfono, abre la URL HTTPS de arriba en el navegador:"
-echo -e "     • ${C_BOLD}Android:${C_RESET} Abre en ${C_BOLD}Google Chrome${C_RESET}. Inicia sesión con cualquier cuenta."
+echo -e "     • ${C_BOLD}Android:${C_RESET} Abre en ${C_BOLD}Google Chrome${C_RESET}. Registra una cuenta USER distinta a la del ADMIN."
 echo -e "       (Si usas Brave, activa 'Usar servicios Google para push' en Ajustes → Privacidad)."
 echo -e "     • ${C_BOLD}iPhone / iPad (iOS 16.4+):${C_RESET} Abre en ${C_BOLD}Safari${C_RESET}, toca el botón Compartir (⎋),"
 echo -e "       selecciona ${C_BOLD}'Agregar a la pantalla de inicio'${C_RESET} y abre la app desde el icono instalado."
 echo -e "  2. Toca un río (o ve a 'Mis ríos'), suscríbete y pulsa ${C_BOLD}'Activar notificaciones'${C_RESET}."
 echo -e "     Acepta el diálogo de permisos del sistema."
-echo -e "  3. Para probar la alerta: inicia sesión con la cuenta ${C_BOLD}ADMIN${C_RESET} en la PC o celular,"
-echo -e "     abre el río que estás siguiendo y pulsa ${C_BOLD}'Simular crecida y notificar'${C_RESET}."
-echo -e "     ¡La notificación push llegará al instante con sonido y vibración!"
+echo -e "  3. En la PC inicia sesión como ${C_BOLD}ADMIN${C_RESET}, abre el mismo río y pulsa"
+echo -e "     ${C_BOLD}'Simular crecida y notificar'${C_RESET}. ¡La notificación llegará al celular!"
+echo -e "     Usa cuentas distintas en PC y celular: el backend desactiva los tokens web"
+echo -e "     anteriores del mismo usuario para evitar notificaciones duplicadas."
+echo -e "  4. Si el celular ya había abierto un túnel anterior, abre la URL nueva y"
+echo -e "     vuelve a pulsar 'Activar notificaciones' (cada túnel es un origen distinto)."
 echo ""
 echo -e "${C_AMARILLO}Presione Ctrl + C para detener todos los servicios de forma limpia.${C_RESET}"
 echo ""
