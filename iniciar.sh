@@ -184,7 +184,7 @@ log_info "Node.js detectado: ${node_version:-desconocido}"
 # Windows (por ejemplo, con OneDrive), los binarios nativos de Rolldown no
 # sirven en Linux y Vite falla al arrancar: se reinstalan para esta plataforma.
 reinstalar_frontend=false
-if [[ ! -x "$raiz/frontend/node_modules/.bin/vite" || ! -d "$raiz/frontend/node_modules/react" ]]; then
+if [[ ! -d "$raiz/frontend/node_modules/react" ]]; then
     reinstalar_frontend=true
 elif [[ "$(uname -s)" == "Linux" ]] && ! compgen -G "$raiz/frontend/node_modules/@rolldown/binding-linux-*" >/dev/null; then
     reinstalar_frontend=true
@@ -201,6 +201,17 @@ if [[ "$reinstalar_frontend" == "true" ]]; then
     log_ok "Dependencias del frontend instaladas."
 else
     log_ok "Dependencias del frontend presentes."
+fi
+
+# En Linux, OneDrive puede sincronizar node_modules sin el bit de ejecución.
+# Esto hace que el binario de Vite exista pero no se pueda ejecutar (Permission denied).
+# Se corrige con chmod +x; es barato e idempotente.
+if [[ "$(uname -s)" == "Linux" && -d "$raiz/frontend/node_modules/.bin" ]]; then
+    if [[ ! -x "$raiz/frontend/node_modules/.bin/vite" ]]; then
+        log_aviso "Binarios del frontend sin permiso de ejecución (típico de OneDrive); corrigiendo..."
+        chmod +x "$raiz/frontend/node_modules/.bin/"* 2>/dev/null || true
+        log_ok "Permisos de ejecución del frontend restaurados."
+    fi
 fi
 
 # Si target/ se sincronizó desde Windows con copias *-safeBackup-*, Maven puede
