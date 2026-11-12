@@ -8,20 +8,43 @@ Messaging (FCM).
 
 1. **Backend (Spring Boot):** Motor central independiente. Ejecuta la lógica de negocio, ingesta y caché de GEOGloWS y Open-Meteo, persistencia en PostgreSQL, seguridad JWT y despacho de notificaciones push vía Firebase Cloud Messaging (FCM). Expone una API REST pública.
 2. **Consola interactiva (`ConsolaDemoRunner`):** Cliente HTTP de consola por terminal interactiva. Permite autenticación JWT, consultar el panel y ejecutar simulaciones administrativas desde el servidor. No recibe notificaciones push directamente ya que una terminal no puede registrar Service Workers.
-3. **PWA de pruebas (`src/main/resources/static/`):** Herramienta web mínima servida por Spring Boot. Existe separadamente de la consola por la **necesidad técnica de validar el ciclo de vida de Web Push** (registro de Service Worker, suscripción FCM en navegador, permisos del sistema operativo y recepción en primer/segundo plano). **No es el frontend definitivo**; este último será desarrollado desde cero por otro equipo.
-4. **Frontend definitivo:** Aplicación externa que construirá otro equipo consumiendo los contratos públicos de la API REST.
+3. **PWA de pruebas (`src/main/resources/static/`):** Herramienta web mínima servida por Spring Boot. Existe separadamente de la consola por la **necesidad técnica de validar el ciclo de vida de Web Push** (registro de Service Worker, suscripción FCM en navegador, permisos del sistema operativo y recepción en primer/segundo plano). **No es la interfaz de la presentación**; la aplicación React está en `frontend/`.
+4. **Frontend React (`frontend/`):** Aplicación Vite de la presentación que consume la API REST (login, mapa/catálogo, seguimiento, panel y push). Se sirve en `http://localhost:5173` con `bash iniciar.sh`.
 
 > Proyecto académico y orientativo. No emite declaraciones oficiales de
 > emergencia ni sustituye a SINAPROC, IMHPA u otra autoridad competente.
 
-> **Estado (Entrega 75 %):** La parte correspondiente al **backend está completamente lista y verificada para la entrega del 75 %**, con **82 pruebas automatizadas en verde** (0 fallos). Cuenta con autenticación JWT, roles `USER`/`ADMIN`, catálogo cerrado de cuatro ríos con geometría real (GeoJSON), selección usuario–ríos, enrutamiento push a seguidores, caché de GEOGloWS con tolerancia a fallos y campo `siguiendo` en el panel. **Para completar la presentación del 75 % solo resta que el equipo de frontend construya y entregue sus pantallas iniciales consumiendo esta base.**
+> **Estado (Entrega 75 %):** La parte correspondiente al **backend está completamente lista y verificada para la entrega del 75 %**, con **82 pruebas automatizadas en verde** (0 fallos). Cuenta con autenticación JWT, roles `USER`/`ADMIN`, catálogo cerrado de cuatro ríos con geometría real (GeoJSON), selección usuario–ríos, enrutamiento push a seguidores, caché de GEOGloWS con tolerancia a fallos y campo `siguiendo` en el panel. La rama `frontend-final` incluye además la aplicación React/Vite con login, mapa/catálogo, seguimiento, panel de riesgo y activación de notificaciones. La presentación se ejecuta con `bash iniciar.sh` en Fedora y la interfaz se abre en `http://localhost:5173`.
 >
 > Para retomar el proyecto o consultar la historia de sesiones, ver [docs/CONTINUIDAD_SESION.md](docs/CONTINUIDAD_SESION.md).
 > Para una explicación funcional sin tecnicismos, ver [docs/RESUMEN_PROYECTO.md](docs/RESUMEN_PROYECTO.md).
 
 ## Arranque rápido
 
-Requisitos: Java 21+, PostgreSQL y, para push, un proyecto Firebase.
+Requisitos: Java 21+, Node.js 20.19+ (probado con Node 24), npm, PostgreSQL y,
+para push, un proyecto Firebase y `cloudflared`.
+
+### Fedora / Linux (recomendado para la presentación)
+
+```bash
+cp .env.demo.example .env.demo
+# editar .env.demo: DB_PASSWORD de esta máquina, Firebase y credenciales locales
+chmod +x iniciar.sh
+bash iniciar.sh
+```
+
+Abrir `http://localhost:5173`. El lanzador instala las dependencias de
+`frontend/` si faltan o si vienen de Windows, inicia el backend en `8081`, Vite
+en `5173`, espera el catálogo y abre un túnel HTTPS **hacia 5173**. La URL del
+túnel aparece al final; esa es la que se abre en el celular.
+
+Opciones: `bash iniciar.sh --sin-tunel` (solo PC) y
+`bash iniciar.sh --sin-navegador`.
+
+La guía paso a paso para la presentación en Fedora está en
+[`docs/GUIA_PRESENTACION_FEDORA.md`](docs/GUIA_PRESENTACION_FEDORA.md).
+
+### Windows (apoyo)
 
 ```powershell
 Copy-Item .env.demo.example .env.demo
@@ -29,10 +52,10 @@ Copy-Item .env.demo.example .env.demo
 .\scripts\iniciar-demo.ps1
 ```
 
-Abrir `http://localhost:8081`. El script también abre un túnel HTTPS para probar
-desde el celular.
+Abrir `http://localhost:5173`. El lanzador de Windows inicia backend, Vite y el
+túnel hacia `5173`.
 
-Arranque manual en Windows (PowerShell):
+Arranque manual del backend en Windows (PowerShell):
 
 ```powershell
 $env:DB_PASSWORD = "su-contraseña-local"
@@ -62,14 +85,17 @@ podman run -d --name alerta-postgres \
 cp .env.demo.example .env.demo
 # completar .env.demo; DB_PASSWORD debe coincidir con POSTGRES_PASSWORD
 
-bash scripts/iniciar-demo.sh            # consola interactiva y navegador
-bash scripts/iniciar-demo.sh --tunel    # ademas abre cloudflared si esta instalado
+bash iniciar.sh                 # backend + React/Vite + tunel si hay cloudflared
+bash iniciar.sh --sin-tunel     # solo PC, sin URL publica
 ```
 
-Con doble clic, el script detecta que no hay terminal y se relanza en Konsole,
-GNOME Terminal o xterm; además abre el navegador en `http://localhost:8081`
-cuando el backend responde. Si ya hay un backend corriendo en el puerto 8081,
-solo abre la página y no lanza una segunda instancia.
+Con doble clic, `iniciar.sh` detecta que no hay terminal y se relanza en Konsole,
+GNOME Terminal o xterm; además abre el navegador en `http://localhost:5173`
+cuando el frontend responde. Si el backend o Vite ya están corriendo en `8081` y
+`5173`, reutiliza esos procesos en lugar de lanzar una segunda instancia.
+
+El lanzador antiguo `scripts/iniciar-demo.sh` servía la PWA de prueba en `8081`;
+para la interfaz React de la presentación use `iniciar.sh`.
 
 En Linux `./mvnw` puede fallar con «Permiso denegado»: usar `bash mvnw`. Si
 OneDrive sincroniza la carpeta `target/` desde Windows y Maven falla con
@@ -84,8 +110,8 @@ $env:ALERTA_DEMO_CONSOLA_HABILITADA = "false"
 
 ## Demo y prueba de notificaciones
 
-1. Cada usuario abre la URL de la aplicación (en PC: `http://localhost:8081`; en celular: la URL HTTPS del túnel).
-2. Inicia sesión o registra una cuenta nueva (`USER`), selecciona al menos un río para seguir y pulsa **Activar notificaciones**.
+1. Cada usuario abre la URL de la aplicación (en PC: `http://localhost:5173`; en celular: la URL HTTPS del túnel que apunta a `5173`).
+2. En el celular, registra una cuenta `USER` distinta de la del administrador, selecciona al menos un río para seguir y pulsa **Activar notificaciones**. Usar cuentas separadas evita que el backend desactive el token anterior del mismo usuario.
 3. Para enviar pruebas como administrador:
    - **Desde la PWA:** Inicie sesión con la cuenta `ADMIN` (`admin` / `admin-local-clave` en local). Al seguir un río, aparecerá el botón **Simular crecida**, el cual envía una notificación con el mismo texto visible de una alerta real (con emojis) a los seguidores de ese río.
    - **Desde la consola (`ConsolaDemoRunner`):** Inicie sesión con `ADMIN`:
@@ -94,11 +120,17 @@ $env:ALERTA_DEMO_CONSOLA_HABILITADA = "false"
 
 > La simulación de crecida no persiste un evento de riesgo en el historial; solo prueba la clasificación y el enrutamiento del canal push. La notificación visible usa el formato de alerta real por requisito de la demostración en clase; la PWA y la consola siguen identificando la operación como simulacro.
 
-## Si ves la PWA antigua o “Sin conexión”
+## Si ves la PWA antigua en 8081 o “Sin conexión”
 
-El navegador pudo conservar el Service Worker de una versión anterior. Cuando el
-backend está detenido, ese Service Worker puede servir el HTML viejo desde su
-caché y mostrar “Sin conexión”, aunque el código actual ya sea la página nueva.
+La interfaz de la presentación es la aplicación React de `frontend/`, servida en
+`http://localhost:5173`. El backend sigue sirviendo la PWA de prueba antigua en
+`http://localhost:8081`; si abres esa dirección verás la PWA mínima, no el
+frontend nuevo.
+
+En la PWA de prueba, el navegador pudo conservar el Service Worker de una versión
+anterior. Cuando el backend está detenido, ese Service Worker puede servir el
+HTML viejo desde su caché y mostrar “Sin conexión”, aunque el código actual ya
+sea la página nueva.
 
 En Chrome de escritorio:
 
@@ -115,6 +147,7 @@ nueva del Service Worker elimina las cachés `alerta-shell-*` al activarse.
 
 | Documento | Contenido |
 |---|---|
+| [docs/GUIA_PRESENTACION_FEDORA.md](docs/GUIA_PRESENTACION_FEDORA.md) | Arranque y guion de la demo en Fedora con el frontend React en `5173` |
 | [docs/CONTINUIDAD_SESION.md](docs/CONTINUIDAD_SESION.md) | Estado actual y cómo retomar el proyecto desde otra computadora o sesión |
 | [docs/RESUMEN_PROYECTO.md](docs/RESUMEN_PROYECTO.md) | Explicación de alto nivel, flujo, alcance y guía para la presentación |
 | [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | Directrices permanentes y separación backend/clientes |
@@ -134,7 +167,16 @@ nueva del Service Worker elimina las cachés `alerta-shell-*` al activarse.
 Estado actual: **82 pruebas, 0 fallos**. En Linux, usar `bash mvnw test` si
 `./mvnw` falla con “Permiso denegado”.
 
-Validación de sintaxis de la PWA:
+Frontend React (Vite):
+
+```bash
+cd frontend
+npm install
+npm run build
+npm run lint
+```
+
+Validación de sintaxis de la PWA antigua:
 
 ```powershell
 node --check src/main/resources/static/app.js
@@ -155,10 +197,12 @@ src/main/java/.../rio/      Catálogo, geometría y mapa
 src/main/java/.../demo/     Consola HTTP de demostración
 src/main/resources/catalogo/  Catálogo con geometría real (GeoJSON)
 tools/                      Script reproducible del catálogo
-src/main/resources/static/  PWA de pruebas
+src/main/resources/static/  PWA de pruebas (8081, no es el frontend nuevo)
+frontend/                   Aplicación React/Vite de la presentación (5173)
+iniciar.sh                  Lanzador Fedora/Linux: backend + frontend + túnel
 src/test/java/...           82 pruebas automatizadas
 docs/                       Arquitectura y guías operativas
-scripts/                    Arranque de demo
+scripts/                    Lanzadores de apoyo (Windows) y legado Linux
 ```
 
 ## Estado de la entrega y alcance
@@ -174,8 +218,8 @@ scripts/                    Arranque de demo
 - **Herramientas de prueba:** Consola interactiva CLI con menú por rol y PWA mínima de prueba web para validación técnica de Service Workers y Push.
 - **Calidad de software:** 82 pruebas automatizadas pasando al 100% (`BUILD SUCCESS`). Base completa lista para ser consumida.
 
-### Pendiente para completar la presentación del 75 % (Equipo de Frontend)
-- **Pantallas iniciales del frontend:** Desarrollo y entrega de las primeras pantallas funcionales por parte del equipo de frontend (autenticación, catálogo/mapa de ríos, seguimiento y visualización del panel de riesgo) utilizando los endpoints provistos por el backend.
+### Frontend de la presentación (rama `frontend-final`)
+- **Pantallas iniciales entregadas:** Aplicación React/Vite con autenticación, catálogo/mapa de ríos, seguimiento y visualización del panel de riesgo, consumiendo los endpoints del backend. Se sirve en `http://localhost:5173` y se arranca con `bash iniciar.sh` en Fedora.
 
 ### Pendiente para la entrega final (100 %)
 - **Frontend definitivo completo:** Aplicación frontend finalizada con todos los flujos de usuario, diseño pulido e integración total de deep links y gráficos.

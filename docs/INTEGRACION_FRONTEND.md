@@ -2,8 +2,13 @@
 
 **Backend:** Spring Boot en `http://localhost:8081`<br>
 **PWA de pruebas:** `src/main/resources/static/` — login, catálogo, suscripción,
-push y simulación admin; no es el frontend definitivo<br>
-**Frontend definitivo:** lo construirá otro equipo desde cero
+push y simulación admin; no es la interfaz de la presentación<br>
+**Frontend React:** `frontend/` (Vite) en `http://localhost:5173`
+
+> **Nota (11/11/2026):** la aplicación React de `frontend/` ya consume este
+> contrato y se arranca con `bash iniciar.sh` en Fedora. Las referencias a la PWA
+> de prueba y al puerto `8081` describen el backend y la PWA antigua. Para la
+> presentación, ver [`GUIA_PRESENTACION_FEDORA.md`](GUIA_PRESENTACION_FEDORA.md).
 
 > Este documento describe los contratos públicos del backend. El equipo de
 > frontend puede elegir libremente su tecnología, diseño y estructura. No debe
@@ -45,15 +50,24 @@ frontend definitivo se desarrollará aparte.
 
 ## 2. Arranque local
 
-### Opción automática
+### Opción automática en Fedora / Linux
+
+```bash
+cp .env.demo.example .env.demo
+# completar .env.demo con credenciales reales
+bash iniciar.sh
+```
+
+Abre la interfaz React en `http://localhost:5173` y un túnel HTTPS hacia `5173`.
+La URL del túnel cambia en cada ejecución.
+
+### Opción automática en Windows
 
 ```powershell
 Copy-Item .env.demo.example .env.demo
 # completar .env.demo con credenciales reales
 .\scripts\iniciar-demo.ps1
 ```
-
-Abre la app y un túnel HTTPS. La URL del túnel cambia en cada ejecución.
 
 ### Opción manual
 
@@ -69,12 +83,14 @@ $env:FIREBASE_CREDENTIALS_PATH = "C:\ruta\service-account.json"
 
 > **Acceso al administrador local:** En desarrollo y pruebas locales se utiliza por convención el identificador `admin` y la contraseña `admin-local-clave`. **Esta credencial es de uso exclusivo para desarrollo local.** Antes de cualquier despliegue en producción DEBE cambiarse o gestionarse mediante variables de entorno protegidas.
 
-Abrir `http://localhost:8081`.
+Abrir `http://localhost:8081` (backend y PWA antigua). La interfaz React de la
+presentación se sirve aparte en `http://localhost:5173` con `bash iniciar.sh`.
 
 ### Requisito para push en celular
 
 `localhost` funciona en la PC. En el celular se necesita **HTTPS**: use la URL
-del túnel. `http://192.168.x.x:8081` **no** habilita Service Workers ni push.
+del túnel que apunta a `5173`. `http://192.168.x.x:5173` **no** habilita Service
+Workers ni push.
 
 ---
 

@@ -6,6 +6,12 @@
 **Para:** equipo de trabajo, agentes de IA y exposición final<br>
 **Documentación técnica relacionada:** [`ARQUITECTURA.md`](ARQUITECTURA.md), [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md), [`GUIA_FRONTEND.md`](GUIA_FRONTEND.md), [`CONTINUIDAD_SESION.md`](CONTINUIDAD_SESION.md) y [`GUIA_PRUEBA_NOTIFICACIONES.md`](GUIA_PRUEBA_NOTIFICACIONES.md)
 
+> **Nota (11/11/2026):** la rama `frontend-final` ya incluye la aplicación React
+> de `frontend/`, servida en `http://localhost:5173` con `bash iniciar.sh`. Las
+> referencias al «frontend definitivo» como pendiente describen el estado
+> anterior. Para la demo en Fedora, ver
+> [`GUIA_PRESENTACION_FEDORA.md`](GUIA_PRESENTACION_FEDORA.md).
+
 > Este documento explica qué problema resuelve el proyecto y cómo funciona, sin
 > entrar en clases, frameworks ni detalles de implementación. La documentación
 > técnica sigue siendo la referencia para modificar el código.

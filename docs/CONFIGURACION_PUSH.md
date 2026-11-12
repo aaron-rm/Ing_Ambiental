@@ -60,17 +60,25 @@ podman run -d --name alerta-postgres \
 
 cp .env.demo.example .env.demo
 # completar .env.demo; DB_PASSWORD debe coincidir con POSTGRES_PASSWORD
-bash scripts/iniciar-demo.sh
+bash iniciar.sh
 ```
+
+`iniciar.sh` instala las dependencias del frontend si faltan, arranca el backend
+en `8081` y Vite en `5173`, y abre el túnel HTTPS hacia `5173` cuando
+`cloudflared` está disponible. En Windows, el equivalente es
+`.\scripts\iniciar-demo.ps1`.
 
 `.env.demo` no se versiona ni debe subirse al repositorio. Si OneDrive u otro
 servicio lo sincroniza entre computadoras, revise `DB_PASSWORD` al cambiar de
 máquina: debe coincidir con la contraseña del PostgreSQL local de esa máquina.
+En Fedora también debe existir el JSON de Firebase en
+`FIREBASE_CREDENTIALS_PATH`.
 
 Para detener la base: `podman stop alerta-postgres`; para volver a levantarla:
 `podman start alerta-postgres`.
 
-Abrir `http://localhost:8081`.
+Abrir `http://localhost:5173` (frontend React). El backend y la PWA de prueba
+siguen disponibles en `http://localhost:8081`.
 
 ### 2.1 Consola de demostración
 
@@ -226,21 +234,27 @@ evento y notificar según las reglas normales.
 
 ### 5.1 Demostración rápida en clase
 
-1. Copiar `.env.demo.example` a `.env.demo` y completar las credenciales.
-2. Ejecutar `.\scripts\iniciar-demo.ps1`; abre la app y el túnel HTTPS.
-3. Cada estudiante abre la URL del túnel, inicia sesión o crea una cuenta, sigue
-   al menos un río y pulsa **Activar notificaciones**.
-4. En la terminal del backend, iniciar sesión en la consola con la cuenta
-   `ADMIN` y elegir la opción **6** para simular una crecida sobre un río
-   seguido, o la opción **7** para el simulacro global.
+1. Copiar `.env.demo.example` a `.env.demo` y completar las credenciales de esa
+   máquina.
+2. En Fedora ejecutar `bash iniciar.sh`; en Windows, `.\scripts\iniciar-demo.ps1`.
+   Ambos abren la interfaz React en `http://localhost:5173` y el túnel HTTPS
+   hacia `5173`.
+3. En el celular, abrir la URL del túnel, registrar una cuenta `USER` distinta
+   de la del administrador, seguir al menos un río y pulsar **Activar
+   notificaciones**.
+4. En la PC, iniciar sesión como `ADMIN` en `http://localhost:5173`, abrir el
+   mismo río y pulsar **Simular crecida y notificar**. También se puede usar la
+   consola del backend con la opción **6** (simulación por río) o **7**
+   (simulacro global).
 
 Las notificaciones visibles usan el formato de una alerta real con emojis
 (`🚨 ALERTA DE INUNDACIÓN 🌊`, `⚠️ AVISO DE CRECIDA...`) y no incluyen
 «simulacro» ni «prueba». La consola y la PWA siguen identificando la operación
 como simulacro.
 
-La PWA solo puede pedir una notificación de prueba para su propio dispositivo;
-el envío masivo se hace desde la consola o directamente contra el endpoint.
+La PWA antigua solo puede pedir una notificación de prueba para su propio
+dispositivo; el envío masivo se hace desde la interfaz React, la consola o
+directamente contra el endpoint.
 
 El endpoint `POST /api/admin/push/demo` envía un simulacro a todos los
 dispositivos activos sin crear un evento de riesgo. Requiere JWT con rol
@@ -300,19 +314,19 @@ como «No tienes permiso para esa operación». Para la demo se puede autorizar
 todo el dominio de túneles temporales:
 
 ```properties
-ALERTA_CORS_ORIGENES=http://localhost:8081,http://127.0.0.1:8081,https://*.trycloudflare.com
+ALERTA_CORS_ORIGENES=http://localhost:5173,http://localhost:8081,http://127.0.0.1:8081,https://*.trycloudflare.com
 ```
 
 `SecurityConfig` acepta orígenes exactos y patrones. El patrón
 `https://*.trycloudflare.com` es solo para la demo; en producción use la URL
 exacta. Reinicie el backend después de cambiar la lista.
 
-`scripts/iniciar-demo.ps1` inicia el túnel primero, lee la URL y la agrega
-automáticamente antes de arrancar el backend. **Cada ejecución crea un túnel
-nuevo**: si el puerto 8081 ya está ocupado, el script ahora se detiene antes de
-abrir el túnel para no dejar una URL que el backend en ejecución no autorizó.
-Cierre la instancia anterior y vuelva a ejecutar el script, o use una URL que
-ya esté autorizada.
+`iniciar.sh` (Fedora/Linux) autoriza `https://*.trycloudflare.com` antes de
+arrancar el backend y abre el túnel hacia `5173`. `scripts/iniciar-demo.ps1`
+(Windows) inicia el frontend, abre el túnel, lee la URL y la agrega al entorno
+antes de arrancar el backend. **Cada ejecución crea un túnel nuevo**: el
+celular debe abrir la URL nueva y reactivar notificaciones. Si el backend ya
+estaba corriendo, reinícielo para que tome el origen nuevo.
 
 ### `Registration failed - push service error`
 

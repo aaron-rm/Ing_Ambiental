@@ -1,5 +1,10 @@
 # Guía de integración para el frontend
 
+> **Nota (11/11/2026):** la aplicación React de `frontend/` ya implementa este
+> flujo y se sirve en `http://localhost:5173` con `bash iniciar.sh`. Para la
+> presentación en Fedora, ver
+> [`GUIA_PRESENTACION_FEDORA.md`](GUIA_PRESENTACION_FEDORA.md).
+
 **Estado:** **implementado**. Este documento describe el diseño del avance de
 autenticación, mapa y selección múltiple de ríos que ya está en la rama
 `backend`, y cómo debe integrarse el frontend definitivo. Se conserva como

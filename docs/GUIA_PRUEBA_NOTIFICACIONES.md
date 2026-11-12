@@ -1,14 +1,22 @@
 # Guía para ejecutar la prueba de notificaciones
 
 **Dirigida a:** compañeros del equipo y agentes de IA que retomen el proyecto.  
-**Última actualización:** 25/10/2026.<br>
+**Última actualización:** 11/11/2026.<br>
 **Alcance:** arrancar el backend con el catálogo de cuatro ríos, iniciar sesión,
 comprobar la PWA, ejecutar la demo push y verificar que la arquitectura no
 depende de la consola.
 
+> **Para la presentación del 75 % (rama `frontend-final`):** la interfaz nueva
+> es la aplicación React/Vite de `frontend/`, servida en
+> `http://localhost:5173`. El lanzador principal en Fedora es
+> `bash iniciar.sh`, que también abre el túnel HTTPS hacia `5173`. La guía
+> específica está en [`GUIA_PRESENTACION_FEDORA.md`](GUIA_PRESENTACION_FEDORA.md).
+> Las secciones de esta guía que mencionan `8081` describen el backend y la PWA
+> de prueba antigua; siguen siendo válidas para validar el canal push.
+
 > La PWA de `src/main/resources/static/` **no es el frontend definitivo**. Sirve
 > para probar el flujo mínimo (login, catálogo, suscripción y notificaciones).
-> El frontend definitivo lo construirá otro equipo desde cero.
+> El frontend definitivo es la aplicación React de `frontend/`.
 
 ---
 
@@ -85,26 +93,35 @@ Reglas:
 
 ## 3. Arranque
 
-### Opción recomendada
+### Fedora / Linux (recomendado para la presentación)
+
+```bash
+cp .env.demo.example .env.demo   # solo si aún no existe
+bash iniciar.sh
+```
+
+El lanzador instala las dependencias de `frontend/` si faltan, arranca el backend
+en `8081`, Vite en `5173`, verifica el catálogo y abre el túnel HTTPS hacia
+`5173`. Abre `http://localhost:5173` en la PC y la URL del túnel en el celular.
+Para una prueba solo de PC: `bash iniciar.sh --sin-tunel`.
+
+La guía detallada es
+[`GUIA_PRESENTACION_FEDORA.md`](GUIA_PRESENTACION_FEDORA.md).
+
+### Windows (apoyo)
 
 ```powershell
 .\scripts\iniciar-demo.ps1
 ```
 
-El script:
-
-1. Carga `.env.demo` en el proceso.
-2. Abre el backend en una ventana nueva.
-3. Si `cloudflared` está instalado, abre un túnel HTTPS.
-4. Avisa si faltan credenciales o la ruta de Firebase.
-
-Si PowerShell bloquea el script:
+El script carga `.env.demo`, inicia el frontend React, el backend y el túnel
+hacia `5173`. Si PowerShell bloquea el script:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\iniciar-demo.ps1
 ```
 
-### Arranque manual
+### Arranque manual (solo backend)
 
 ```powershell
 $env:DB_URL = "jdbc:postgresql://localhost:5432/alerta_inundaciones"
@@ -116,21 +133,12 @@ $env:ALERTA_ADMIN_PASSWORD = "admin-local-clave"
 .\mvnw.cmd spring-boot:run
 ```
 
-### Arranque en Linux
+### Lanzador Linux antiguo
 
-El script de PowerShell requiere `pwsh`, que no viene instalado en la mayoría de
-distribuciones. El equivalente en bash carga `.env.demo` y arranca la aplicación
-con la consola interactiva:
-
-```bash
-bash scripts/iniciar-demo.sh            # consola interactiva y navegador
-bash scripts/iniciar-demo.sh --tunel    # ademas abre cloudflared si esta instalado
-```
-
-Con doble clic (sin terminal) el script se relanza en Konsole, GNOME Terminal o
-xterm, y abre el navegador en `http://localhost:8081` cuando el backend
-responde. Si el puerto 8081 ya está ocupado, solo abre la página y no lanza una
-segunda instancia.
+`scripts/iniciar-demo.sh` servía la PWA de prueba en `8081`; para la interfaz
+React de la presentación use `iniciar.sh`. Se conserva por compatibilidad. El
+lanzador nuevo también relanza en Konsole/GNOME Terminal/xterm si se ejecuta con
+doble clic y abre `http://localhost:5173`.
 
 Si no hay PostgreSQL local, se puede usar un contenedor:
 
@@ -148,8 +156,11 @@ podman run -d --name alerta-postgres \
 Abre:
 
 ```text
-http://localhost:8081
+http://localhost:5173
 ```
+
+Esa es la interfaz React de la presentación. La PWA de prueba antigua sigue en
+`http://localhost:8081` y no debe usarse como pantalla principal.
 
 En la consola del backend debe aparecer el menú de acceso:
 
@@ -346,19 +357,24 @@ revisa el `motivo`, la ruta del JSON y las claves públicas.
 
 En la PC:
 
-1. Abre `http://localhost:8081` e inicia sesión o crea una cuenta.
-2. Sigue al menos un río (el push depende de los ríos que sigue el usuario).
-3. Pulsa **Activar notificaciones**.
-4. Acepta el permiso.
-5. Debe aparecer **Activadas**.
+1. Abre `http://localhost:5173` e inicia sesión como `ADMIN` (o con una cuenta
+   distinta de la del celular).
+2. Si vas a probar el push en la PC, sigue al menos un río y pulsa **Activar
+   notificaciones**; acepta el permiso y verifica **Activadas**.
+3. Para la demo con celular, la PC se usa como `ADMIN` y el celular como `USER`.
 
 En el celular:
 
-1. Abre la URL HTTPS del túnel, no `http://192.168.x.x:8081`.
-2. Inicia sesión o crea una cuenta y sigue al menos un río.
+1. Abre la URL HTTPS del túnel que apunta a `5173`, no
+   `http://192.168.x.x:5173`.
+2. Registra una cuenta `USER` distinta de la del `ADMIN`, sigue al menos un río.
 3. Pulsa **Activar notificaciones**.
 4. Acepta el permiso.
 5. Debe aparecer **Activadas**.
+
+> El backend desactiva los tokens web anteriores del mismo usuario al registrar
+> uno nuevo. Por eso conviene usar una cuenta `USER` en el celular y la cuenta
+> `ADMIN` solo en la PC.
 
 Android: usa Chrome.  
 iPhone/iPad: requiere iOS 16.4+ y agregar la página a la pantalla de inicio.
@@ -368,7 +384,8 @@ iPhone/iPad: requiere iOS 16.4+ y agregar la página a la pantalla de inicio.
 La forma principal de probar el push es simular una crecida sobre un río que
 tenga seguidores:
 
-1. En la PWA, suscríbete a un río con la cuenta que recibirá la notificación.
+1. En el celular (o en la PWA antigua), suscríbete a un río con la cuenta que
+   recibirá la notificación.
 2. En la consola, inicia sesión con `ADMIN` y elige la opción `6`.
 3. Selecciona el mismo río. El caudal por defecto del menú es `75.0 m³/s`.
 4. La consola debe mostrar cuántos dispositivos siguen el río, cuántos envíos
@@ -378,10 +395,11 @@ tenga seguidores:
    El texto visible usa el formato de una alerta real con emojis
    (`🚨 ALERTA DE INUNDACIÓN 🌊` o `⚠️ AVISO DE CRECIDA...` según el nivel
    simulado); no incluye «simulacro» ni «prueba».
-6. En la PWA, el administrador también puede pulsar **Simular crecida** en la
-   sección de administración, sin usar la consola. Si FCM no está configurado,
-   la PWA muestra el aviso y no ofrece el botón: no tiene sentido simular un
-   envío que no puede salir.
+6. En la interfaz React (`http://localhost:5173`), el administrador también
+   puede pulsar **Simular crecida y notificar** en el panel del río o **Simular
+   crecida** en **Mis ríos**, sin usar la consola. Si FCM no está configurado,
+   la interfaz muestra el aviso y no ofrece el botón: no tiene sentido simular
+   un envío que no puede salir.
 
 ### 6.5 Enviar la demostración global
 
@@ -636,11 +654,14 @@ ríos configurados. Las rutas heredadas `POST /api/push/demo` y
 ## 11. Checklist de aceptación
 
 - [ ] El backend inicia y queda escuchando en `8081`.
+- [ ] La interfaz React abre en `http://localhost:5173` y el proxy `/api`
+      responde a través de Vite.
 - [ ] `GET /api/rios` responde con los cuatro ríos y `GET /api/rios/mapa` con la
       geometría real.
 - [ ] El login `ADMIN` devuelve un JWT; el registro público crea solo `USER`.
 - [ ] `GET /api/push/config` responde sin `reachId`.
-- [ ] La PWA pide iniciar sesión y muestra el catálogo con botones de suscripción.
+- [ ] La PWA antigua pide iniciar sesión y muestra el catálogo con botones de
+      suscripción.
 - [ ] Seguir un río es idempotente y se refleja en `/api/usuarios/me/rios`.
 - [ ] El panel devuelve `siguiendo` con JWT y `null` sin sesión.
 - [ ] La segunda consulta del panel dentro del TTL usa la caché de GEOGloWS.
@@ -658,7 +679,9 @@ ríos configurados. Las rutas heredadas `POST /api/push/demo` y
 - [ ] La opción `7` envía el simulacro global a todos los dispositivos.
 - [ ] Con `ALERTA_DEMO_CONSOLA_HABILITADA=false` el backend sigue funcionando.
 - [ ] `.\mvnw.cmd package` termina con 82 pruebas y `BUILD SUCCESS`.
-- [ ] `node --check` no reporta errores.
+- [ ] `cd frontend && npm run build` termina sin errores.
+- [ ] `cd frontend && npm run lint` no reporta errores nuevos.
+- [ ] `node --check` no reporta errores en la PWA antigua.
 - [ ] No se versionaron `.env.demo` ni credenciales.
 
 ---

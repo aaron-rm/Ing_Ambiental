@@ -4,6 +4,12 @@
 **Estado:** vigente. Refleja el avance de autenticación, catálogo de cuatro ríos,
 selección usuario–ríos y push asociado al usuario.
 
+> **Nota (11/11/2026):** la rama `frontend-final` ya incluye la aplicación React
+> de `frontend/`, servida en `http://localhost:5173` con `bash iniciar.sh`. Las
+> referencias al «frontend definitivo» como una entrega futura describen el
+> estado anterior; el frontend de la presentación ya existe. Ver
+> [`GUIA_PRESENTACION_FEDORA.md`](GUIA_PRESENTACION_FEDORA.md).
+
 Este documento es la referencia permanente para separar responsabilidades entre el
 backend, la consola de demostración y los clientes. `GEMINI.md` resume estas
 reglas y enlaza aquí; si hay contradicción entre un documento histórico y este

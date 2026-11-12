@@ -1,5 +1,12 @@
 # Continuidad de sesión y traspaso de contexto
 
+> **Nota (11/11/2026):** para la rama `frontend-final` y la presentación en
+> Fedora, el arranque vigente es `bash iniciar.sh` y la interfaz React se abre en
+> `http://localhost:5173`. Ver
+> [`GUIA_PRESENTACION_FEDORA.md`](GUIA_PRESENTACION_FEDORA.md). Las referencias a
+> la rama `backend`, la PWA y el puerto `8081` describen el backend y la PWA de
+> prueba.
+
 **Última actualización:** 25/10/2026<br>
 **Rama de trabajo:** `backend`<br>
 **Último commit de referencia:** cierre de revisión y preparación del backend para la entrega del 75 % (`git log -1`).<br>
@@ -283,11 +290,12 @@ del commit correspondiente.
 
 - Entorno: Fedora/KDE con Java 25; PostgreSQL 16 en un contenedor Podman
   (`alerta-postgres`, volumen `alerta-pgdata`, puerto `127.0.0.1:5432`).
-- `scripts/iniciar-demo.sh` es el equivalente Linux de `iniciar-demo.ps1`:
-  carga `.env.demo`, relanza el script en Konsole/GNOME Terminal/xterm si no hay
-  terminal (doble clic), abre el navegador cuando el backend responde y no lanza
-  una segunda instancia si el puerto 8081 ya está ocupado. `--tunel` inicia
-  `cloudflared` si está instalado.
+- En esa fecha, `scripts/iniciar-demo.sh` era el equivalente Linux de
+  `iniciar-demo.ps1`: cargaba `.env.demo`, relanzaba el script en
+  Konsole/GNOME Terminal/xterm si no había terminal (doble clic), abría el
+  navegador cuando el backend respondía y no lanzaba una segunda instancia si el
+  puerto 8081 ya estaba ocupado. `--tunel` iniciaba `cloudflared` si estaba
+  instalado. Hoy el lanzador vigente es `iniciar.sh`.
 - `.env.demo` de esa máquina recibió `ALERTA_JWT_SECRET`,
   `ALERTA_ADMIN_IDENTIFICADOR`, `ALERTA_ADMIN_PASSWORD`, `ALERTA_CORS_ORIGENES`,
   `ALERTA_CARGAR_CATALOGO` y `FIREBASE_ENABLED=false`. **La contraseña de
@@ -357,21 +365,21 @@ Los GeoPackage se descargan de las URLs indicadas en el encabezado del script
 (~600 MB entre los dos). El catálogo ya está versionado en
 `src/main/resources/catalogo/rios.json`.
 
-7. Arrancar la demo en Windows:
+7. Arrancar la demo en Fedora (rama `frontend-final`):
 
-```powershell
-.\scripts\iniciar-demo.ps1
+```bash
+bash iniciar.sh
 ```
 
-La prueba de humo ya se completó en Linux (sección 2.8). En Windows confirmar lo
-mismo: el backend arranca, `/api/rios` devuelve los cuatro ríos, el login
-funciona y la PWA carga en `http://localhost:8081`.
+El lanzador inicia el backend en `8081`, la interfaz React en `5173` y el túnel
+HTTPS hacia `5173`. Abre `http://localhost:5173`. En Windows, el apoyo es
+`.\scripts\iniciar-demo.ps1`.
 
-En Linux, para la próxima sesión:
+La prueba de humo ya se completó en Linux (sección 2.8). Para la próxima sesión:
 
 ```bash
 podman start alerta-postgres   # si el contenedor está detenido
-bash scripts/iniciar-demo.sh   # backend, menú y navegador
+bash iniciar.sh                # backend + React/Vite + túnel
 ```
 
 ---
@@ -394,9 +402,11 @@ bash scripts/iniciar-demo.sh   # backend, menú y navegador
 | `src/main/java/.../GEOGLOWS/ClienteApiGeoglows.java` | Consulta a GEOGloWS con caché por tramo y reserva ante fallos |
 | `src/main/java/.../alerta/AlertaRioDTO.java` | Contrato del panel, incluido `siguiendo` |
 | `src/main/resources/static/` | PWA de prueba (login, catálogo, suscripción, push y simulación admin) |
+| `frontend/` | Aplicación React/Vite de la presentación (`http://localhost:5173`) |
+| `iniciar.sh` | Arranque en Fedora/Linux: backend + frontend + túnel |
 | `docs/INTEGRACION_FRONTEND.md` | Contrato vigente para el frontend definitivo |
 | `scripts/iniciar-demo.ps1` | Arranque en Windows (PowerShell) |
-| `scripts/iniciar-demo.sh` | Arranque en Linux (terminal automática y navegador) |
+| `scripts/iniciar-demo.sh` | Lanzador Linux antiguo de la PWA en `8081` (legado) |
 
 ---
 
