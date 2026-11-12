@@ -41,6 +41,10 @@ túnel aparece al final; esa es la que se abre en el celular.
 Opciones: `bash iniciar.sh --sin-tunel` (solo PC) y
 `bash iniciar.sh --sin-navegador`.
 
+Si el backend falla por PostgreSQL, ejecuta
+`bash scripts/diagnosticar-postgres.sh`; muestra la causa sin imprimir la
+contraseña.
+
 La guía paso a paso para la presentación en Fedora está en
 [`docs/GUIA_PRESENTACION_FEDORA.md`](docs/GUIA_PRESENTACION_FEDORA.md).
 

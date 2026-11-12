@@ -215,34 +215,163 @@ if find "$raiz/target/classes" -name '*safeBackup*' -print -quit 2>/dev/null | g
     log_ok "target/ limpio."
 fi
 
-# Verificar PostgreSQL en el puerto 5432
-if (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1; then
-    log_ok "PostgreSQL está activo y escuchando en el puerto 5432."
-else
-    log_aviso "PostgreSQL no responde en el puerto 5432. Intentando iniciar contenedor..."
-    if command -v podman >/dev/null 2>&1 && podman container exists alerta-postgres 2>/dev/null; then
-        podman start alerta-postgres >/dev/null 2>&1 || true
-    elif command -v docker >/dev/null 2>&1 && docker ps -a --format '{{.Names}}' | grep -q "^alerta-postgres$"; then
-        docker start alerta-postgres >/dev/null 2>&1 || true
-    fi
+# Verificar PostgreSQL: puerto, contenedor de la demo y credenciales reales.
+# Extraer host, puerto y base de DB_URL (jdbc:postgresql://host:puerto/base).
+db_host="localhost"
+db_port="5432"
+db_name="alerta_inundaciones"
+if [[ "${DB_URL:-}" =~ ^jdbc:postgresql://([^/:?]+)(:([0-9]+))?/([^?]+) ]]; then
+    db_host="${BASH_REMATCH[1]}"
+    db_port="${BASH_REMATCH[3]:-5432}"
+    db_name="${BASH_REMATCH[4]}"
+fi
 
-    # Esperar hasta 10 segundos
-    pg_ok=false
+# Detectar el contenedor de la demo (Podman o Docker).
+pg_contenedor=""
+pg_contenedor_activo=false
+if command -v podman >/dev/null 2>&1 && podman container exists alerta-postgres 2>/dev/null; then
+    pg_contenedor="podman"
+    if podman ps --format '{{.Names}}' 2>/dev/null | grep -qx 'alerta-postgres'; then
+        pg_contenedor_activo=true
+    fi
+elif command -v docker >/dev/null 2>&1 && docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'alerta-postgres'; then
+    pg_contenedor="docker"
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'alerta-postgres'; then
+        pg_contenedor_activo=true
+    fi
+fi
+
+puerto_pg_abierto=false
+if (echo > /dev/tcp/127.0.0.1/"$db_port") >/dev/null 2>&1; then
+    puerto_pg_abierto=true
+fi
+
+# Si el contenedor de la demo está detenido y el puerto lo ocupa otro
+# PostgreSQL (por ejemplo, el servicio nativo de Fedora), no se puede arrancar.
+if [[ -n "$pg_contenedor" && "$pg_contenedor_activo" == "false" && "$puerto_pg_abierto" == "true" ]]; then
+    log_error "El contenedor alerta-postgres está detenido y el puerto $db_port ya está ocupado."
+    if systemctl list-units --type=service --state=active --no-legend 2>/dev/null | grep -qE 'postgresql[^ ]*\.service'; then
+        log_error "El puerto lo ocupa PostgreSQL del sistema. Para usar los datos de la demo:"
+        log_error "  sudo systemctl stop postgresql"
+        log_error "  $pg_contenedor start alerta-postgres"
+    else
+        log_error "Detenga el proceso que usa el puerto $db_port o use el contenedor de la demo."
+    fi
+    exit 1
+fi
+
+# Si el contenedor existe y está detenido, arrancarlo.
+if [[ -n "$pg_contenedor" && "$pg_contenedor_activo" == "false" && "$puerto_pg_abierto" == "false" ]]; then
+    log_info "Iniciando contenedor PostgreSQL (alerta-postgres)..."
+    if $pg_contenedor start alerta-postgres >/dev/null 2>&1; then
+        for _ in {1..20}; do
+            if (echo > /dev/tcp/127.0.0.1/"$db_port") >/dev/null 2>&1; then
+                puerto_pg_abierto=true
+                pg_contenedor_activo=true
+                break
+            fi
+            sleep 0.5
+        done
+    fi
+fi
+
+if [[ "$puerto_pg_abierto" == "true" ]]; then
+    log_ok "PostgreSQL está activo y escuchando en el puerto $db_port."
+else
+    log_aviso "PostgreSQL no responde en el puerto $db_port."
+    if [[ -n "$pg_contenedor" ]]; then
+        $pg_contenedor start alerta-postgres >/dev/null 2>&1 || true
+    else
+        log_aviso "Si PostgreSQL es un servicio del sistema, ejecute: sudo systemctl start postgresql"
+    fi
     for _ in {1..20}; do
-        if (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1; then
-            pg_ok=true
+        if (echo > /dev/tcp/127.0.0.1/"$db_port") >/dev/null 2>&1; then
+            puerto_pg_abierto=true
             break
         fi
         sleep 0.5
     done
-
-    if [[ "$pg_ok" == "true" ]]; then
-        log_ok "Contenedor PostgreSQL (alerta-postgres) iniciado correctamente."
+    if [[ "$puerto_pg_abierto" == "true" ]]; then
+        log_ok "PostgreSQL iniciado en el puerto $db_port."
     else
-        log_error "No se pudo conectar a PostgreSQL en localhost:5432."
-        log_error "Asegúrese de iniciar su base de datos o ejecute: podman start alerta-postgres"
+        log_error "No se pudo conectar a PostgreSQL en $db_host:$db_port."
+        log_error "Inicie la base de datos o ejecute: podman start alerta-postgres"
         exit 1
     fi
+fi
+
+# Validar las credenciales con psql antes de arrancar Maven. Sin esto, una
+# contraseña incorrecta tarda 90 s en aparecer como un error de Hibernate.
+if command -v psql >/dev/null 2>&1; then
+    pg_error="$(mktemp)"
+    pg_ok=false
+    if PGCONNECT_TIMEOUT=5 PGPASSWORD="${DB_PASSWORD:-}" psql -w -h "$db_host" -p "$db_port" \
+        -U "${DB_USERNAME:-postgres}" -d "$db_name" -c 'select 1;' >/dev/null 2>"$pg_error"; then
+        pg_ok=true
+    elif [[ "$db_host" == "localhost" ]] \
+        && grep -qiE 'Connection refused|could not connect' "$pg_error" \
+        && PGCONNECT_TIMEOUT=5 PGPASSWORD="${DB_PASSWORD:-}" psql -w -h 127.0.0.1 -p "$db_port" \
+            -U "${DB_USERNAME:-postgres}" -d "$db_name" -c 'select 1;' >/dev/null 2>"$pg_error"; then
+        if [[ -n "${DB_URL:-}" ]]; then
+            DB_URL="${DB_URL/localhost/127.0.0.1}"
+            export DB_URL
+        fi
+        db_host="127.0.0.1"
+        pg_ok=true
+        log_aviso "localhost no conectaba; se usará 127.0.0.1 para la base de datos."
+    elif [[ "$pg_contenedor_activo" == "true" ]]; then
+        # La contraseña del contenedor puede diferir de .env.demo, por ejemplo
+        # si OneDrive sincronizó el archivo desde otra máquina.
+        pg_pw_contenedor=""
+        if [[ "$pg_contenedor" == "podman" ]]; then
+            pg_pw_contenedor="$(podman exec alerta-postgres printenv POSTGRES_PASSWORD 2>/dev/null || true)"
+        else
+            pg_pw_contenedor="$(docker exec alerta-postgres printenv POSTGRES_PASSWORD 2>/dev/null || true)"
+        fi
+        if [[ -n "$pg_pw_contenedor" ]] && PGCONNECT_TIMEOUT=5 PGPASSWORD="$pg_pw_contenedor" psql -w \
+            -h "$db_host" -p "$db_port" -U "${DB_USERNAME:-postgres}" -d "$db_name" -c 'select 1;' \
+            >/dev/null 2>"$pg_error"; then
+            DB_PASSWORD="$pg_pw_contenedor"
+            export DB_PASSWORD
+            pg_ok=true
+            log_aviso "La contraseña de .env.demo no coincide con el contenedor; se usará la del contenedor para esta ejecución."
+        fi
+    fi
+
+    if [[ "$pg_ok" == "true" ]]; then
+        log_ok "Conexión a PostgreSQL verificada (base $db_name)."
+    else
+        pg_detalle="$(tr '\n' ' ' < "$pg_error" | cut -c1-300)"
+        log_error "PostgreSQL responde, pero la conexión con .env.demo falló."
+        log_error "Detalle: $pg_detalle"
+        if grep -qiE 'password authentication failed|no password supplied' "$pg_error"; then
+            log_error "La contraseña de DB_PASSWORD no es válida para el usuario ${DB_USERNAME:-postgres}."
+            if [[ "$pg_contenedor_activo" == "true" ]]; then
+                log_error "Actualice DB_PASSWORD en .env.demo con la contraseña del contenedor."
+                log_error "Puede consultarla con: $pg_contenedor exec alerta-postgres printenv POSTGRES_PASSWORD"
+            else
+                log_error "Si usa PostgreSQL del sistema, restablezca la clave:"
+                log_error "  sudo -u postgres psql -c \"ALTER USER postgres PASSWORD 'la-clave-de-.env.demo';\""
+            fi
+        elif grep -qiE 'database .* does not exist' "$pg_error"; then
+            log_error "La base '$db_name' no existe."
+            if [[ "$pg_contenedor_activo" == "true" ]]; then
+                log_error "Créela con: $pg_contenedor exec alerta-postgres createdb -U postgres $db_name"
+            else
+                log_error "Créela con: sudo -u postgres createdb $db_name"
+            fi
+        elif grep -qiE 'Connection refused|could not connect' "$pg_error"; then
+            log_error "No se pudo conectar a $db_host:$db_port."
+        elif grep -qiE 'no pg_hba.conf entry' "$pg_error"; then
+            log_error "PostgreSQL rechazó la conexión por pg_hba.conf."
+        fi
+        log_error "Diagnóstico ampliado: bash scripts/diagnosticar-postgres.sh"
+        rm -f "$pg_error"
+        exit 1
+    fi
+    rm -f "$pg_error"
+else
+    log_aviso "psql no está instalado; no se validaron las credenciales antes de arrancar."
 fi
 
 # ------------------------------------------------------------------------------
@@ -279,7 +408,15 @@ else
         log_ok "Backend iniciado y listo en http://localhost:8081."
     else
         log_error "El backend no pudo iniciar a tiempo. Revise el log: $dir_logs/backend.log"
-        tail -n 25 "$dir_logs/backend.log"
+        if [[ -f "$dir_logs/backend.log" ]]; then
+            log_error "Causa probable:"
+            causas=$(grep -aE 'Caused by|FATAL|password authentication|does not exist|Connection refused|no pg_hba|HikariPool|Unable to determine Dialect' "$dir_logs/backend.log" | tail -n 12 || true)
+            if [[ -n "$causas" ]]; then
+                while IFS= read -r linea; do log_error "  $linea"; done <<< "$causas"
+            else
+                tail -n 10 "$dir_logs/backend.log" | while IFS= read -r linea; do log_error "  $linea"; done
+            fi
+        fi
         exit 1
     fi
 fi

@@ -377,6 +377,30 @@ simulación quedaron integrados en la rama `frontend-final`.
   cuenta de servicio en `FIREBASE_CREDENTIALS_PATH` y abrir el túnel nuevo desde
   el teléfono.
 
+### 4.3. Sesión del 12/11/2026 (Fedora) — diagnóstico de PostgreSQL
+
+- Al arrancar en la laptop Fedora, el backend falló con
+  `Unable to determine Dialect without JDBC metadata`. Ese mensaje de Hibernate
+  es un envoltorio: la causa real es que el backend no pudo conectarse a
+  PostgreSQL (contraseña, base inexistente o conflicto de puerto).
+- El lanzador solo comprobaba que el puerto 5432 estuviera abierto; no validaba
+  las credenciales. Por eso esperaba 90 s y mostraba el error de Hibernate sin
+  la causa.
+- `iniciar.sh` ahora:
+  - extrae host, puerto y base de `DB_URL`;
+  - detecta si el contenedor `alerta-postgres` existe y está detenido;
+  - si el puerto lo ocupa PostgreSQL del sistema, explica cómo detenerlo y
+    arrancar el contenedor;
+  - valida las credenciales con `psql` antes de Maven y muestra la causa;
+  - si el contenedor está activo y la contraseña de `.env.demo` no coincide,
+    usa la contraseña del contenedor solo para esa ejecución;
+  - prueba `127.0.0.1` si `localhost` no conecta.
+- Se agregó `scripts/diagnosticar-postgres.sh`, que imprime configuración,
+  puerto, servicios, contenedores y una prueba de conexión sin revelar la
+  contraseña.
+- **Pendiente:** confirmar en la laptop cuál de los casos era y dejar `.env.demo`
+  con la contraseña correcta de esa máquina.
+
 ---
 
 ## 5. Cómo retomar en otra computadora
@@ -454,6 +478,16 @@ inicia el backend en `8081`, la interfaz React en `5173` y el túnel HTTPS hacia
 `5173`. Abre `http://localhost:5173` en la PC y la URL del túnel en el celular.
 En Windows, el apoyo es `.\scripts\iniciar-demo.ps1`.
 
+Si el backend falla por PostgreSQL, ejecuta:
+
+```bash
+bash scripts/diagnosticar-postgres.sh
+```
+
+El diagnóstico no imprime la contraseña y explica si el problema es el
+contenedor detenido, PostgreSQL del sistema ocupando el puerto, una clave
+incorrecta o una base inexistente.
+
 8. Al terminar, detener con `Ctrl + C` y comprobar los puertos:
 
 ```bash
@@ -481,7 +515,8 @@ ss -ltnp | grep -E ':8081|:5173' || echo "Puertos libres"
 | `src/main/java/.../alerta/AlertaRioDTO.java` | Contrato del panel, incluido `siguiendo` |
 | `src/main/resources/static/` | PWA de prueba (login, catálogo, suscripción, push y simulación admin) |
 | `frontend/` | Aplicación React/Vite de la presentación (`http://localhost:5173`) |
-| `iniciar.sh` | Arranque en Fedora/Linux: backend + frontend + túnel |
+| `iniciar.sh` | Arranque en Fedora/Linux: backend + frontend + túnel; valida PostgreSQL antes de Maven |
+| `scripts/diagnosticar-postgres.sh` | Diagnóstico de conexión, contenedor y credenciales de PostgreSQL |
 | `docs/INTEGRACION_FRONTEND.md` | Contrato vigente para el frontend definitivo |
 | `scripts/iniciar-demo.ps1` | Arranque en Windows (PowerShell) |
 | `scripts/iniciar-demo.sh` | Lanzador Linux antiguo de la PWA en `8081` (legado) |

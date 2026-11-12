@@ -273,6 +273,7 @@ URL (`/?simulacion=...`) y en el payload.
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
+| El backend falla con `Unable to determine Dialect without JDBC metadata` | Hibernate no pudo conectarse a PostgreSQL; la causa real está antes en el log | Ejecutar `bash scripts/diagnosticar-postgres.sh`; el lanzador ahora valida las credenciales y muestra la causa |
 | El backend no arranca y el log menciona `password authentication failed` | `DB_PASSWORD` no coincide con el PostgreSQL de esta laptop | Corregir `.env.demo`; probar con `psql`; volver a arrancar |
 | `Port 8081 is already in use` o `5173` ocupado | Proceso anterior | `ss -ltnp \| grep -E ':8081\|:5173'` y cerrar el PID, o reiniciar la sesión |
 | Vite falla con un error de `@rolldown/binding` o `Cannot find module` | `node_modules` sincronizado desde Windows | `rm -rf frontend/node_modules && (cd frontend && npm install)`; el lanzador también lo detecta |
@@ -286,6 +287,63 @@ URL (`/?simulacion=...`) y en el payload.
 | La notificación no llega a Android | Permiso, ahorro de batería, Brave o agrupación de Android | Usar Chrome, permitir notificaciones, desactivar optimización de batería para Chrome y probar con otro río o esperar unos segundos |
 | La notificación no llega a iPhone | iOS antiguo, Safari sin agregar a inicio o permiso denegado | iOS 16.4+, agregar a la pantalla de inicio, abrir desde el icono y permitir notificaciones |
 | La app se ve vieja en la PC | Se abrió `8081` (PWA antigua) o el navegador cacheó | Abrir `http://localhost:5173`; en la PWA antigua, desregistrar el Service Worker |
+
+### Si el backend falla con «Unable to determine Dialect without JDBC metadata»
+
+Ese mensaje de Hibernate significa que el backend **no pudo conectarse a
+PostgreSQL**; la causa real aparece antes en `target/logs/backend.log`. Desde el
+12/11/2026, `iniciar.sh` valida las credenciales con `psql` antes de arrancar y
+muestra la causa probable. Ejecuta también:
+
+```bash
+bash scripts/diagnosticar-postgres.sh
+```
+
+El diagnóstico no imprime la contraseña. Casos típicos:
+
+1. **El contenedor `alerta-postgres` está detenido y PostgreSQL del sistema
+   ocupa el puerto 5432.** Es lo más frecuente después de reiniciar Fedora.
+   Para volver a usar los datos de la demo:
+
+   ```bash
+   sudo systemctl stop postgresql
+   podman start alerta-postgres
+   bash iniciar.sh
+   ```
+
+   Si el contenedor no existe, usa PostgreSQL del sistema y configura la base:
+
+   ```bash
+   sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'la-clave-de-.env.demo';"
+   sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='alerta_inundaciones'" \
+     | grep -q 1 || sudo -u postgres createdb alerta_inundaciones
+   bash iniciar.sh
+   ```
+
+2. **La contraseña de `.env.demo` no coincide.** Si el contenedor está corriendo,
+   el lanzador toma automáticamente la contraseña del contenedor para esa
+   ejecución. Para dejarla fija en `.env.demo`:
+
+   ```bash
+   podman exec alerta-postgres printenv POSTGRES_PASSWORD
+   ```
+
+   Copia el valor en `DB_PASSWORD`.
+
+3. **La base `alerta_inundaciones` no existe.** Créala con el comando del caso 1,
+   o dentro del contenedor:
+
+   ```bash
+   podman exec alerta-postgres createdb -U postgres alerta_inundaciones
+   ```
+
+4. **`localhost` resuelve a IPv6 y PostgreSQL solo escucha en IPv4.** El
+   lanzador prueba `127.0.0.1` automáticamente; si funciona, usa esa dirección
+   para esa ejecución. También puedes fijarla en `.env.demo`:
+
+   ```properties
+   DB_URL=jdbc:postgresql://127.0.0.1:5432/alerta_inundaciones
+   ```
 
 ### Si Cloudflare no coopera
 
