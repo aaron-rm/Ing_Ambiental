@@ -78,11 +78,17 @@ echo
 
 echo "== Contenedores de la demo =="
 encontrado=false
+pg_contenedor=""
+pg_contenedor_activo=false
 if command -v podman >/dev/null 2>&1; then
     salida_podman=$(podman ps -a --filter name=alerta-postgres --format 'podman: {{.Names}} | {{.Status}} | {{.Ports}}' 2>/dev/null || true)
     if [[ -n "$salida_podman" ]]; then
         echo "$salida_podman"
         encontrado=true
+        pg_contenedor="podman"
+        if podman ps --format '{{.Names}}' 2>/dev/null | grep -qx 'alerta-postgres'; then
+            pg_contenedor_activo=true
+        fi
     fi
 fi
 if command -v docker >/dev/null 2>&1; then
@@ -90,10 +96,32 @@ if command -v docker >/dev/null 2>&1; then
     if [[ -n "$salida_docker" ]]; then
         echo "$salida_docker"
         encontrado=true
+        pg_contenedor="docker"
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'alerta-postgres'; then
+            pg_contenedor_activo=true
+        fi
     fi
 fi
 if [[ "$encontrado" == "false" ]]; then
     echo "No se encontró el contenedor alerta-postgres."
+fi
+
+pw_contenedor=""
+if [[ "$pg_contenedor_activo" == "true" ]]; then
+    pw_contenedor="$($pg_contenedor exec alerta-postgres printenv POSTGRES_PASSWORD 2>/dev/null || true)"
+    if [[ -n "$pw_contenedor" ]]; then
+        echo "Contraseña del contenedor: definida (${#pw_contenedor} caracteres)"
+        if [[ -n "${DB_PASSWORD:-}" && "$DB_PASSWORD" != "$pw_contenedor" ]]; then
+            echo "AVISO: DB_PASSWORD en .env.demo (${#DB_PASSWORD} caracteres) NO coincide con la del contenedor (${#pw_contenedor} caracteres)."
+            echo "       OneDrive suele sincronizar la contraseña de Windows; iniciar.sh usará la del contenedor automáticamente."
+        fi
+    fi
+    # Verificar si la base de datos existe en el contenedor
+    if $pg_contenedor exec alerta-postgres psql -U postgres -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw "$db_name"; then
+        echo "Base '$db_name' en contenedor: EXISTE"
+    else
+        echo "Base '$db_name' en contenedor: NO EXISTE (ejecute: $pg_contenedor exec alerta-postgres createdb -U postgres $db_name)"
+    fi
 fi
 echo
 
@@ -101,30 +129,75 @@ echo "== Cliente psql =="
 if command -v psql >/dev/null 2>&1; then
     psql --version
 else
-    echo "psql NO instalado (sudo dnf install postgresql)"
+    echo "psql en host: NO instalado (instalar con: sudo dnf install postgresql)"
+    if [[ "$pg_contenedor_activo" == "true" ]]; then
+        echo "psql en contenedor alerta-postgres: DISPONIBLE"
+    fi
 fi
 echo
 
 echo "== Prueba de conexión =="
-if command -v psql >/dev/null 2>&1; then
-    salida="$(PGCONNECT_TIMEOUT=5 PGPASSWORD="${DB_PASSWORD:-}" psql -w -h "$db_host" -p "$db_port" \
-        -U "${DB_USERNAME:-postgres}" -d "$db_name" -c 'select 1;' 2>&1)"
-    codigo=$?
+ejecutar_prueba() {
+    local h="$1"
+    local p="$2"
+    local u="$3"
+    local pass="$4"
+    local db="$5"
+
+    if command -v psql >/dev/null 2>&1; then
+        PGCONNECT_TIMEOUT=5 PGPASSWORD="$pass" psql -w -h "$h" -p "$p" -U "$u" -d "$db" -c 'select 1;' 2>&1
+    elif [[ "$pg_contenedor_activo" == "true" ]]; then
+        $pg_contenedor exec -e PGPASSWORD="$pass" alerta-postgres psql -w -h "$h" -p "$p" -U "$u" -d "$db" -c 'select 1;' 2>&1
+    else
+        echo "NO_PSQL"
+        return 127
+    fi
+}
+
+salida="$(ejecutar_prueba "$db_host" "$db_port" "${DB_USERNAME:-postgres}" "${DB_PASSWORD:-}" "$db_name")"
+codigo=$?
+
+if [[ "$salida" == "NO_PSQL" ]]; then
+    echo "No se puede probar la conexión: psql no está instalado en el host y no hay contenedor activo."
+    echo "Instale el cliente con: sudo dnf install postgresql"
+else
+    echo "Destino: $db_host:$db_port / base: $db_name / usuario: ${DB_USERNAME:-postgres}"
     echo "$salida"
     echo "Código de salida: $codigo"
     if [[ $codigo -eq 0 ]]; then
-        echo "Conexión correcta."
+        echo "Conexión correcta con las credenciales de .env.demo."
     else
+        # Si falló, intentar con 127.0.0.1 o con la clave del contenedor
+        if [[ "$db_host" == "localhost" ]]; then
+            echo
+            echo "Probando con 127.0.0.1 (evitar conflicto IPv6)..."
+            salida_ipv4="$(ejecutar_prueba "127.0.0.1" "$db_port" "${DB_USERNAME:-postgres}" "${DB_PASSWORD:-}" "$db_name")"
+            if [[ $? -eq 0 ]]; then
+                echo "127.0.0.1: CONEXIÓN EXITOSA. Use DB_URL=jdbc:postgresql://127.0.0.1:$db_port/$db_name en .env.demo"
+            fi
+        fi
+        if [[ "$pg_contenedor_activo" == "true" && -n "$pw_contenedor" && "$pw_contenedor" != "${DB_PASSWORD:-}" ]]; then
+            echo
+            echo "Probando con la contraseña del contenedor alerta-postgres..."
+            salida_cont="$(ejecutar_prueba "$db_host" "$db_port" "${DB_USERNAME:-postgres}" "$pw_contenedor" "$db_name")"
+            if [[ $? -eq 0 ]]; then
+                echo "Contenedor: CONEXIÓN EXITOSA con la clave del contenedor. iniciar.sh la usará automáticamente."
+            fi
+        fi
+
         echo
         echo "== Sugerencias =="
         case "$salida" in
             *"password authentication failed"*|*"no password supplied"*)
                 echo "- La contraseña de .env.demo no coincide con PostgreSQL."
-                echo "- Si el contenedor alerta-postgres está corriendo:"
-                echo "    podman exec alerta-postgres printenv POSTGRES_PASSWORD"
-                echo "  copie ese valor en DB_PASSWORD."
-                echo "- Si usa PostgreSQL del sistema:"
-                echo "    sudo -u postgres psql -c \"ALTER USER postgres PASSWORD 'la-clave-de-.env.demo';\""
+                if [[ "$pg_contenedor_activo" == "true" ]]; then
+                    echo "- Contenedor alerta-postgres activo. La clave del contenedor se obtiene con:"
+                    echo "    $pg_contenedor exec alerta-postgres printenv POSTGRES_PASSWORD"
+                    echo "  iniciar.sh la detecta y utiliza automáticamente."
+                else
+                    echo "- Si usa PostgreSQL del sistema:"
+                    echo "    sudo -u postgres psql -c \"ALTER USER postgres PASSWORD 'la-clave-de-.env.demo';\""
+                fi
                 ;;
             *"database"*"does not exist"*)
                 echo "- La base '$db_name' no existe."

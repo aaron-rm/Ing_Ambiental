@@ -377,29 +377,25 @@ simulación quedaron integrados en la rama `frontend-final`.
   cuenta de servicio en `FIREBASE_CREDENTIALS_PATH` y abrir el túnel nuevo desde
   el teléfono.
 
-### 4.3. Sesión del 12/11/2026 (Fedora) — diagnóstico de PostgreSQL
+### 4.3. Sesión del 12/11/2026 (Fedora y Windows) — diagnóstico y corrección de PostgreSQL
 
 - Al arrancar en la laptop Fedora, el backend falló con
   `Unable to determine Dialect without JDBC metadata`. Ese mensaje de Hibernate
   es un envoltorio: la causa real es que el backend no pudo conectarse a
-  PostgreSQL (contraseña, base inexistente o conflicto de puerto).
-- El lanzador solo comprobaba que el puerto 5432 estuviera abierto; no validaba
-  las credenciales. Por eso esperaba 90 s y mostraba el error de Hibernate sin
-  la causa.
-- `iniciar.sh` ahora:
-  - extrae host, puerto y base de `DB_URL`;
-  - detecta si el contenedor `alerta-postgres` existe y está detenido;
-  - si el puerto lo ocupa PostgreSQL del sistema, explica cómo detenerlo y
-    arrancar el contenedor;
-  - valida las credenciales con `psql` antes de Maven y muestra la causa;
-  - si el contenedor está activo y la contraseña de `.env.demo` no coincide,
-    usa la contraseña del contenedor solo para esa ejecución;
-  - prueba `127.0.0.1` si `localhost` no conecta.
-- Se agregó `scripts/diagnosticar-postgres.sh`, que imprime configuración,
-  puerto, servicios, contenedores y una prueba de conexión sin revelar la
-  contraseña.
-- **Pendiente:** confirmar en la laptop cuál de los casos era y dejar `.env.demo`
-  con la contraseña correcta de esa máquina.
+  PostgreSQL (contraseña de Windows sincronizada por OneDrive a `.env.demo`, base inexistente o conflicto IPv6 en `localhost`).
+- El lanzador anterior solo comprobaba si el puerto 5432 estaba abierto; no validaba
+  las credenciales ni verificaba si `psql` estaba instalado en el host. Por eso esperaba 90 s y mostraba el error de Hibernate sin la causa.
+- Correcciones implementadas y verificadas:
+  - En `src/main/resources/application.properties`: se fijó explícitamente `spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect`. Con esto Hibernate no oculta fallos de conexión bajo `determineDialect` y cualquier error de conexión muestra la causa exacta de JDBC.
+  - En `iniciar.sh`:
+    - extrae host, puerto y base de `DB_URL`;
+    - detecta si el contenedor `alerta-postgres` existe y está detenido;
+    - si el contenedor está activo, extrae su contraseña y verifica si la base de datos `alerta_inundaciones` existe; si no existe en el contenedor, la crea automáticamente (`createdb`);
+    - la función de prueba de conexión funciona tanto con `psql` en el host como con `exec` dentro del contenedor `alerta-postgres` (funciona aun si `psql` no está instalado en Fedora);
+    - si la contraseña de `.env.demo` difiere de la del contenedor (típico cuando OneDrive sincroniza la clave desde Windows), adopta la del contenedor automáticamente para la ejecución;
+    - si `localhost` falla por resolución IPv6 (`::1`), prueba `127.0.0.1` y actualiza `DB_URL` para esa sesión.
+  - En `scripts/diagnosticar-postgres.sh`: imprime configuración, puerto, servicios, estado del contenedor, detecta si la clave de `.env.demo` difiere de la del contenedor, verifica si la base existe y ejecuta la prueba de conexión a través del host o del contenedor según disponibilidad.
+- **Resultado:** 82 pruebas en verde (`.\mvnw.cmd test`). En Fedora solo se requiere ejecutar `git pull` y `bash iniciar.sh`.
 
 ---
 
