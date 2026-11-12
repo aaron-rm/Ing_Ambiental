@@ -1,16 +1,23 @@
 # Continuidad de sesión y traspaso de contexto
 
-> **Nota (11/11/2026):** para la rama `frontend-final` y la presentación en
-> Fedora, el arranque vigente es `bash iniciar.sh` y la interfaz React se abre en
-> `http://localhost:5173`. Ver
-> [`GUIA_PRESENTACION_FEDORA.md`](GUIA_PRESENTACION_FEDORA.md). Las referencias a
-> la rama `backend`, la PWA y el puerto `8081` describen el backend y la PWA de
-> prueba.
+> **Traspaso rápido (12/11/2026):** la rama `frontend-final` está publicada en
+> `origin/frontend-final` (código verificado en `a9f65ff`) y lista para la
+> presentación del 75 %. En Fedora:
+>
+> ```bash
+> git switch frontend-final
+> git pull
+> bash iniciar.sh
+> ```
+>
+> La interfaz React se abre en `http://localhost:5173`; el túnel HTTPS debe
+> apuntar a `5173`. La guía paso a paso es
+> [`GUIA_PRESENTACION_FEDORA.md`](GUIA_PRESENTACION_FEDORA.md).
 
-**Última actualización:** 25/10/2026<br>
-**Rama de trabajo:** `backend`<br>
-**Último commit de referencia:** cierre de revisión y preparación del backend para la entrega del 75 % (`git log -1`).<br>
-**Estado:** **Parte del backend lista y verificada para la entrega del 75 %**, con **82 pruebas en verde (0 fallos)**, contratos de API estables y base lista. Para la presentación del 75 % resta que el equipo de frontend construya y entregue sus pantallas iniciales sobre esta base.<br>
+**Última actualización:** 12/11/2026<br>
+**Rama de trabajo:** `frontend-final`<br>
+**Último commit de referencia:** `a9f65ff` (`docs: registrar prueba real del túnel y propagación DNS`), más el commit de traspaso de este documento; ambos en `origin/frontend-final`.<br>
+**Estado:** **backend verificado (82 pruebas, 0 fallos) y frontend React implementado** con login, mapa/catálogo, seguimiento, panel de riesgo y activación de notificaciones. Los lanzadores de Fedora y Windows están probados y el túnel HTTPS hacia `5173` se verificó de punta a punta. **Único pendiente de la demo:** recibir una notificación real en el celular, lo que exige abrir el túnel nuevo desde el teléfono y activar notificaciones.<br>
 **Objetivo de este documento:** permitir que otra persona o una sesión nueva de IA
 retome el proyecto desde otra computadora sin necesitar el historial del chat.
 
@@ -21,18 +28,20 @@ retome el proyecto desde otra computadora sin necesitar el historial del chat.
 Al retomar el proyecto, leer en este orden:
 
 1. Este documento.
-2. [`RESUMEN_PROYECTO.md`](RESUMEN_PROYECTO.md): explicación funcional y alcance.
-3. [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md): contrato de la API que
+2. [`GUIA_PRESENTACION_FEDORA.md`](GUIA_PRESENTACION_FEDORA.md): arranque y guion
+   de la demo en la laptop Fedora.
+3. [`RESUMEN_PROYECTO.md`](RESUMEN_PROYECTO.md): explicación funcional y alcance.
+4. [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md): contrato de la API que
    existe hoy.
-4. [`GUIA_FRONTEND.md`](GUIA_FRONTEND.md): diseño que se implementó (login,
+5. [`GUIA_FRONTEND.md`](GUIA_FRONTEND.md): diseño que se implementó (login,
    mapa, selección múltiple y administración).
-5. [`ARQUITECTURA.md`](ARQUITECTURA.md): separación entre backend, consola, PWA
+6. [`ARQUITECTURA.md`](ARQUITECTURA.md): separación entre backend, consola, PWA
    y frontend.
-6. [`../GEMINI.md`](../GEMINI.md): reglas de trabajo para agentes de IA.
+7. [`../GEMINI.md`](../GEMINI.md): reglas de trabajo para agentes de IA.
 
 Después revisar:
 
-```powershell
+```bash
 git status
 git log -8 --oneline
 ```
@@ -135,8 +144,8 @@ carga el catálogo desde `catalogo/rios.json` y la consola pide inicio de sesió
   seguir, activación de push y, solo para `ADMIN`, un botón de simulación por
   cada río seguido.
 - No muestra caudal, lluvia, hidrogramas, mapas, recomendaciones ni advertencias.
-  Esas vistas pertenecen al frontend definitivo; la PWA solo demuestra el canal
-  de notificaciones.
+  Esas vistas pertenecen a la aplicación React de `frontend/`; la PWA solo
+  demuestra el canal de notificaciones.
 - Al suscribirse se intenta activar el push en el dispositivo. Si el navegador
   no lo permite, la suscripción se guarda igual y se avisa que faltan permisos.
 - La simulación llama a `POST /api/alertas/simular` y muestra cuántos
@@ -230,7 +239,7 @@ carga el catálogo desde `catalogo/rios.json` y la consola pide inicio de sesió
   token; el registro público nunca crea administradores.
 - Para desarrollo y pruebas locales se utiliza por convención la credencial `admin` con la contraseña `admin-local-clave`. **Esta clave es exclusivamente de desarrollo local**; para producción debe cambiarse y proveerse mediante secretos seguros.
 - El archivo `.env.demo` contiene la configuración local y está ignorado por Git.
-- Separación técnica de clientes: `ConsolaDemoRunner` es una herramienta CLI para demostración del backend. La PWA (`src/main/resources/static/`) existe por la **necesidad técnica de probar Web Push en un entorno de navegador con Service Workers**, ya que la consola no puede recibir push de Firebase. No es el frontend definitivo.
+- Separación técnica de clientes: `ConsolaDemoRunner` es una herramienta CLI para demostración del backend. La PWA (`src/main/resources/static/`) existe por la **necesidad técnica de probar Web Push en un entorno de navegador con Service Workers**, ya que la consola no puede recibir push de Firebase. No es la interfaz de la presentación; esa es la aplicación React de `frontend/`.
 - Catálogo cerrado de cuatro ríos; no se incluyen Matasnillo, Matías Hernández
   ni Tapia porque no tienen un tramo de pronóstico propio que no duplique otro.
 - No inventar ríos, `reachId` ni geometrías: todo sale de GEOGloWS V2 y del
@@ -254,9 +263,24 @@ carga el catálogo desde `catalogo/rios.json` y la consola pide inicio de sesió
 
 ## 4. Estado del repositorio
 
-- Rama: `backend`. Remoto: `https://github.com/aaron-rm/Ing_Ambiental.git`
-  (la rama por defecto es `main`).
-- Todos los commits del avance están subidos a `origin/backend`:
+- Remoto: `https://github.com/aaron-rm/Ing_Ambiental.git` (rama por defecto
+  `main`).
+- **Rama de la presentación:** `frontend-final`, sincronizada con
+  `origin/frontend-final`. El código verificado corresponde a `a9f65ff`; encima
+  va el commit de este traspaso.
+- Árbol de trabajo limpio. `.env.demo`, el JSON de Firebase y los secretos
+  siguen fuera de Git.
+
+| Commit | Contenido |
+|---|---|
+| `a9f65ff` | `docs`: prueba real del túnel y propagación DNS |
+| `677b140` | `docs`: guías de la demo en Fedora y frontend React |
+| `50dce8b` | `fix(demo)`: lanzadores endurecidos para Fedora y Windows |
+| `06ba4f1` | `feat`: cauces de OpenStreetMap y punto de referencia en el mapa |
+| `555b395` | `feat(frontend)`: punto de referencia del pronóstico en el mapa |
+
+El historial anterior del backend (`origin/backend`) se conserva como
+referencia:
 
 | Commit | Contenido |
 |---|---|
@@ -274,8 +298,7 @@ carga el catálogo desde `catalogo/rios.json` y la consola pide inicio de sesió
 | `5b0fde4` | `docs`: cerrar el traspaso a Windows y quitar credenciales de ejemplo |
 
 Los cambios de caché de GEOGloWS, `siguiendo`, la PWA mínima y el push de la
-simulación están en el árbol de trabajo a la espera de la prueba del usuario y
-del commit correspondiente.
+simulación quedaron integrados en la rama `frontend-final`.
 
 - Variables nuevas: `ALERTA_JWT_SECRET`, `ALERTA_ADMIN_IDENTIFICADOR`,
   `ALERTA_ADMIN_PASSWORD`, `ALERTA_CORS_ORIGENES`, `ALERTA_CARGAR_CATALOGO` y
@@ -309,51 +332,105 @@ del commit correspondiente.
 - La consola ahora se omite sola cuando no hay terminal (antes quedaba al 98 %
   de CPU repitiendo el menú) y cierra al recibir EOF. Verificado con CPU en 0 %.
 
+### 4.2. Sesión del 11/11/2026 (Windows) — preparación de la demo en Fedora
+
+- Entorno: Windows 11, Git Bash, Java 21, Node 24, PostgreSQL local y
+  `cloudflared` 2026.10.3. La presentación se hará en una laptop Fedora.
+- **Base de datos:** el arranque fallaba porque la contraseña de PostgreSQL en
+  `.env.demo` estaba vencida. Se reemplazó por la válida de esa máquina
+  (8 caracteres). `.env.demo` sigue ignorado y no se versionó.
+- **Frontend:** `npm install` reparó Vite/oxlint; `npm run build` termina bien y
+  `npm run lint` solo reporta dos advertencias de fast-refresh (`Medidor.jsx` y
+  `auth.jsx`). No se cambió el diseño visual.
+- **Backend:** `.\mvnw.cmd -q test` termina sin fallos (82 pruebas) y
+  `.\mvnw.cmd -q -DskipTests package` genera el jar.
+- **Lanzadores:**
+  - `iniciar.sh` instala dependencias si faltan o si `node_modules` viene de
+    Windows (detecta `@rolldown/binding-linux-*`), limpia `target/` si encuentra
+    clases `*safeBackup*`, valida PostgreSQL y Firebase, autoriza
+    `https://*.trycloudflare.com`, arranca backend en `8081` y Vite en `5173`
+    con `--strictPort`, verifica el proxy y el catálogo, y abre el túnel hacia
+    `5173` con hasta tres intentos.
+  - `scripts/iniciar-demo.ps1` aplica las mismas validaciones en Windows y
+    también sirve el frontend en `5173`.
+  - `.gitattributes` fuerza `eol=lf` en los scripts `.sh` para que Fedora no
+    reciba CRLF.
+  - Ambos lanzadores se probaron con `--sin-tunel`/`-SinTunel`: backend, Vite,
+    proxy, catálogo de cuatro ríos y FCM habilitado.
+- **Túnel real (verificado):** se abrió un quick tunnel hacia `5173` y respondió
+  `/` con 200, `/api/rios` con 4 ríos, `/api/push/config` con
+  `habilitado: true` y el login con `Origin: https://...trycloudflare.com` con
+  200. La primera resolución DNS del subdominio nuevo tardó cerca de un minuto.
+- **Push:** la simulación con un token FCM falso devolvió
+  `dispositivos=1, enviados=0, fallidos=1` y el log mostró `INVALID_ARGUMENT`:
+  el recorrido llega hasta FCM y rechaza el token inválido como se espera. Todos
+  los `dispositivos_push` quedaron inactivos, el token falso se eliminó y el
+  admin sigue en Río Abajo.
+- **Limpieza:** procesos y `cloudflared` detenidos; puertos `8081` y `5173`
+  libres. La URL del túnel de prueba ya no sirve: cada ejecución crea una nueva.
+- **Documentación:** se actualizaron `README.md`, `CONFIGURACION_PUSH.md`,
+  `GUIA_PRUEBA_NOTIFICACIONES.md`, `GUIA_FRONTEND.md`,
+  `INTEGRACION_FRONTEND.md`, `ARQUITECTURA.md`, `RESUMEN_PROYECTO.md` y este
+  documento; se creó `GUIA_PRESENTACION_FEDORA.md`.
+- **Pendiente:** confirmar la recepción real en el celular. En Fedora hay que
+  crear `.env.demo` con la contraseña local de PostgreSQL, colocar el JSON de la
+  cuenta de servicio en `FIREBASE_CREDENTIALS_PATH` y abrir el túnel nuevo desde
+  el teléfono.
+
 ---
 
 ## 5. Cómo retomar en otra computadora
 
-1. Clonar o actualizar el repositorio:
+1. Actualizar el repositorio (Fedora):
 
-```powershell
+```bash
 git fetch
-git switch backend
+git switch frontend-final
 git pull
 ```
 
-2. Verificar que la documentación esté presente:
+2. Comprobar las herramientas:
 
-```powershell
-Test-Path docs/CONTINUIDAD_SESION.md
-Test-Path docs/INTEGRACION_FRONTEND.md
+```bash
+java -version          # 21 o superior
+node -v                # 20.19+ o 22.12+ (Vite 8)
+npm -v
+cloudflared --version  # opcional para PC; necesario para el celular
 ```
 
 3. Crear la configuración local (nunca versionarla):
 
-```powershell
-Copy-Item .env.demo.example .env.demo
-# completar DB_PASSWORD, Firebase, ALERTA_JWT_SECRET y credenciales de demostración
+```bash
+cp .env.demo.example .env.demo
+# editar DB_PASSWORD, ALERTA_JWT_SECRET, Firebase y credenciales locales
 ```
 
-Si `.env.demo` ya existe (por ejemplo, sincronizado por OneDrive desde la
-laptop Linux), **revise `DB_PASSWORD`**: debe ser la contraseña del PostgreSQL de
-esta máquina. Las demás variables nuevas (`ALERTA_JWT_SECRET`,
-`ALERTA_ADMIN_IDENTIFICADOR`, `ALERTA_ADMIN_PASSWORD`, `ALERTA_CORS_ORIGENES`)
-ya vienen completas y sirven en ambas máquinas.
+Si `.env.demo` llegó por OneDrive desde Windows, **revise `DB_PASSWORD`**: debe
+ser la contraseña del PostgreSQL de Fedora. Las claves públicas de Firebase
+sirven en ambas máquinas, pero `FIREBASE_CREDENTIALS_PATH` debe apuntar a un
+JSON que exista en esta laptop. `ALERTA_CORS_ORIGENES` debe incluir
+`https://*.trycloudflare.com`.
 
-4. Verificar que `.env.demo` esté ignorado:
+4. Verificar que `.env.demo` esté ignorado y que PostgreSQL responda:
 
-```powershell
+```bash
 git check-ignore .env.demo
+PGPASSWORD='la-clave-local' psql -h localhost -U postgres \
+  -d alerta_inundaciones -c 'select 1;'
 ```
 
 5. Ejecutar pruebas antes de cambiar código:
 
-```powershell
-.\mvnw.cmd test
+```bash
+bash mvnw test
+cd frontend
+npm install
+npm run build
+npm run lint
 ```
 
-Esperado: **82 pruebas, 0 fallos**.
+Esperado: **82 pruebas, 0 fallos**; build sin errores y solo dos advertencias de
+fast-refresh en el lint.
 
 6. Para regenerar el catálogo (opcional; no hace falta para arrancar):
 
@@ -365,21 +442,22 @@ Los GeoPackage se descargan de las URLs indicadas en el encabezado del script
 (~600 MB entre los dos). El catálogo ya está versionado en
 `src/main/resources/catalogo/rios.json`.
 
-7. Arrancar la demo en Fedora (rama `frontend-final`):
+7. Arrancar la demo:
 
 ```bash
+podman start alerta-postgres   # solo si PostgreSQL está en un contenedor
 bash iniciar.sh
 ```
 
-El lanzador inicia el backend en `8081`, la interfaz React en `5173` y el túnel
-HTTPS hacia `5173`. Abre `http://localhost:5173`. En Windows, el apoyo es
-`.\scripts\iniciar-demo.ps1`.
+El lanzador instala las dependencias del frontend si faltan o vienen de Windows,
+inicia el backend en `8081`, la interfaz React en `5173` y el túnel HTTPS hacia
+`5173`. Abre `http://localhost:5173` en la PC y la URL del túnel en el celular.
+En Windows, el apoyo es `.\scripts\iniciar-demo.ps1`.
 
-La prueba de humo ya se completó en Linux (sección 2.8). Para la próxima sesión:
+8. Al terminar, detener con `Ctrl + C` y comprobar los puertos:
 
 ```bash
-podman start alerta-postgres   # si el contenedor está detenido
-bash iniciar.sh                # backend + React/Vite + túnel
+ss -ltnp | grep -E ':8081|:5173' || echo "Puertos libres"
 ```
 
 ---
@@ -441,12 +519,15 @@ bash iniciar.sh                # backend + React/Vite + túnel
 8. **Clientes de apoyo:** Consola interactiva CLI (`ConsolaDemoRunner`) y PWA mínima de prueba web para validar Service Worker y notificaciones push.
 9. **Pruebas automatizadas:** 82 pruebas pasando al 100 % sin fallos (`mvnw.cmd test`). Base lista para que el frontend la consuma.
 
-### 8.2 Parte del Frontend (Pendiente para completar la presentación del 75 %)
-1. **Pantallas iniciales del frontend:** El equipo de frontend debe construir y entregar las pantallas iniciales requeridas para la presentación del 75 % (login, catálogo/mapa de ríos, seguimiento de ríos y visualización del panel hidrológico), consumiendo la API provista por este backend.
+### 8.2 Parte del Frontend (Implementada para la presentación del 75 %)
+1. **Aplicación React/Vite:** login y registro, mapa/catálogo de los cuatro ríos, seguimiento de ríos, panel de riesgo con caudal y lluvia, y activación de notificaciones.
+2. **Integración con el backend:** consume la API REST a través del proxy `/api` de Vite; se sirve en `http://localhost:5173`.
+3. **Calidad:** `npm run build` sin errores y `npm run lint` solo con dos advertencias de fast-refresh.
+4. **Pendiente único de la demo:** confirmar la notificación real en un celular con la rama `frontend-final`. El recorrido hasta FCM está verificado con un token de prueba; falta un token válido de un dispositivo.
 
 ### 8.3 Pendiente para la entrega final (100 %)
-1. **Frontend definitivo completo:** Construcción y pulido del producto final por el equipo de frontend desde cero consumiendo la API REST.
-2. **Push real en iOS:** confirmar la recepción en iPhone/iPad (iOS 16.4+ y app agregada a la pantalla de inicio). En Windows y Android ya se verificó.
+1. **Frontend definitivo completo:** pulido del producto final sobre la aplicación React actual, sin cambiar el diseño visual para la demo.
+2. **Push real en dispositivos:** confirmar la recepción en Android y en iPhone/iPad (iOS 16.4+ y app agregada a la pantalla de inicio) usando un túnel nuevo y un token válido.
 3. **Calibración estacional de umbrales:** Ajuste hidrológico y de precipitación con datos oficiales de SINAPROC / IMHPA.
 4. **Configuración definitiva de producción:** Definir dominio oficial, ajustar `ALERTA_CORS_ORIGENES` y rotar credenciales sensibles fuera de entornos locales.
 5. **Retiro de endpoints heredados:** Eliminar rutas transitorias que aún usan `X-Admin-Token` (`POST /api/push/demo` y `GET /api/alertas/suscripciones/{reachId}`).

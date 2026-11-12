@@ -3,7 +3,13 @@
 **Rama:** `frontend-final`<br>
 **Interfaz de la demo:** React + Vite en `http://localhost:5173`<br>
 **Backend:** Spring Boot en `http://localhost:8081`<br>
-**Última actualización:** 11/11/2026
+**Última actualización:** 12/11/2026
+
+> **Estado al retomar (12/11/2026):** la rama está publicada en
+> `origin/frontend-final` (código verificado en `a9f65ff`). Backend (82 pruebas)
+> y frontend (build correcto) están verificados; el túnel HTTPS hacia `5173`
+> respondió 200, con 4 ríos y FCM habilitado. **Solo falta la prueba con el
+> celular.** Empieza por la sección 4.
 
 Esta guía deja lista la presentación del 75 % en una laptop Fedora. El lanzador
 principal es `iniciar.sh`; `scripts/iniciar-demo.ps1` es solo el apoyo para la PC
