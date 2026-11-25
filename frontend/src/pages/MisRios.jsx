@@ -96,6 +96,7 @@ export default function MisRios() {
               )}
               {abre && (
                 <PanelRio
+                  rioId={r.rioId}
                   nombre={r.nombre}
                   estado={e?.dto}
                   cargando={e?.cargando}

@@ -31,7 +31,7 @@ public class Usuario {
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
+    @Column(nullable = false, length = 20)
     private Rol rol = Rol.USER;
 
     @Column(name = "fecha_registro", nullable = false, updatable = false)

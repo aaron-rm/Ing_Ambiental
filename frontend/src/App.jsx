@@ -3,6 +3,7 @@ import { useAuth } from './auth.jsx'
 import Login from './pages/Login.jsx'
 import Mapa from './pages/Mapa.jsx'
 import MisRios from './pages/MisRios.jsx'
+import Usuarios from './pages/Usuarios.jsx'
 
 function Marco() {
   const { token, usuario, salir } = useAuth()
@@ -13,6 +14,7 @@ function Marco() {
         <nav className="cab__nav" aria-label="Principal">
           <NavLink to="/" end>Mapa</NavLink>
           <NavLink to="/mis-rios">Mis ríos</NavLink>
+          {usuario?.rol === 'ADMIN' && <NavLink to="/usuarios">Usuarios</NavLink>}
         </nav>
         {token ? (
           <>
@@ -49,6 +51,7 @@ export default function App() {
             </Protegida>
           }
         />
+        <Route path="usuarios" element={<Usuarios />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

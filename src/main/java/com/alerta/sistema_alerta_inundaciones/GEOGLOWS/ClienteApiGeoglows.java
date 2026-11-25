@@ -1,6 +1,7 @@
 package com.alerta.sistema_alerta_inundaciones.GEOGLOWS;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -501,7 +502,10 @@ public class ClienteApiGeoglows {
      */
     @SuppressWarnings("unchecked")
     public Long buscarReachIdCercano(double lat, double lon) throws IOException, InterruptedException {
-        Map<String, Object> raw = get("getriverid", "lat=" + lat + "&lon=" + lon + "&format=json");
+        Map<String, Object> raw = get("getriverid",
+                "lat=" + BigDecimal.valueOf(lat).toPlainString()
+                        + "&lon=" + BigDecimal.valueOf(lon).toPlainString()
+                        + "&format=json");
         for (String clave : new String[]{"river_id", "reach_id", "LINKNO", "linkno", "id"}) {
             Object valor = raw.get(clave);
             if (valor != null) {

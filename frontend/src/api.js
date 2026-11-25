@@ -8,9 +8,13 @@ export class ApiError extends Error {
 }
 
 // Llamada al backend. Si hay token se envía como "Authorization: Bearer ...".
-export async function api(path, { method = 'GET', body, token } = {}) {
+export async function api(path, { method = 'GET', body, token, raw, contentType } = {}) {
   const headers = {}
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  if (raw !== undefined) {
+    if (contentType) headers['Content-Type'] = contentType
+  } else if (body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+  }
   if (token) headers.Authorization = `Bearer ${token}`
 
   let resp
@@ -18,7 +22,7 @@ export async function api(path, { method = 'GET', body, token } = {}) {
     resp = await fetch(path, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: raw !== undefined ? raw : body !== undefined ? JSON.stringify(body) : undefined,
     })
   } catch {
     throw new ApiError(0, 'No se pudo conectar con el servidor. ¿Está corriendo el backend?')

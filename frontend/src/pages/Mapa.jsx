@@ -1,10 +1,11 @@
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip, useMap, ZoomControl } from 'react-leaflet'
+import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip, useMap, useMapEvents, ZoomControl } from 'react-leaflet'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
+import AgregarRio from '../components/AgregarRio.jsx'
 import PanelRio from '../components/PanelRio.jsx'
 import { visual } from '../estados.js'
 
@@ -48,6 +49,18 @@ function RedimensionarMapa() {
   return null
 }
 
+function ClicMapa({ agregando, onClic }) {
+  useMapEvents({
+    click(e) {
+      if (!agregando) return
+      const lat = Number(e.latlng.lat.toFixed(5))
+      const lng = Number(e.latlng.lng.toFixed(5))
+      onClic({ lat, lng })
+    },
+  })
+  return null
+}
+
 export default function Mapa() {
   const { token } = useAuth()
   const navigate = useNavigate()
@@ -61,6 +74,8 @@ export default function Mapa() {
   const [lista, setLista] = useState(false)
   const [ocupado, setOcupado] = useState(false)
   const [aviso, setAviso] = useState('')
+  const [agregando, setAgregando] = useState(false)
+  const [punto, setPunto] = useState(null)
 
   const cargarEstado = useCallback(
     (rioId) => {
@@ -103,6 +118,8 @@ export default function Mapa() {
 
   const elegir = (id, enfocar = false) => {
     setSel(id)
+    setAgregando(false)
+    setPunto(null)
     setAviso('')
     setLista(false)
     if (enfocar) enfocarRio(id)
@@ -168,6 +185,22 @@ export default function Mapa() {
             </ul>
           )}
         </div>
+        <button
+          type="button"
+          className="btn-agregar-rio"
+          onClick={() => {
+            if (!token) {
+              navigate('/login?volver=/')
+              return
+            }
+            setLista(false)
+            setSel(null)
+            setAgregando(true)
+            setAviso('')
+          }}
+        >
+          ＋ Agregar río
+        </button>
         {errorCarga && <p className="error error--mapa" role="alert">{errorCarga}</p>}
 
         <MapContainer center={[9.0, -79.5]} zoom={10} className="mapa" zoomControl={false}>
@@ -176,6 +209,16 @@ export default function Mapa() {
           <LimpiarAnimacion />
           <RedimensionarMapa />
           <Enfocar destino={destino} />
+          <ClicMapa agregando={agregando} onClic={(p) => setPunto(p)} />
+          {agregando && punto && (
+            <CircleMarker
+              center={[punto.lat, punto.lng]}
+              radius={10}
+              pathOptions={{ color: '#d97706', weight: 4, fillColor: '#fef3c7', fillOpacity: 0.95 }}
+            >
+              <Tooltip permanent>Punto elegido</Tooltip>
+            </CircleMarker>
+          )}
           {geo?.features?.map((f) => {
             const id = f.properties.rioId
             const v = visual(estados[id]?.dto)
@@ -192,7 +235,15 @@ export default function Mapa() {
                   key={`h-${id}`}
                   data={f}
                   style={{ color: '#000000', weight: 28, opacity: 0.001, fill: false }}
-                  eventHandlers={{ click: () => elegir(id) }}
+                  eventHandlers={{
+                    click: (e) => {
+                      if (agregando) {
+                        setPunto({ lat: Number(e.latlng.lat.toFixed(5)), lng: Number(e.latlng.lng.toFixed(5)) })
+                      } else {
+                        elegir(id)
+                      }
+                    },
+                  }}
                 >
                   <Tooltip sticky>{f.properties.nombre}</Tooltip>
                 </GeoJSON>
@@ -207,7 +258,15 @@ export default function Mapa() {
                 center={[r.latitud, r.longitud]}
                 radius={9}
                 pathOptions={{ color: visual(estados[r.rioId]?.dto).trazo, weight: 4, fillColor: '#ffffff', fillOpacity: 1 }}
-                eventHandlers={{ click: () => elegir(r.rioId) }}
+                eventHandlers={{
+                  click: (e) => {
+                    if (agregando) {
+                      setPunto({ lat: Number(e.latlng.lat.toFixed(5)), lng: Number(e.latlng.lng.toFixed(5)) })
+                    } else {
+                      elegir(r.rioId)
+                    }
+                  },
+                }}
               >
                 <Tooltip>
                   {r.nombre}: punto de referencia del pronóstico (ubicación aproximada)
@@ -224,11 +283,42 @@ export default function Mapa() {
         </div>
       </div>
 
-      <aside className={`panel ${sel ? 'panel--abierto' : ''}`} aria-label="Información del río">
-        {sel ? (
+      <aside className={`panel ${sel || agregando ? 'panel--abierto' : ''} ${agregando ? 'panel--agregar' : ''}`} aria-label={agregando ? 'Agregar río' : 'Información del río'}>
+        {agregando ? (
+          <>
+            <button
+              type="button"
+              className="panel__cerrar"
+              aria-label="Cerrar panel"
+              onClick={() => {
+                setAgregando(false)
+                setPunto(null)
+              }}
+            >
+              ×
+            </button>
+            <AgregarRio
+              punto={punto}
+              onPuntoChange={setPunto}
+              onCreado={(nuevo) => {
+                setRios((prev) => [...prev, nuevo])
+                cargarEstado(nuevo.rioId)
+                elegir(nuevo.rioId)
+                if (nuevo?.latitud != null && nuevo?.longitud != null) {
+                  setDestino({ centro: [nuevo.latitud, nuevo.longitud] })
+                }
+              }}
+              onCancelar={() => {
+                setAgregando(false)
+                setPunto(null)
+              }}
+            />
+          </>
+        ) : sel ? (
           <>
             <button type="button" className="panel__cerrar" aria-label="Cerrar panel" onClick={() => setSel(null)}>×</button>
             <PanelRio
+              rioId={sel}
               nombre={selRio?.nombre ?? 'Río'}
               estado={est?.dto}
               cargando={est?.cargando}

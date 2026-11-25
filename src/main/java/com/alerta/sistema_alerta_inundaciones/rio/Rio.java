@@ -32,6 +32,9 @@ public class Rio {
     @Column(columnDefinition = "TEXT")
     private String geometria;
 
+    @Column(name = "creado_por", length = 80)
+    private String creadoPor;
+
     public Rio() {
     }
 
@@ -84,5 +87,13 @@ public class Rio {
 
     public void setGeometria(String geometria) {
         this.geometria = geometria;
+    }
+
+    public String getCreadoPor() {
+        return creadoPor;
+    }
+
+    public void setCreadoPor(String creadoPor) {
+        this.creadoPor = creadoPor;
     }
 }
