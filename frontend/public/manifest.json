@@ -1,0 +1,28 @@
+{
+  "id": "/",
+  "name": "Alerta de ríos de Panamá",
+  "short_name": "Alerta Ríos",
+  "description": "Sistema de alerta temprana de crecidas de ríos de Panamá con GEOGLOWS.",
+  "lang": "es-PA",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0b1d1d",
+  "theme_color": "#12302F",
+  "categories": ["utilities", "education"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

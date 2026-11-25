@@ -1,0 +1,28 @@
+{
+  "id": "/",
+  "name": "Alertas de inundación (prueba)",
+  "short_name": "Alertas",
+  "description": "PWA de prueba del sistema de alerta temprana de inundaciones: login, suscripción a ríos y notificaciones push.",
+  "lang": "es-PA",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f4f7f8",
+  "theme_color": "#0f766e",
+  "categories": ["utilities", "education"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

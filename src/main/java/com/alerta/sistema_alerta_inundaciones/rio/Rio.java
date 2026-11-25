@@ -1,0 +1,99 @@
+package com.alerta.sistema_alerta_inundaciones.rio;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+@Entity
+@Table(name = "rios")
+public class Rio {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String nombre;
+
+    private Long geoglowsId;
+
+    private Double latitud;
+
+    private Double longitud;
+
+    /**
+     * Geometría GeoJSON simplificada en WGS84 (LineString o MultiLineString).
+     * Se mapea como TEXT, no como LOB: en PostgreSQL un LOB puede quedar ligado
+     * a la conexión y fallar con «Unable to access lob stream» al leerlo desde
+     * una transacción ya cerrada.
+     */
+    @Column(columnDefinition = "TEXT")
+    private String geometria;
+
+    @Column(name = "creado_por", length = 80)
+    private String creadoPor;
+
+    public Rio() {
+    }
+
+    public Rio(String nombre, Long geoglowsId, Double latitud, Double longitud) {
+        this.nombre = nombre;
+        this.geoglowsId = geoglowsId;
+        this.latitud = latitud;
+        this.longitud = longitud;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public Long getGeoglowsId() {
+        return geoglowsId;
+    }
+
+    public void setGeoglowsId(Long geoglowsId) {
+        this.geoglowsId = geoglowsId;
+    }
+
+    public Double getLatitud() {
+        return latitud;
+    }
+
+    public void setLatitud(Double latitud) {
+        this.latitud = latitud;
+    }
+
+    public Double getLongitud() {
+        return longitud;
+    }
+
+    public void setLongitud(Double longitud) {
+        this.longitud = longitud;
+    }
+
+    public String getGeometria() {
+        return geometria;
+    }
+
+    public void setGeometria(String geometria) {
+        this.geometria = geometria;
+    }
+
+    public String getCreadoPor() {
+        return creadoPor;
+    }
+
+    public void setCreadoPor(String creadoPor) {
+        this.creadoPor = creadoPor;
+    }
+}

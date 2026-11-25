@@ -1,0 +1,699 @@
+# Guía de integración para el frontend
+
+> **Nota (11/11/2026):** la aplicación React de `frontend/` ya implementa este
+> flujo y se sirve en `http://localhost:5173` con `bash iniciar.sh`. Para la
+> presentación en Fedora, ver
+> [`GUIA_PRESENTACION_FEDORA.md`](GUIA_PRESENTACION_FEDORA.md).
+
+**Estado:** **implementado**. Este documento describe el diseño del avance de
+autenticación, mapa y selección múltiple de ríos que ya está en la rama
+`backend`, y cómo debe integrarse el frontend definitivo. Se conserva como
+referencia de decisiones; los endpoints listados existen tal como se describen,
+con las rutas heredadas marcadas en la sección 8.
+
+**Contrato vigente:** [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md)
+resume la API que existe hoy.
+
+---
+
+## 1. Regla principal
+
+El frontend es responsable de **la interfaz y la interacción**. El backend es
+responsable de **los usuarios, los ríos, la geometría, las selecciones, las
+alertas y el envío push**.
+
+```text
+Frontend
+  ├── dibuja el mapa
+  ├── dibuja los ríos del catálogo
+  ├── detecta el clic sobre una capa de río
+  ├── envía el rioId al backend
+  ├── muestra los datos que recibe
+  └── muestra el panel de administración si el usuario es ADMIN
+
+Backend
+  ├── autentica usuarios
+  ├── entrega el catálogo y el GeoJSON de los ríos
+  ├── valida que el rioId exista
+  ├── guarda qué ríos sigue cada usuario
+  ├── evalúa el riesgo con GEOGloWS y Open-Meteo
+  └── envía notificaciones a los usuarios que siguen cada río
+```
+
+El frontend **no** debe:
+
+- consultar directamente GEOGloWS ni Open-Meteo;
+- calcular niveles de riesgo, umbrales o pronósticos;
+- buscar el río más cercano a un punto;
+- decidir qué `reachId` corresponde a un río;
+- usar `X-Admin-Token`;
+- guardar credenciales administrativas o la cuenta de servicio de Firebase.
+
+---
+
+## 2. Precisiones importantes
+
+### 2.1. El backend no “ve” el clic
+
+El navegador recibe el evento del mapa. Cuando el usuario hace clic sobre una
+línea de río, el frontend lee la propiedad `rioId` de esa feature y la envía al
+backend.
+
+```text
+clic del usuario
+   → el frontend identifica la feature
+   → lee properties.rioId
+   → llama a /api/usuarios/me/rios/{rioId}
+   → el backend valida el río y responde
+```
+
+No se envía la coordenada del clic para que el backend busque el río más
+cercano. Tampoco se usa el endpoint de “río cercano” para este flujo. La
+selección es explícita: **el usuario hace clic sobre un río del catálogo**.
+
+### 2.2. `rioId` no es lo mismo que `reachId`
+
+| Campo | Significado | Uso |
+|---|---|---|
+| `rioId` | ID interno del río en la base de datos | Seleccionar, consultar y mostrar el río |
+| `reachId` | ID del tramo GEOGloWS | Alertas, monitoreo y push |
+
+En la API actual el `reachId` aparece con el nombre `geoglowsId`. En los
+endpoints nuevos se puede exponer como `reachId`; durante la transición puede
+aparecer con ambos nombres.
+
+**Regla para el frontend:** para suscribirse o consultar un río usa `rioId`.
+No uses `reachId` para seleccionar.
+
+### 2.3. Geometría y orden de coordenadas
+
+El backend entregará geometrías simplificadas en formato GeoJSON. Las
+coordenadas siguen el estándar GeoJSON:
+
+```text
+[longitud, latitud]
+```
+
+No las inviertas. Si el mapa usa otra convención, haz la conversión en el
+cliente.
+
+---
+
+## 3. Flujo de autenticación
+
+### 3.1. Registro
+
+```http
+POST /api/auth/registro
+Content-Type: application/json
+```
+
+```json
+{
+  "identificador": "juan",
+  "password": "una-clave-de-al-menos-8-caracteres"
+}
+```
+
+El `identificador` puede ser un nombre de usuario o un correo:
+
+```json
+{
+  "identificador": "juan@correo.com",
+  "password": "una-clave-de-al-menos-8-caracteres"
+}
+```
+
+Reglas:
+
+- es único;
+- no distingue mayúsculas/minúsculas;
+- si contiene `@`, se valida como correo;
+- si no contiene `@`, se valida como nombre de usuario;
+- no hay verificación por correo;
+- no hay recuperación de contraseña;
+- el registro público siempre crea un usuario con rol `USER`.
+
+Respuesta `201`:
+
+```json
+{
+  "token": "<jwt>",
+  "usuario": {
+    "id": 1,
+    "identificador": "juan",
+    "rol": "USER"
+  }
+}
+```
+
+### 3.2. Login
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+```
+
+```json
+{
+  "identificador": "juan@correo.com",
+  "password": "..."
+}
+```
+
+Respuesta `200`: el mismo formato del registro.
+
+Si las credenciales son incorrectas, el backend responde `401` con un mensaje
+genérico. No debe revelar si el identificador existe.
+
+### 3.3. Sesión actual
+
+```http
+GET /api/auth/me
+Authorization: Bearer <jwt>
+```
+
+```json
+{
+  "id": 1,
+  "identificador": "juan",
+  "rol": "USER"
+}
+```
+
+### 3.4. Uso del token
+
+Todas las rutas protegidas usan:
+
+```http
+Authorization: Bearer <jwt>
+```
+
+Duración: **24 horas**, configurable en el backend. No habrá refresh
+token en este avance. Cuando el token expire, el frontend recibe `401` y debe
+volver a pedir login.
+
+Recomendaciones para el frontend:
+
+- guardar el token en `sessionStorage` o en memoria;
+- si se usa `localStorage`, recordar que es vulnerable a XSS;
+- ante `401`, borrar la sesión y volver al login;
+- ante `403`, mostrar “no tienes permiso”; no significa que la sesión haya
+  expirado.
+
+### 3.5. CORS
+
+Si el frontend se sirve desde otro origen, el backend debe permitir ese origen.
+El equipo de frontend debe informar la URL exacta de desarrollo y producción.
+No se debe resolver con `Access-Control-Allow-Origin: *` si se envían
+credenciales o tokens.
+
+---
+
+## 4. Flujo principal del mapa
+
+### 4.1. Cargar el catálogo
+
+```http
+GET /api/rios/mapa
+```
+
+Respuesta:
+
+```json
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-79.42, 9.03],
+          [-79.41, 9.04],
+          [-79.40, 9.05]
+        ]
+      },
+      "properties": {
+        "rioId": 4,
+        "nombre": "Río Tocumen",
+        "reachId": 670053261
+      }
+    }
+  ]
+}
+```
+
+- `features[].properties.rioId` es la clave para seleccionar.
+- `features[].geometry` es la línea que se dibuja y sobre la que se hace clic.
+- `reachId` es informativo; no se usa para suscribirse.
+- El catálogo queda cerrado en **cuatro ríos** cercanos a la UTP:
+
+| Río | `reachId` principal |
+|---|---:|
+| Río Abajo | `710039498` |
+| Río Curundú | `710037516` |
+| Río Juan Díaz | `710051399` |
+| Río Tocumen | `670053261` |
+
+- Los ríos y sus geometrías son datos del backend. El frontend no debe
+  inventarlos ni completarlos con otro servicio.
+- No se incluyen Matasnillo, Matías Hernández ni Tapia porque no tienen un
+  tramo de pronóstico propio que no duplique el de otro río del catálogo.
+
+La **escritura** del catálogo (crear, editar o desactivar ríos y cambiar su
+geometría) será exclusiva de administradores. El usuario normal solo puede leer
+el catálogo y seleccionar ríos. Si el panel de administración necesita editar
+ríos, usará endpoints bajo `/api/admin/rios` con JWT y rol `ADMIN`.
+
+### 4.2. Dibujar los ríos
+
+El frontend puede usar la librería de mapas que prefiera (Leaflet, MapLibre,
+Mapbox GL, etc.). El contrato no impone una librería.
+
+Ejemplo conceptual con MapLibre:
+
+```js
+const respuesta = await fetch(`${API}/api/rios/mapa`);
+const catalogo = await respuesta.json();
+
+map.addSource("rios", {
+  type: "geojson",
+  data: catalogo
+});
+
+map.addLayer({
+  id: "rios-lineas",
+  type: "line",
+  source: "rios",
+  paint: {
+    "line-color": "#1565c0",
+    "line-width": 4
+  }
+});
+```
+
+### 4.3. Detectar el clic
+
+```js
+map.on("click", "rios-lineas", (evento) => {
+  const rioId = evento.features[0].properties.rioId;
+  abrirPanelRio(rioId);
+});
+```
+
+El panel se abre para **cualquier río del catálogo**, esté o no seguido. Para
+cargar sus datos, el frontend consulta:
+
+```http
+GET /api/alertas/rio/{rioId}
+```
+
+El panel puede mostrar:
+
+- nombre del río;
+- caudal actual y caudal máximo pronosticado;
+- lluvia prevista para 24 y 72 horas, y su nivel de riesgo;
+- estado actual y nivel de alerta;
+- botón **Seguir este río** o **Dejar de seguir**;
+- último evento o pronóstico, si el frontend decide mostrarlo.
+
+La consulta de caudal y lluvia **no requiere estar suscrito**. El botón de
+seguir solo controla si el usuario recibe notificaciones cuando ese río supera
+los umbrales de alerta. El clic en el mapa no debe disparar por sí solo una
+suscripción si el diseño pide confirmación. El backend solo recibe la intención
+cuando el frontend llama al endpoint correspondiente.
+
+> El backend ya tiene implementados la caché de GEOGloWS, `rioId`, `siguiendo`,
+> las recomendaciones por nivel de riesgo y la geometría GeoJSON.
+
+### 4.4. Resaltar los ríos que el usuario sigue
+
+```http
+GET /api/usuarios/me/rios
+Authorization: Bearer <jwt>
+```
+
+Respuesta:
+
+```json
+[
+  {
+    "rioId": 4,
+    "nombre": "Río Tocumen",
+    "reachId": 670053261,
+    "latitud": 9.07,
+    "longitud": -79.39,
+    "fechaSeleccion": "2026-10-22T15:00:00Z"
+  }
+]
+```
+
+El frontend cruza esta lista con el catálogo y resalta las features cuyo
+`rioId` esté en la lista. El backend no necesita saber qué color usa el mapa.
+
+**Alternativa más simple:** al consultar el panel con JWT,
+`GET /api/alertas/rio/{rioId}` devuelve `siguiendo` (`true`/`false`, o `null` sin
+sesión). El frontend puede usar ese campo para el botón y para resaltar el río
+seleccionado, sin una llamada adicional a `/api/usuarios/me/rios`.
+
+La caché de GEOGloWS es transparente para el cliente: el backend reutiliza la
+respuesta por `reachId` durante `GEOGLOWS_CACHE_MINUTOS` y, si la API falla,
+sirve la última copia disponible.
+
+---
+
+## 5. Selección múltiple de ríos
+
+### 5.1. Seguir un río
+
+```http
+POST /api/usuarios/me/rios/{rioId}
+Authorization: Bearer <jwt>
+```
+
+Respuesta `200`:
+
+```json
+{
+  "rioId": 1,
+  "seguido": true,
+  "mensaje": "Río agregado a tus alertas."
+}
+```
+
+La operación es idempotente: si el usuario ya seguía el río, no se duplica la
+relación.
+
+### 5.2. Dejar de seguir un río
+
+```http
+DELETE /api/usuarios/me/rios/{rioId}
+Authorization: Bearer <jwt>
+```
+
+Respuesta `204`, aunque el río no estuviera seleccionado.
+
+### 5.3. Varios ríos
+
+Un usuario puede seguir varios ríos. El frontend debe:
+
+- permitir marcar y desmarcar varios;
+- mostrar claramente cuáles están seleccionados;
+- actualizar el mapa después de cada cambio;
+- no asumir que hay un único río “principal”.
+
+El backend enviará las alertas de **todos** los ríos que el usuario siga.
+Seguir o dejar de seguir un río **no cambia** la posibilidad de consultar su
+caudal y su lluvia en el panel del mapa; solo cambia si se reciben
+notificaciones de ese río.
+
+---
+
+## 6. Notificaciones push
+
+### 6.1. Requisito previo
+
+El usuario debe haber iniciado sesión. El dispositivo se asocia a la cuenta, no
+a un `reachId` suelto.
+
+### 6.2. Configuración pública
+
+```http
+GET /api/push/config
+```
+
+El frontend usa esta respuesta para inicializar Firebase. La respuesta solo
+contiene datos públicos de Firebase (API key, VAPID key, etc.); ya **no**
+incluye `reachId`. El dispositivo se asocia al usuario y las alertas dependen de
+los ríos que sigue, consultados con `/api/usuarios/me/rios`.
+
+### 6.3. Registro del dispositivo
+
+```http
+POST /api/push/registrar
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+```json
+{
+  "token": "<token FCM>",
+  "deviceId": "<uuid local>",
+  "plataforma": "web"
+}
+```
+
+Ya no se envía `reachId`. El backend asocia el dispositivo al usuario
+autenticado.
+
+Respuesta `200`:
+
+```json
+{
+  "id": 1,
+  "activo": true,
+  "mensaje": "Dispositivo registrado.",
+  "fechaActualizacion": "2026-10-22T15:00:00Z"
+}
+```
+
+### 6.4. Reglas de permisos
+
+- Pedir permiso de notificaciones **solo después de un clic del usuario**.
+- No pedir permiso al cargar la página.
+- No registrar el token antes de tener permiso.
+- Si el backend responde `410`, borrar el token local y pedir reactivación.
+- Si el backend responde `401`, volver al login.
+- Si el usuario no sigue ningún río, no recibirá alertas de ríos.
+
+### 6.5. Qué recibe el dispositivo
+
+El backend envía la alerta a todos los dispositivos activos de los usuarios que
+siguen el río afectado. Si un usuario sigue dos ríos, puede recibir alertas de
+ambos.
+
+El payload de la notificación mantiene el formato data-only documentado en
+[`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md). El frontend decide cómo
+mostrar el clic y el detalle del evento.
+
+### 6.6. Cambio de cuenta en el mismo dispositivo
+
+El token FCM identifica una instalación, no a una persona. Si un usuario cierra
+sesión y otro inicia sesión en el mismo teléfono, el backend debe **reasignar el
+token al usuario nuevo** y dejar de enviar alertas del usuario anterior a ese
+dispositivo.
+
+Recomendaciones:
+
+- al cerrar sesión, llamar a `DELETE /api/push/registrar` y pedir al navegador
+  que desactive el token local;
+- al registrar el mismo token con otro usuario, actualizar el dueño del
+  dispositivo;
+- no mantener dos usuarios asociados al mismo token, porque el teléfono
+  recibiría alertas de ambos.
+
+### 6.7. PWA de prueba con flujo mínimo
+
+La PWA de prueba quedó reducida a lo necesario para demostrar el canal push:
+
+1. pantalla de login o registro;
+2. lista de los cuatro ríos con botón para suscribirse o dejar de seguir;
+3. activación de notificaciones y registro del token FCM con el JWT (sin
+   `reachId`);
+4. si el usuario es `ADMIN`, un botón **Simular crecida** por cada río seguido;
+5. cierre de sesión con desactivación del dispositivo.
+
+No muestra caudal, lluvia, hidrogramas, mapas ni recomendaciones, y no pretende
+ser el frontend definitivo. Al suscribirse intenta activar el push; si el
+navegador lo impide, la suscripción se guarda y se muestra el aviso.
+
+---
+
+## 7. Panel de administración
+
+### 7.1. Quién puede usarlo
+
+Solo un usuario autenticado con rol `ADMIN`.
+
+- El registro público siempre crea `USER`.
+- El administrador inicial se crea desde el backend con variables de entorno
+  (`ALERTA_ADMIN_IDENTIFICADOR` y `ALERTA_ADMIN_PASSWORD`) o un mecanismo de
+  siembra; no se crea desde el formulario público.
+- El frontend puede ocultar el panel si `usuario.rol !== "ADMIN"`, pero eso es
+  solo estética: **el backend debe validar el rol en cada endpoint**.
+
+### 7.2. Enviar notificación de prueba
+
+```http
+POST /api/admin/push/demo
+Authorization: Bearer <jwt-de-admin>
+```
+
+Respuesta:
+
+```json
+{
+  "dispositivos": 3,
+  "enviados": 3,
+  "fallidos": 0
+}
+```
+
+El endpoint envía a todos los dispositivos activos, sin crear un evento real de
+riesgo. Es el equivalente del actual `POST /api/push/demo` de la consola.
+
+### 7.2.1. Simular una crecida por río
+
+```http
+POST /api/alertas/simular?reachId=710039498
+Authorization: Bearer <jwt-de-admin>
+```
+
+El parámetro `caudal` es opcional. Sin él, el backend usa un caudal superior al
+umbral de emergencia del tramo. La respuesta incluye `alerta`, `dispositivos`,
+`enviados` y `fallidos`. El push se envía **solo a los seguidores de ese río** y
+no se persiste un evento de riesgo.
+
+### 7.3. Relación con la consola
+
+La consola **no desaparece**. A partir de este avance también pedirá inicio de
+sesión o registro al arrancar. Eso permite que la consola use el mismo JWT y los
+mismos roles que el frontend.
+
+La recomendación técnica es:
+
+| Cliente | Autenticación | Endpoint de demo |
+|---|---|---|
+| Consola migrada | JWT con rol `ADMIN` | `POST /api/admin/push/demo` |
+| Frontend nuevo | JWT con rol `ADMIN` | `POST /api/admin/push/demo` |
+
+La consola ya usa JWT. `X-Admin-Token` se conserva solo para dos rutas heredadas
+(`POST /api/push/demo` y `GET /api/alertas/suscripciones/{reachId}`) que se
+retirarán más adelante; el frontend **nunca** debe usarlo.
+
+El token es un secreto compartido, no una credencial de usuario. No debe
+enviarse desde el navegador.
+
+---
+
+## 8. Resumen de endpoints del avance
+
+| Método | Ruta | Auth | Estado |
+|---|---|---|---|
+| POST | `/api/auth/registro` | pública | implementado |
+| POST | `/api/auth/login` | pública | implementado |
+| GET | `/api/auth/me` | JWT | implementado |
+| GET | `/api/rios` | pública | implementado |
+| GET | `/api/rios/mapa` | pública | implementado |
+| GET | `/api/usuarios/me/rios` | JWT | implementado |
+| POST | `/api/usuarios/me/rios/{rioId}` | JWT | implementado |
+| DELETE | `/api/usuarios/me/rios/{rioId}` | JWT | implementado |
+| GET | `/api/alertas/rio/{rioId}` | pública | implementado |
+| GET | `/api/push/config` | pública | implementado (sin `reachId`) |
+| POST | `/api/push/registrar` | JWT | implementado (sin `reachId`) |
+| DELETE | `/api/push/registrar` | JWT | implementado |
+| POST | `/api/push/prueba` | JWT | implementado |
+| POST | `/api/admin/push/demo` | JWT + ADMIN | implementado |
+| POST | `/api/admin/rios` | JWT + ADMIN | reservado para mantenimiento; no se usó en esta entrega |
+| PUT | `/api/admin/rios/{rioId}` | JWT + ADMIN | reservado para mantenimiento; no se usó en esta entrega |
+| POST | `/api/push/demo` | `X-Admin-Token` | heredado; se retirará |
+
+La evaluación manual (`POST /api/alertas/evaluar/{reachId}`) y la simulación
+(`POST /api/alertas/simular`) ya exigen JWT con rol `ADMIN`. Las rutas heredadas
+que aún usan `X-Admin-Token` son solo compatibilidad para la consola y no se
+documentan como parte del contrato del frontend.
+
+Las rutas heredadas de suscripción por correo o teléfono
+(`POST /api/alertas/suscribir` y
+`GET /api/alertas/suscripciones/{reachId}`) se retirarán del flujo de usuario y
+de la consola. El modelo definitivo es usuario–ríos con notificaciones push.
+
+---
+
+## 9. Códigos de error
+
+| Código | Significado para el frontend |
+|---|---|
+| 400 | Datos inválidos; mostrar el mensaje del backend |
+| 401 | Credenciales incorrectas o token ausente/expirado |
+| 403 | El usuario no tiene rol suficiente para esa operación |
+| 404 | El río o recurso no existe |
+| 409 | Identificador duplicado, token push en conflicto u operación incompatible |
+| 410 | Token FCM inválido; hay que reactivar notificaciones |
+| 429 | Demasiadas pruebas push; esperar |
+| 502 | Fallo de GEOGloWS, Open-Meteo o FCM; mostrar aviso temporal |
+
+Para los errores `400` y `409`, el backend puede devolver texto plano. El
+frontend debe tolerar tanto texto como JSON.
+
+---
+
+## 10. Lista de comprobación para el equipo de frontend
+
+- [ ] El registro acepta un solo `identificador` y una contraseña.
+- [ ] El login funciona con correo o nombre de usuario.
+- [ ] El token se envía como `Authorization: Bearer`.
+- [ ] El mapa dibuja el `FeatureCollection` de `/api/rios/mapa`.
+- [ ] El clic lee `properties.rioId`, no calcula cercanía.
+- [ ] Al hacer clic en cualquier río se muestra el panel con caudal y lluvia,
+      aunque el río no esté seguido.
+- [ ] Seguir o dejar de seguir solo cambia las notificaciones, no la consulta.
+- [ ] El usuario puede seguir y dejar de seguir varios ríos.
+- [ ] Los ríos seguidos se resaltan usando `siguiendo` del panel o
+      `/api/usuarios/me/rios`.
+- [ ] El registro push requiere sesión y no envía `reachId`.
+- [ ] El panel admin solo se muestra para `rol === "ADMIN"`.
+- [ ] El panel admin llama a `/api/admin/push/demo`, nunca a `/api/push/demo`
+      con `X-Admin-Token`.
+- [ ] Los errores `401`, `403`, `409` y `410` tienen mensajes claros.
+- [ ] No hay credenciales ni tokens administrativos en el código del cliente.
+
+---
+
+## 11. Decisiones tomadas y pendientes
+
+Decisiones tomadas:
+
+1. La consola migró a JWT. `X-Admin-Token` se conserva solo para las dos rutas
+   heredadas (`POST /api/push/demo` y
+   `GET /api/alertas/suscripciones/{reachId}`) y se retirará más adelante.
+2. El catálogo queda cerrado en cuatro ríos: Abajo, Curundú, Juan Díaz y
+   Tocumen. Se cargan predefinidos; no habrá creación ni edición de ríos en la
+   interfaz de esta entrega. Los endpoints de escritura quedarán reservados y
+   protegidos para mantenimiento.
+3. Las suscripciones heredadas por correo/teléfono se retiran del flujo de
+   usuario y de la consola.
+4. La PWA de prueba se limitó a login, catálogo, suscripción, push y simulación
+   para `ADMIN`; seguirá siendo solo una herramienta de prueba y no duplica el
+   panel del frontend definitivo.
+5. La duración inicial del JWT será de 24 horas, configurable, sin refresh
+   token.
+6. La geometría se obtiene de GEOGloWS V2 y se guarda simplificada como
+   GeoJSON; no se consulta a internet en tiempo de ejecución.
+7. El panel de administración del frontend solo necesita el push de prueba. La
+   consola administrativa tendrá además simulación y evaluación manual.
+8. La consulta de caudal y lluvia está disponible para cualquier río del
+   catálogo al hacer clic en el mapa, sin necesidad de seguirlo. Seguir un río
+   solo habilita sus notificaciones cuando supera los umbrales.
+9. El gráfico del panel será un hidrograma de caudal contra tiempo con las
+   líneas de umbral. La representación del nivel del agua, si se incluye, será
+   ilustrativa y derivada del caudal; no se mostrarán metros ni bordes reales
+   del cauce, porque no hay curva de gasto ni batimetría.
+10. GEOGloWS se cachea en memoria por endpoint y `reachId` durante
+    `GEOGLOWS_CACHE_MINUTOS` (15 min por defecto). Ante un fallo se reutiliza la
+    última respuesta cacheada.
+11. El panel devuelve `siguiendo` cuando la petición trae JWT; sin sesión es
+    `null`. Evita que el frontend tenga que cruzar la lista de ríos seguidos.
+
+Pendientes antes de cerrar el avance:
+
+1. Definir la URL exacta del frontend para CORS (`ALERTA_CORS_ORIGENES`).
+2. Investigar y calibrar umbrales de lluvia por temporada (invierno/verano).
+   No se implementará con valores inventados.
+3. Repetir la prueba de humo con PostgreSQL en Windows y verificar la recepción
+   push en un dispositivo físico. No afirmar que el push funciona de extremo a
+   extremo sin esa prueba.
+
+Este documento describe el contrato ya implementado. El resumen operativo para
+el equipo de frontend está en [`INTEGRACION_FRONTEND.md`](INTEGRACION_FRONTEND.md).

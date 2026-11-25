@@ -1,10 +1,16 @@
 package com.alerta.sistema_alerta_inundaciones.GEOGLOWS;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -15,6 +21,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 /**
  * =====================================================================================
@@ -30,30 +44,301 @@ import java.util.TreeMap;
  * tocar BASE_URL y las rutas de esta clase.
  * =====================================================================================
  */
+@Component
 public class ClienteApiGeoglows {
 
+    private static final Logger log = LoggerFactory.getLogger(ClienteApiGeoglows.class);
     private static final String BASE_URL = "https://geoglows.ecmwf.int/api/v2/";
-    private final HttpClient http = HttpClient.newHttpClient();
+    private static final int MAX_INTENTOS = 3;
+    private static final long MAX_RETRY_AFTER_SEGUNDOS = 10L;
+    private static final Duration TTL_RETURN_PERIODS = Duration.ofDays(7);
+    private static final Duration VENTANA_FALLO_DEFECTO = Duration.ofMinutes(10);
+    private static final String MENSAJE_429 =
+            "GEOGloWS está limitando las consultas (429). Intenta de nuevo en un minuto.";
 
-    /** Llama un endpoint de GEOGloWS y devuelve el JSON ya parseado como Map. */
-    @SuppressWarnings("unchecked")
+    private final String baseUrl;
+    private final HttpClient http;
+    private final Duration cacheTtl;
+    private final Duration esperaBase;
+    private final Semaphore semaforo;
+    private final RitmoPeticiones ritmo;
+    private final Path cacheDir;
+    private final Duration ventanaFallo;
+    private final Map<String, EntradaCache> cache = new ConcurrentHashMap<>();
+    private final Map<String, Instant> fallosRecientes = new ConcurrentHashMap<>();
+    private final Map<String, Object> bloqueos = new ConcurrentHashMap<>();
+
+    @Autowired
+    public ClienteApiGeoglows(
+            @Value("${geoglows.cache-minutos:15}") long cacheMinutos,
+            @Value("${geoglows.max-concurrentes:1}") int maxConcurrentes,
+            @Value("${geoglows.intervalo-minimo-ms:1500}") long intervaloMinimoMs,
+            @Value("${geoglows.cache-dir:${user.home}/.ing-ambiental/geoglows-cache}") String cacheDir) {
+        this(
+                BASE_URL,
+                Duration.ofMinutes(Math.max(1, cacheMinutos)),
+                Duration.ofSeconds(5),
+                maxConcurrentes,
+                intervaloMinimoMs,
+                resolverCacheDir(cacheDir),
+                VENTANA_FALLO_DEFECTO);
+    }
+
+    public ClienteApiGeoglows(long cacheMinutos, int maxConcurrentes) {
+        this(
+                BASE_URL,
+                Duration.ofMinutes(Math.max(1, cacheMinutos)),
+                Duration.ofSeconds(5),
+                maxConcurrentes,
+                1500L,
+                null,
+                VENTANA_FALLO_DEFECTO);
+    }
+
+    public ClienteApiGeoglows(long cacheMinutos) {
+        this(cacheMinutos, 1);
+    }
+
+    /** Constructor sin argumentos para usos heredados fuera de Spring. */
+    public ClienteApiGeoglows() {
+        this(15, 1);
+    }
+
+    /** Constructor para pruebas con un servidor HTTP local y un TTL explícito. */
+    ClienteApiGeoglows(String baseUrl, Duration cacheTtl) {
+        this(baseUrl, cacheTtl, Duration.ofSeconds(1));
+    }
+
+    /** Constructor para pruebas con TTL y espera base entre reintentos explícitos. */
+    ClienteApiGeoglows(String baseUrl, Duration cacheTtl, Duration esperaBase) {
+        this(baseUrl, cacheTtl, esperaBase, null);
+    }
+
+    /** Constructor para pruebas con caché en disco explícita. */
+    ClienteApiGeoglows(String baseUrl, Duration cacheTtl, Duration esperaBase, Path cacheDir) {
+        this(baseUrl, cacheTtl, esperaBase, 1, 0L, cacheDir, Duration.ZERO);
+    }
+
+    /** Constructor para pruebas con caché en disco y ventana de fallo negativo explícitas. */
+    ClienteApiGeoglows(
+            String baseUrl,
+            Duration cacheTtl,
+            Duration esperaBase,
+            Path cacheDir,
+            Duration ventanaFallo) {
+        this(baseUrl, cacheTtl, esperaBase, 1, 0L, cacheDir, ventanaFallo);
+    }
+
+    private ClienteApiGeoglows(
+            String baseUrl,
+            Duration cacheTtl,
+            Duration esperaBase,
+            int maxConcurrentes,
+            long intervaloMinimoMs,
+            Path cacheDir,
+            Duration ventanaFallo) {
+        this.baseUrl = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
+        this.http = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(4))
+                .build();
+        this.cacheTtl = cacheTtl;
+        this.esperaBase = esperaBase;
+        this.semaforo = new Semaphore(Math.max(1, maxConcurrentes));
+        this.ritmo = new RitmoPeticiones(intervaloMinimoMs);
+        this.cacheDir = cacheDir;
+        this.ventanaFallo = ventanaFallo != null ? ventanaFallo : Duration.ZERO;
+    }
+
+    private static Path resolverCacheDir(String cacheDir) {
+        if (cacheDir == null || cacheDir.isBlank()) {
+            return null;
+        }
+        return Path.of(cacheDir.trim());
+    }
+
+    /**
+     * Llama un endpoint de GEOGloWS y devuelve el JSON ya parseado como Map.
+     *
+     * Las respuestas se cachean en memoria por endpoint + reachId durante
+     * {@code geoglows.cache-minutos}. Si GEOGloWS falla y existe una respuesta
+     * anterior, se reutiliza esa respuesta marcando la advertencia en el log:
+     * el objetivo es que una caída breve del servicio no deje el panel sin datos.
+     */
     private Map<String, Object> get(String path, String query) throws IOException, InterruptedException {
-        String url = BASE_URL + path + (query.isEmpty() ? "" : "?" + query);
+        String clave = path + (query.isEmpty() ? "" : "?" + query);
+        Duration ttl = ttlPara(clave);
+        EntradaCache entrada = cache.get(clave);
+        Instant ahora = Instant.now();
+
+        if (entrada != null && entrada.fechaConsulta.plus(ttl).isAfter(ahora)) {
+            log.debug("GEOGloWS: respuesta en caché para {}", clave);
+            return entrada.respuesta;
+        }
+
+        // Serializa peticiones simultáneas a la misma clave para no repetir el fallo de caché contra GEOGloWS.
+        synchronized (bloqueos.computeIfAbsent(clave, k -> new Object())) {
+            entrada = cache.get(clave);
+            if (entrada == null) {
+                entrada = cargarDesdeDisco(clave);
+                if (entrada != null) {
+                    cache.put(clave, entrada);
+                }
+            }
+            ahora = Instant.now();
+            if (entrada != null && entrada.fechaConsulta.plus(ttl).isAfter(ahora)) {
+                log.debug("GEOGloWS: respuesta en caché para {}", clave);
+                return entrada.respuesta;
+            }
+
+            Instant falloReciente = fallosRecientes.get(clave);
+            if (falloReciente != null
+                    && !ventanaFallo.isZero()
+                    && !ventanaFallo.isNegative()
+                    && falloReciente.isAfter(ahora.minus(ventanaFallo))) {
+                if (entrada != null) {
+                    log.debug("GEOGloWS falló hace poco para {}. Se reutiliza la respuesta cacheada de {}.",
+                            clave, entrada.fechaConsulta);
+                    return entrada.respuesta;
+                }
+                throw new IOException("GEOGloWS no respondió hace poco para " + clave + "; se reintentará más tarde.");
+            }
+
+            try {
+                EntradaCache nueva = consultar(path, query);
+                fallosRecientes.remove(clave);
+                guardarEnDisco(clave, nueva.cuerpoCrudo);
+                cache.put(clave, new EntradaCache(nueva.fechaConsulta, nueva.respuesta, null));
+                return nueva.respuesta;
+            } catch (IOException e) {
+                fallosRecientes.put(clave, Instant.now());
+                if (entrada != null) {
+                    log.warn("GEOGloWS falló para {} ({}). Se reutiliza la respuesta cacheada de {}.",
+                            clave, e.getMessage(), entrada.fechaConsulta);
+                    return entrada.respuesta;
+                }
+                throw e;
+            }
+        }
+    }
+
+    private Duration ttlPara(String clave) {
+        return clave.startsWith("returnperiods") ? TTL_RETURN_PERIODS : cacheTtl;
+    }
+
+    private EntradaCache cargarDesdeDisco(String clave) {
+        if (cacheDir == null) {
+            return null;
+        }
+        Path archivo = archivoCache(clave);
+        if (!Files.isRegularFile(archivo)) {
+            return null;
+        }
+        try {
+            Instant fecha = Files.getLastModifiedTime(archivo).toInstant();
+            String contenido = Files.readString(archivo, StandardCharsets.UTF_8);
+            if (contenido.isBlank()) {
+                return null;
+            }
+            return new EntradaCache(fecha, parsearMapa(contenido), null);
+        } catch (IOException | RuntimeException e) {
+            log.warn("No se pudo leer caché de disco {}: {}", archivo, e.getMessage());
+            return null;
+        }
+    }
+
+    private void guardarEnDisco(String clave, String cuerpoCrudo) {
+        if (cacheDir == null || cuerpoCrudo == null) {
+            return;
+        }
+        Path archivo = archivoCache(clave);
+        Path temporal = null;
+        try {
+            Files.createDirectories(cacheDir);
+            temporal = Files.createTempFile(cacheDir, archivo.getFileName().toString(), ".tmp");
+            Files.writeString(temporal, cuerpoCrudo, StandardCharsets.UTF_8);
+            try {
+                Files.move(temporal, archivo, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temporal, archivo, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            log.warn("No se pudo guardar caché de disco {}: {}", archivo, e.getMessage());
+            if (temporal != null) {
+                try {
+                    Files.deleteIfExists(temporal);
+                } catch (IOException ignored) {
+                    // Ignorado al limpiar temporal tras fallo de E/S.
+                }
+            }
+        }
+    }
+
+    private Path archivoCache(String clave) {
+        String nombre = clave.replaceAll("[^A-Za-z0-9._-]", "_") + ".json";
+        return cacheDir.resolve(nombre);
+    }
+
+    private EntradaCache consultar(String path, String query)
+            throws IOException, InterruptedException {
+        String url = baseUrl + path + (query.isEmpty() ? "" : "?" + query);
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(30))
+                .timeout(Duration.ofSeconds(4))
                 .GET()
                 .build();
-        HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
-        if (resp.statusCode() != 200) {
-            throw new IOException("GEOGloWS respondió " + resp.statusCode() + " para " + url);
+
+        for (int intento = 1; intento <= MAX_INTENTOS; intento++) {
+            HttpResponse<String> resp;
+            semaforo.acquire();
+            try {
+                ritmo.esperarTurno();
+                resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+            } finally {
+                semaforo.release();
+            }
+
+            int status = resp.statusCode();
+            if (status == 200) {
+                String cuerpo = resp.body();
+                return new EntradaCache(Instant.now(), parsearMapa(cuerpo), cuerpo);
+            }
+
+            if (esReintentable(status) && intento < MAX_INTENTOS) {
+                Duration espera = calcularEspera(resp, intento);
+                log.warn("GEOGloWS respondió {} para {} (intento {}/{}). Reintentando en {} ms.",
+                        status, url, intento, MAX_INTENTOS, espera.toMillis());
+                long esperaMs = espera.toMillis();
+                if (esperaMs > 0) {
+                    Thread.sleep(esperaMs);
+                }
+                continue;
+            }
+
+            if (status == 429) {
+                throw new IOException(MENSAJE_429);
+            }
+            throw new IOException("GEOGloWS respondió " + status + " para " + url);
         }
-        Object parsed = Json.parse(resp.body());
-        if (parsed instanceof Map) {
-            return (Map<String, Object>) parsed;
+
+        throw new IOException("GEOGloWS falló para " + url);
+    }
+
+    private static boolean esReintentable(int status) {
+        return status == 429 || status == 502 || status == 503 || status == 504;
+    }
+
+    private Duration calcularEspera(HttpResponse<String> resp, int intento) {
+        String retryAfter = resp.headers().firstValue("Retry-After").orElse(null);
+        if (retryAfter != null && !retryAfter.isBlank()) {
+            try {
+                long segundos = Long.parseLong(retryAfter.trim());
+                if (segundos >= 0) {
+                    return Duration.ofSeconds(Math.min(MAX_RETRY_AFTER_SEGUNDOS, segundos));
+                }
+            } catch (NumberFormatException ignored) {
+                // Cabecera no numérica: se usa backoff exponencial con esperaBase.
+            }
         }
-        Map<String, Object> envoltorio = new LinkedHashMap<>();
-        envoltorio.put("data", parsed);
-        return envoltorio;
+        return esperaBase.multipliedBy(1L << (intento - 1));
     }
 
     /**
@@ -148,13 +433,27 @@ public class ClienteApiGeoglows {
      */
     public LectorDatosIngresados.UmbralAlerta obtenerUmbrales(long reachId)
             throws IOException, InterruptedException {
-        Map<Integer, Double> periodos = obtenerPeriodosRetorno(reachId);
+        Map<Integer, Double> periodos;
+        boolean usandoReferencia = false;
+        try {
+            periodos = obtenerPeriodosRetorno(reachId);
+        } catch (IOException e) {
+            // Si la API remota de GEOGloWS falla temporalmente en returnperiods (ej: error interno de variable o dataset),
+            // usamos umbrales predeterminados de referencia para no bloquear el flujo de evaluación del tramo.
+            periodos = new TreeMap<>();
+            periodos.put(2, 15.0);
+            periodos.put(5, 30.0);
+            periodos.put(25, 60.0);
+            usandoReferencia = true;
+        }
         LectorDatosIngresados.UmbralAlerta u = new LectorDatosIngresados.UmbralAlerta();
         u.reachId = reachId;
-        u.caudalVigilancia = periodos.getOrDefault(2, 0.0);
-        u.caudalAlerta = periodos.getOrDefault(5, 0.0);
-        u.caudalEmergencia = periodos.getOrDefault(25, 0.0);
-        u.fuenteCalibracion = "GEOGloWS - periodos de retorno (pendiente de calibrar con datos locales)";
+        u.caudalVigilancia = periodos.getOrDefault(2, 15.0);
+        u.caudalAlerta = periodos.getOrDefault(5, 30.0);
+        u.caudalEmergencia = periodos.getOrDefault(25, 60.0);
+        u.fuenteCalibracion = usandoReferencia
+                ? "Configuración de referencia (demostración, no oficial)"
+                : "GEOGloWS - periodos de retorno";
         u.fechaCalibracion = LocalDate.now();
         return u;
     }
@@ -203,7 +502,10 @@ public class ClienteApiGeoglows {
      */
     @SuppressWarnings("unchecked")
     public Long buscarReachIdCercano(double lat, double lon) throws IOException, InterruptedException {
-        Map<String, Object> raw = get("getriverid", "lat=" + lat + "&lon=" + lon + "&format=json");
+        Map<String, Object> raw = get("getriverid",
+                "lat=" + BigDecimal.valueOf(lat).toPlainString()
+                        + "&lon=" + BigDecimal.valueOf(lon).toPlainString()
+                        + "&format=json");
         for (String clave : new String[]{"river_id", "reach_id", "LINKNO", "linkno", "id"}) {
             Object valor = raw.get(clave);
             if (valor != null) {
@@ -265,14 +567,56 @@ public class ClienteApiGeoglows {
     }
 
     private static Instant parseFecha(String texto) {
+        if (texto == null || texto.isBlank()) return Instant.now();
         try {
-            return Instant.parse(texto.endsWith("Z") ? texto : texto + "Z");
+            if (texto.contains("+") || texto.endsWith("Z")) {
+                return java.time.OffsetDateTime.parse(texto.replace(' ', 'T')).toInstant();
+            }
+            return LocalDateTime.parse(texto.replace(' ', 'T')).atZone(ZoneOffset.UTC).toInstant();
         } catch (Exception e) {
             try {
-                return LocalDateTime.parse(texto.replace(' ', 'T')).atZone(ZoneOffset.UTC).toInstant();
+                return Instant.parse(texto);
             } catch (Exception e2) {
                 return Instant.now();
             }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> parsearMapa(String cuerpo) {
+        Object parsed = Json.parse(cuerpo);
+        if (parsed instanceof Map) {
+            return (Map<String, Object>) parsed;
+        }
+        Map<String, Object> envoltorio = new LinkedHashMap<>();
+        envoltorio.put("data", parsed);
+        return envoltorio;
+    }
+
+    private record EntradaCache(Instant fechaConsulta, Map<String, Object> respuesta, String cuerpoCrudo) {
+    }
+
+    private static final class RitmoPeticiones {
+        private final long intervaloMinimoNanos;
+        private long ultimaPeticionNanos;
+        private boolean iniciado;
+
+        private RitmoPeticiones(long intervaloMinimoMs) {
+            this.intervaloMinimoNanos = Math.max(0L, intervaloMinimoMs) * 1_000_000L;
+        }
+
+        synchronized void esperarTurno() throws InterruptedException {
+            if (intervaloMinimoNanos <= 0L) {
+                return;
+            }
+            if (iniciado) {
+                long restanteNanos = intervaloMinimoNanos - (System.nanoTime() - ultimaPeticionNanos);
+                if (restanteNanos > 0L) {
+                    Thread.sleep(restanteNanos / 1_000_000L, (int) (restanteNanos % 1_000_000L));
+                }
+            }
+            ultimaPeticionNanos = System.nanoTime();
+            iniciado = true;
         }
     }
 
