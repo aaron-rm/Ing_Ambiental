@@ -155,7 +155,7 @@ try {
         Escribir-Aviso "Se detectaron clases duplicadas de una sincronizacion anterior; limpiando target/..."
         Push-Location $raiz
         try {
-            & cmd.exe /c 'mvnw.cmd -q clean'
+            & cmd.exe /c '.\mvnw.cmd -q clean'
             if ($LASTEXITCODE -ne 0) { throw "mvnw.cmd clean fallo con codigo $LASTEXITCODE." }
         } finally {
             Pop-Location
@@ -269,7 +269,7 @@ try {
         }
     } else {
         Escribir-Info "Iniciando backend Spring Boot en http://localhost:8081..."
-        $backend = Iniciar-Servicio 'Backend (Spring Boot)' 'cmd.exe' @('/c', 'mvnw.cmd spring-boot:run') $raiz 'backend-demo'
+        $backend = Iniciar-Servicio 'Backend (Spring Boot)' 'cmd.exe' @('/c', '.\mvnw.cmd spring-boot:run') $raiz 'backend-demo'
         $iniciados += $backend
         if (-not (Esperar-Url 'http://localhost:8081/api/push/config' 90 1000)) {
             Mostrar-Log $backend 40
