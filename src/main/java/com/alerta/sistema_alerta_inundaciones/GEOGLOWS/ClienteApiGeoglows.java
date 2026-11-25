@@ -5,6 +5,11 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -16,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,29 +48,94 @@ public class ClienteApiGeoglows {
 
     private static final Logger log = LoggerFactory.getLogger(ClienteApiGeoglows.class);
     private static final String BASE_URL = "https://geoglows.ecmwf.int/api/v2/";
+    private static final int MAX_INTENTOS = 3;
+    private static final long MAX_RETRY_AFTER_SEGUNDOS = 10L;
+    private static final Duration TTL_RETURN_PERIODS = Duration.ofDays(7);
+    private static final String MENSAJE_429 =
+            "GEOGloWS está limitando las consultas (429). Intenta de nuevo en un minuto.";
 
     private final String baseUrl;
     private final HttpClient http;
     private final Duration cacheTtl;
+    private final Duration esperaBase;
+    private final Semaphore semaforo;
+    private final RitmoPeticiones ritmo;
+    private final Path cacheDir;
     private final Map<String, EntradaCache> cache = new ConcurrentHashMap<>();
+    private final Map<String, Object> bloqueos = new ConcurrentHashMap<>();
 
     @Autowired
-    public ClienteApiGeoglows(@Value("${geoglows.cache-minutos:15}") long cacheMinutos) {
-        this(BASE_URL, Duration.ofMinutes(Math.max(1, cacheMinutos)));
+    public ClienteApiGeoglows(
+            @Value("${geoglows.cache-minutos:15}") long cacheMinutos,
+            @Value("${geoglows.max-concurrentes:1}") int maxConcurrentes,
+            @Value("${geoglows.intervalo-minimo-ms:1500}") long intervaloMinimoMs,
+            @Value("${geoglows.cache-dir:${user.home}/.ing-ambiental/geoglows-cache}") String cacheDir) {
+        this(
+                BASE_URL,
+                Duration.ofMinutes(Math.max(1, cacheMinutos)),
+                Duration.ofSeconds(5),
+                maxConcurrentes,
+                intervaloMinimoMs,
+                resolverCacheDir(cacheDir));
+    }
+
+    public ClienteApiGeoglows(long cacheMinutos, int maxConcurrentes) {
+        this(
+                BASE_URL,
+                Duration.ofMinutes(Math.max(1, cacheMinutos)),
+                Duration.ofSeconds(5),
+                maxConcurrentes,
+                1500L,
+                null);
+    }
+
+    public ClienteApiGeoglows(long cacheMinutos) {
+        this(cacheMinutos, 1);
     }
 
     /** Constructor sin argumentos para usos heredados fuera de Spring. */
     public ClienteApiGeoglows() {
-        this(15);
+        this(15, 1);
     }
 
     /** Constructor para pruebas con un servidor HTTP local y un TTL explícito. */
     ClienteApiGeoglows(String baseUrl, Duration cacheTtl) {
+        this(baseUrl, cacheTtl, Duration.ofSeconds(1));
+    }
+
+    /** Constructor para pruebas con TTL y espera base entre reintentos explícitos. */
+    ClienteApiGeoglows(String baseUrl, Duration cacheTtl, Duration esperaBase) {
+        this(baseUrl, cacheTtl, esperaBase, null);
+    }
+
+    /** Constructor para pruebas con caché en disco explícita. */
+    ClienteApiGeoglows(String baseUrl, Duration cacheTtl, Duration esperaBase, Path cacheDir) {
+        this(baseUrl, cacheTtl, esperaBase, 1, 0L, cacheDir);
+    }
+
+    private ClienteApiGeoglows(
+            String baseUrl,
+            Duration cacheTtl,
+            Duration esperaBase,
+            int maxConcurrentes,
+            long intervaloMinimoMs,
+            Path cacheDir) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
         this.http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(4))
                 .build();
         this.cacheTtl = cacheTtl;
+        this.esperaBase = esperaBase;
+        this.semaforo = new Semaphore(Math.max(1, maxConcurrentes));
+        this.ritmo = new RitmoPeticiones(intervaloMinimoMs);
+        this.cacheDir = cacheDir;
+    }
+
+    private static Path resolverCacheDir(String cacheDir) {
+        if (cacheDir == null || cacheDir.isBlank()) {
+            return null;
+        }
+        return Path.of(cacheDir.trim());
     }
 
     /**
@@ -75,49 +146,166 @@ public class ClienteApiGeoglows {
      * anterior, se reutiliza esa respuesta marcando la advertencia en el log:
      * el objetivo es que una caída breve del servicio no deje el panel sin datos.
      */
-    @SuppressWarnings("unchecked")
     private Map<String, Object> get(String path, String query) throws IOException, InterruptedException {
         String clave = path + (query.isEmpty() ? "" : "?" + query);
+        Duration ttl = ttlPara(clave);
         EntradaCache entrada = cache.get(clave);
         Instant ahora = Instant.now();
 
-        if (entrada != null && entrada.fechaConsulta.plus(cacheTtl).isAfter(ahora)) {
+        if (entrada != null && entrada.fechaConsulta.plus(ttl).isAfter(ahora)) {
             log.debug("GEOGloWS: respuesta en caché para {}", clave);
             return entrada.respuesta;
         }
 
-        try {
-            Map<String, Object> respuesta = consultar(path, query);
-            cache.put(clave, new EntradaCache(Instant.now(), respuesta));
-            return respuesta;
-        } catch (IOException e) {
-            if (entrada != null) {
-                log.warn("GEOGloWS falló para {} ({}). Se reutiliza la respuesta cacheada de {}.",
-                        clave, e.getMessage(), entrada.fechaConsulta);
+        // Serializa peticiones simultáneas a la misma clave para no repetir el fallo de caché contra GEOGloWS.
+        synchronized (bloqueos.computeIfAbsent(clave, k -> new Object())) {
+            entrada = cache.get(clave);
+            if (entrada == null) {
+                entrada = cargarDesdeDisco(clave);
+                if (entrada != null) {
+                    cache.put(clave, entrada);
+                }
+            }
+            ahora = Instant.now();
+            if (entrada != null && entrada.fechaConsulta.plus(ttl).isAfter(ahora)) {
+                log.debug("GEOGloWS: respuesta en caché para {}", clave);
                 return entrada.respuesta;
             }
-            throw e;
+
+            try {
+                EntradaCache nueva = consultar(path, query);
+                guardarEnDisco(clave, nueva.cuerpoCrudo);
+                cache.put(clave, new EntradaCache(nueva.fechaConsulta, nueva.respuesta, null));
+                return nueva.respuesta;
+            } catch (IOException e) {
+                if (entrada != null) {
+                    log.warn("GEOGloWS falló para {} ({}). Se reutiliza la respuesta cacheada de {}.",
+                            clave, e.getMessage(), entrada.fechaConsulta);
+                    return entrada.respuesta;
+                }
+                throw e;
+            }
         }
     }
 
-    private Map<String, Object> consultar(String path, String query)
+    private Duration ttlPara(String clave) {
+        return clave.startsWith("returnperiods") ? TTL_RETURN_PERIODS : cacheTtl;
+    }
+
+    private EntradaCache cargarDesdeDisco(String clave) {
+        if (cacheDir == null) {
+            return null;
+        }
+        Path archivo = archivoCache(clave);
+        if (!Files.isRegularFile(archivo)) {
+            return null;
+        }
+        try {
+            Instant fecha = Files.getLastModifiedTime(archivo).toInstant();
+            String contenido = Files.readString(archivo, StandardCharsets.UTF_8);
+            if (contenido.isBlank()) {
+                return null;
+            }
+            return new EntradaCache(fecha, parsearMapa(contenido), null);
+        } catch (IOException | RuntimeException e) {
+            log.warn("No se pudo leer caché de disco {}: {}", archivo, e.getMessage());
+            return null;
+        }
+    }
+
+    private void guardarEnDisco(String clave, String cuerpoCrudo) {
+        if (cacheDir == null || cuerpoCrudo == null) {
+            return;
+        }
+        Path archivo = archivoCache(clave);
+        Path temporal = null;
+        try {
+            Files.createDirectories(cacheDir);
+            temporal = Files.createTempFile(cacheDir, archivo.getFileName().toString(), ".tmp");
+            Files.writeString(temporal, cuerpoCrudo, StandardCharsets.UTF_8);
+            try {
+                Files.move(temporal, archivo, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temporal, archivo, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            log.warn("No se pudo guardar caché de disco {}: {}", archivo, e.getMessage());
+            if (temporal != null) {
+                try {
+                    Files.deleteIfExists(temporal);
+                } catch (IOException ignored) {
+                    // Ignorado al limpiar temporal tras fallo de E/S.
+                }
+            }
+        }
+    }
+
+    private Path archivoCache(String clave) {
+        String nombre = clave.replaceAll("[^A-Za-z0-9._-]", "_") + ".json";
+        return cacheDir.resolve(nombre);
+    }
+
+    private EntradaCache consultar(String path, String query)
             throws IOException, InterruptedException {
         String url = baseUrl + path + (query.isEmpty() ? "" : "?" + query);
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(4))
                 .GET()
                 .build();
-        HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
-        if (resp.statusCode() != 200) {
-            throw new IOException("GEOGloWS respondió " + resp.statusCode() + " para " + url);
+
+        for (int intento = 1; intento <= MAX_INTENTOS; intento++) {
+            HttpResponse<String> resp;
+            semaforo.acquire();
+            try {
+                ritmo.esperarTurno();
+                resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+            } finally {
+                semaforo.release();
+            }
+
+            int status = resp.statusCode();
+            if (status == 200) {
+                String cuerpo = resp.body();
+                return new EntradaCache(Instant.now(), parsearMapa(cuerpo), cuerpo);
+            }
+
+            if (esReintentable(status) && intento < MAX_INTENTOS) {
+                Duration espera = calcularEspera(resp, intento);
+                log.warn("GEOGloWS respondió {} para {} (intento {}/{}). Reintentando en {} ms.",
+                        status, url, intento, MAX_INTENTOS, espera.toMillis());
+                long esperaMs = espera.toMillis();
+                if (esperaMs > 0) {
+                    Thread.sleep(esperaMs);
+                }
+                continue;
+            }
+
+            if (status == 429) {
+                throw new IOException(MENSAJE_429);
+            }
+            throw new IOException("GEOGloWS respondió " + status + " para " + url);
         }
-        Object parsed = Json.parse(resp.body());
-        if (parsed instanceof Map) {
-            return (Map<String, Object>) parsed;
+
+        throw new IOException("GEOGloWS falló para " + url);
+    }
+
+    private static boolean esReintentable(int status) {
+        return status == 429 || status == 502 || status == 503 || status == 504;
+    }
+
+    private Duration calcularEspera(HttpResponse<String> resp, int intento) {
+        String retryAfter = resp.headers().firstValue("Retry-After").orElse(null);
+        if (retryAfter != null && !retryAfter.isBlank()) {
+            try {
+                long segundos = Long.parseLong(retryAfter.trim());
+                if (segundos >= 0) {
+                    return Duration.ofSeconds(Math.min(MAX_RETRY_AFTER_SEGUNDOS, segundos));
+                }
+            } catch (NumberFormatException ignored) {
+                // Cabecera no numérica: se usa backoff exponencial con esperaBase.
+            }
         }
-        Map<String, Object> envoltorio = new LinkedHashMap<>();
-        envoltorio.put("data", parsed);
-        return envoltorio;
+        return esperaBase.multipliedBy(1L << (intento - 1));
     }
 
     /**
@@ -358,7 +546,42 @@ public class ClienteApiGeoglows {
         }
     }
 
-    private record EntradaCache(Instant fechaConsulta, Map<String, Object> respuesta) {
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> parsearMapa(String cuerpo) {
+        Object parsed = Json.parse(cuerpo);
+        if (parsed instanceof Map) {
+            return (Map<String, Object>) parsed;
+        }
+        Map<String, Object> envoltorio = new LinkedHashMap<>();
+        envoltorio.put("data", parsed);
+        return envoltorio;
+    }
+
+    private record EntradaCache(Instant fechaConsulta, Map<String, Object> respuesta, String cuerpoCrudo) {
+    }
+
+    private static final class RitmoPeticiones {
+        private final long intervaloMinimoNanos;
+        private long ultimaPeticionNanos;
+        private boolean iniciado;
+
+        private RitmoPeticiones(long intervaloMinimoMs) {
+            this.intervaloMinimoNanos = Math.max(0L, intervaloMinimoMs) * 1_000_000L;
+        }
+
+        synchronized void esperarTurno() throws InterruptedException {
+            if (intervaloMinimoNanos <= 0L) {
+                return;
+            }
+            if (iniciado) {
+                long restanteNanos = intervaloMinimoNanos - (System.nanoTime() - ultimaPeticionNanos);
+                if (restanteNanos > 0L) {
+                    Thread.sleep(restanteNanos / 1_000_000L, (int) (restanteNanos % 1_000_000L));
+                }
+            }
+            ultimaPeticionNanos = System.nanoTime();
+            iniciado = true;
+        }
     }
 
     /**
