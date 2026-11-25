@@ -1,17 +1,21 @@
 import { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth.jsx'
 
 export default function Login() {
   const { entrar, token } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const volver = searchParams.get('volver')
+  const destino = volver && volver.startsWith('/') && !volver.startsWith('//') ? volver : '/'
+
   const [modo, setModo] = useState('login')
   const [identificador, setIdentificador] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [ocupado, setOcupado] = useState(false)
 
-  if (token) return <Navigate to="/" replace />
+  if (token) return <Navigate to={destino} replace />
 
   const enviar = async (e) => {
     e.preventDefault()
@@ -21,7 +25,7 @@ export default function Login() {
     setOcupado(true)
     try {
       await entrar(modo, { identificador: identificador.trim(), password })
-      navigate('/', { replace: true })
+      navigate(destino, { replace: true })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -47,6 +51,9 @@ export default function Login() {
           {ocupado ? 'Enviando…' : modo === 'login' ? 'Entrar' : 'Crear cuenta'}
         </button>
       </form>
+      <p style={{ textAlign: 'center', marginTop: 16 }}>
+        <Link to="/">Ver el mapa sin iniciar sesión</Link>
+      </p>
     </main>
   )
 }

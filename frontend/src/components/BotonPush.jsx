@@ -9,6 +9,8 @@ import {
 
 const MENSAJE_BLOQUEADO = 'El navegador bloqueó las notificaciones. Habilítalas en los permisos del sitio y recarga la página.'
 const MENSAJE_ACTIVO = 'Activadas. Recibirás avisos de los ríos que sigues.'
+const MENSAJE_NO_DISPONIBLE =
+  'Este servidor no tiene Firebase configurado, así que las notificaciones push están apagadas. Puedes ver y seguir los ríos igual.'
 
 export default function BotonPush() {
   const { token } = useAuth()
@@ -49,7 +51,7 @@ export default function BotonPush() {
 
         if (!cfg || !cfg.habilitado) {
           setEstado('no-disponible')
-          setMensaje((cfg && cfg.motivo) || 'Las notificaciones no están habilitadas en el servidor.')
+          setMensaje(MENSAJE_NO_DISPONIBLE)
           return
         }
         if (permisoNotificaciones() === 'denied') {
@@ -97,7 +99,7 @@ export default function BotonPush() {
     activo: 'Notificaciones activadas',
     bloqueado: 'Notificaciones bloqueadas',
     'no-soportado': 'Notificaciones no disponibles',
-    'no-disponible': 'Notificaciones no disponibles',
+    'no-disponible': 'Notificaciones no configuradas',
     error: 'Reintentar',
     inactivo: 'Activar notificaciones',
   }[estado] ?? 'Activar notificaciones'
@@ -114,7 +116,7 @@ export default function BotonPush() {
       setConfig(cfg)
       if (!cfg?.habilitado) {
         setEstado('no-disponible')
-        setMensaje((cfg && cfg.motivo) || 'Las notificaciones no están habilitadas en el servidor.')
+        setMensaje(MENSAJE_NO_DISPONIBLE)
         return
       }
       if (permisoNotificaciones() === 'denied') {
@@ -133,7 +135,7 @@ export default function BotonPush() {
     }
   }
 
-  const conError = ['bloqueado', 'no-soportado', 'no-disponible', 'error'].includes(estado)
+  const conError = ['bloqueado', 'no-soportado', 'error'].includes(estado)
     || (estado === 'inactivo' && Boolean(mensaje))
 
   return (

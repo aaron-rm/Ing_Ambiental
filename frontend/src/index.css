@@ -9,19 +9,21 @@
   color: var(--ink);
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); }
+html, body { margin: 0; background: var(--bg); overflow-x: hidden; }
 button, input { font: inherit; }
 a { color: var(--ink); }
 :focus-visible { outline: 3px solid #2a7db5; outline-offset: 2px; }
+/* Al tocar un río, Chrome dibuja el foco del trazo SVG como un rectángulo negro. */
+.leaflet-container path.leaflet-interactive:focus { outline: none; }
 
 /* Encabezado */
 .cab { height: var(--hdr); display: flex; align-items: center; gap: 12px; padding: 0 14px; background: var(--ink); color: #fff; }
-.cab__marca { font-weight: 800; }
+.cab__marca { font-weight: 800; white-space: nowrap; }
 .cab__nav { display: flex; gap: 4px; margin-right: auto; }
-.cab__nav a { color: #fff; text-decoration: none; padding: 8px 10px; border-radius: 8px; }
+.cab__nav a { color: #fff; text-decoration: none; padding: 8px 10px; border-radius: 8px; white-space: nowrap; }
 .cab__nav a.active { background: rgba(255, 255, 255, 0.18); font-weight: 700; }
 .cab__usuario { display: none; font-size: 14px; opacity: 0.85; }
-.cab__salir { background: none; border: 1px solid rgba(255, 255, 255, 0.6); color: #fff; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.cab__salir { background: none; border: 1px solid rgba(255, 255, 255, 0.6); color: #fff; border-radius: 8px; padding: 6px 12px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 
 /* Textos y botones comunes */
 .k { margin: 0; font-size: 13px; color: var(--sec); }
@@ -35,6 +37,17 @@ a { color: var(--ink); }
 .btn--sec { background: #fff; color: var(--ink); }
 .btn--peligro { background: var(--peligro); border-color: var(--peligro); }
 .btn--chico { min-height: 40px; width: auto; font-size: 14px; padding: 0 12px; }
+
+/* Barra de carga */
+.carga { height: 6px; width: 100%; border-radius: 3px; overflow: hidden; margin-top: 8px; background: var(--linea); }
+.carga__barra { width: 40%; height: 100%; border-radius: 3px; background: var(--ink); animation: carga-deslizar 1.2s ease-in-out infinite; }
+@keyframes carga-deslizar {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .carga__barra { animation: none; width: 100%; opacity: 0.6; }
+}
 
 /* Login */
 .login { max-width: 420px; margin: 0 auto; padding: 32px 20px; }
@@ -58,7 +71,7 @@ a { color: var(--ink); }
 .sugerencias button:hover { background: #eef3f1; }
 .error--mapa { position: absolute; top: 72px; left: 12px; right: 12px; z-index: 1050; background: #fff; padding: 10px 14px; border-radius: 10px; }
 
-.panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1100; max-height: 72%; overflow-y: auto; background: #fff; border-radius: 18px 18px 0 0; box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.25); transform: translateY(105%); transition: transform 0.25s ease; padding-bottom: env(safe-area-inset-bottom); }
+.panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1100; max-height: 72%; overflow-y: auto; overflow-x: hidden; background: #fff; border-radius: 18px 18px 0 0; box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.25); transform: translateY(105%); transition: transform 0.25s ease; padding-bottom: env(safe-area-inset-bottom); }
 .panel--abierto { transform: none; }
 .panel__vacio { display: none; }
 .panel__cerrar { position: absolute; top: 8px; right: 10px; width: 40px; height: 40px; border: 0; border-radius: 20px; background: #eef3f1; font-size: 24px; line-height: 1; cursor: pointer; }
@@ -101,4 +114,22 @@ a { color: var(--ink); }
   .cab__usuario { display: inline; }
   .panel { position: static; width: 420px; max-height: none; border-radius: 0; transform: none; box-shadow: -2px 0 12px rgba(0, 0, 0, 0.12); padding-bottom: 0; }
   .panel__vacio { display: block; padding: 28px 24px; color: var(--sec); }
+}
+
+/* Móvil y táctil: controles de al menos 44px de alto */
+@media (max-width: 768px) {
+  .btn--chico { min-height: 44px; }
+  .panel__cerrar { width: 44px; height: 44px; border-radius: 22px; }
+  .sugerencias button { min-height: 44px; }
+  .pestanas button { min-height: 44px; }
+  .cab__salir { min-height: 44px; }
+}
+
+/* Pantallas pequeñas (<= 420px): evitar desborde en cabecera */
+@media (max-width: 420px) {
+  .cab { gap: 8px; padding: 0 8px; }
+  .cab__marca { font-size: 14px; }
+  .cab__nav { gap: 2px; }
+  .cab__nav a { padding: 6px 6px; font-size: 13px; }
+  .cab__salir { padding: 6px 8px; font-size: 13px; }
 }

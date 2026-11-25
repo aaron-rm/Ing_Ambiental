@@ -33,7 +33,7 @@ export default function PanelRio({
   mostrarPush = false,
   mostrarSimulacion = true,
 }) {
-  const { usuario } = useAuth()
+  const { usuario, token } = useAuth()
   const v = visual(d)
   const diaPico = useMemo(
     () => (d?.pronosticoDiario ?? []).reduce((m, x) => (!m || x.caudalMaximo > m.caudalMaximo ? x : m), null),
@@ -44,7 +44,12 @@ export default function PanelRio({
     return (
       <div className="panel__cuerpo">
         <h2 className="panel__titulo">{nombre}</h2>
-        {cargando && <p className="aviso">Consultando el pronóstico… puede tardar unos segundos.</p>}
+        {cargando && (
+          <>
+            <p className="aviso">Consultando el pronóstico… puede tardar unos segundos.</p>
+            <div className="carga" role="progressbar" aria-label="Consultando el pronóstico" aria-busy="true"><div className="carga__barra" /></div>
+          </>
+        )}
         {error && (
           <>
             <p className="error" role="alert">{error}</p>
@@ -104,7 +109,13 @@ export default function PanelRio({
           disabled={ocupado}
           onClick={onAlternar}
         >
-          {ocupado ? 'Guardando…' : siguiendo ? 'Dejar de seguir este río' : 'Suscribirme a este río'}
+          {ocupado
+            ? 'Guardando…'
+            : !usuario || !token
+              ? 'Inicia sesión para seguir este río y recibir avisos'
+              : siguiendo
+                ? 'Dejar de seguir este río'
+                : 'Suscribirme a este río'}
         </button>
       )}
 

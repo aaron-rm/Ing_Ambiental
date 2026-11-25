@@ -1,7 +1,8 @@
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip, useMap, ZoomControl } from 'react-leaflet'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
 import PanelRio from '../components/PanelRio.jsx'
@@ -32,8 +33,24 @@ function LimpiarAnimacion() {
   return null
 }
 
+// Invalida el tamaño de Leaflet cuando el contenedor cambia de dimensiones (al abrir/cerrar panel o redimensionar).
+function RedimensionarMapa() {
+  const map = useMap()
+  useEffect(() => {
+    const contenedor = map.getContainer()
+    if (!contenedor || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      map.invalidateSize()
+    })
+    ro.observe(contenedor)
+    return () => ro.disconnect()
+  }, [map])
+  return null
+}
+
 export default function Mapa() {
   const { token } = useAuth()
+  const navigate = useNavigate()
   const [geo, setGeo] = useState(null)
   const [rios, setRios] = useState([])
   const [errorCarga, setErrorCarga] = useState('')
@@ -92,6 +109,10 @@ export default function Mapa() {
   }
 
   const alternar = async (id) => {
+    if (!token) {
+      navigate(`/login?volver=${encodeURIComponent('/?rio=' + id)}`)
+      return
+    }
     const siguiendo = Boolean(estados[id]?.dto?.siguiendo)
     setOcupado(true)
     setAviso('')
@@ -149,9 +170,11 @@ export default function Mapa() {
         </div>
         {errorCarga && <p className="error error--mapa" role="alert">{errorCarga}</p>}
 
-        <MapContainer center={[9.0, -79.5]} zoom={10} className="mapa">
+        <MapContainer center={[9.0, -79.5]} zoom={10} className="mapa" zoomControl={false}>
+          <ZoomControl position="bottomright" />
           <TileLayer attribution="&copy; colaboradores de OpenStreetMap" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
           <LimpiarAnimacion />
+          <RedimensionarMapa />
           <Enfocar destino={destino} />
           {geo?.features?.map((f) => {
             const id = f.properties.rioId
@@ -194,9 +217,9 @@ export default function Mapa() {
             ))}
         </MapContainer>
         <div
-          style={{ position: 'absolute', left: 12, bottom: 12, zIndex: 1000, background: '#fff', padding: '6px 10px', borderRadius: 8, fontSize: 12, boxShadow: '0 1px 6px rgba(0,0,0,.25)', display: 'flex', alignItems: 'center', gap: 6 }}
+          style={{ position: 'absolute', left: 12, bottom: 12, zIndex: 1000, background: '#fff', padding: '6px 10px', borderRadius: 8, fontSize: 12, boxShadow: '0 1px 6px rgba(0,0,0,.25)', display: 'flex', alignItems: 'center', gap: 6, maxWidth: 'calc(100% - 24px)' }}
         >
-          <span aria-hidden="true" style={{ width: 12, height: 12, borderRadius: '50%', border: '3px solid #12302F', background: '#fff', display: 'inline-block' }} />
+          <span aria-hidden="true" style={{ width: 12, height: 12, borderRadius: '50%', border: '3px solid #12302F', background: '#fff', display: 'inline-block', flexShrink: 0 }} />
           Punto de referencia del pronóstico (ubicación aproximada)
         </div>
       </div>
@@ -214,7 +237,7 @@ export default function Mapa() {
               siguiendo={Boolean(est?.dto?.siguiendo)}
               ocupado={ocupado}
               onAlternar={() => alternar(sel)}
-              mostrarPush
+              mostrarPush={Boolean(token)}
             />
             {aviso && <p className="error panel__aviso" role="alert">{aviso}</p>}
           </>
