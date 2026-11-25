@@ -189,11 +189,11 @@ export default function Mapa() {
           type="button"
           className="btn-agregar-rio"
           onClick={() => {
+            setLista(false)
             if (!token) {
               navigate('/login?volver=/')
               return
             }
-            setLista(false)
             setSel(null)
             setAgregando(true)
             setAviso('')
