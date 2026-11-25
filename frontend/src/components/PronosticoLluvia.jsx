@@ -1,3 +1,9 @@
+/**
+ * @file PronosticoLluvia.jsx
+ * Gráfico SVG de barras que presenta el pronóstico de precipitación total diaria en milímetros.
+ * Exporta el componente PronosticoLluvia por defecto.
+ */
+
 import { useMemo } from 'react'
 
 const ZONA = 'America/Panama'
@@ -20,6 +26,13 @@ function claveLocal(fecha) {
 }
 
 // Barras con la lluvia total prevista para cada día completo.
+/**
+ * Gráfico de barras SVG que acumula y visualiza la precipitación pronosticada para cada día.
+ *
+ * @param {Object} props - Propiedades del componente.
+ * @param {Array<{fecha: string, mm: number|string}>} props.puntos - Puntos horarios de lluvia suministrados por Open-Meteo.
+ * @returns {JSX.Element|null} Elemento SVG con las barras de lluvia o null si no hay datos disponibles.
+ */
 export default function PronosticoLluvia({ puntos }) {
   const dias = useMemo(() => {
     const mapa = new Map()

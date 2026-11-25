@@ -21,6 +21,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Servicio de negocio del canal push. Registra y desactiva dispositivos,
+ * envía notificaciones de prueba, demostración, simulación y de eventos de
+ * alerta reales solo a los usuarios que siguen el río afectado.
+ */
 @Service
 public class PushService {
 
@@ -36,6 +41,16 @@ public class PushService {
     private final PropiedadesFirebase propiedadesFirebase;
     private final Map<String, Instant> ultimaPruebaPorToken = new ConcurrentHashMap<>();
 
+    /**
+     * Crea el servicio con sus dependencias.
+     *
+     * @param dispositivoRepository repositorio de dispositivos push
+     * @param rioRepository repositorio de ríos
+     * @param seleccionRepository repositorio de ríos seguidos por usuario
+     * @param eventoRepository repositorio de eventos de alerta
+     * @param pushSender emisor de notificaciones (FCM)
+     * @param propiedadesFirebase propiedades de configuración de Firebase
+     */
     public PushService(DispositivoPushRepository dispositivoRepository,
                        RioRepository rioRepository,
                        UsuarioRioRepository seleccionRepository,
@@ -50,6 +65,12 @@ public class PushService {
         this.propiedadesFirebase = propiedadesFirebase;
     }
 
+    /**
+     * Calcula la configuración pública de Firebase para la PWA e indica si el
+     * push está operativo (servidor con FCM y datos web completos).
+     *
+     * @return configuración pública, con {@code habilitado} y el motivo si no lo está
+     */
     public ConfigPushDTO configuracion() {
         PropiedadesFirebase.Publica publica = propiedadesFirebase.getPublica();
         boolean configuracionWebCompleta = !vacio(publica.getApiKey())
@@ -79,6 +100,16 @@ public class PushService {
         );
     }
 
+    /**
+     * Registra o actualiza el dispositivo de un usuario. Desactiva tokens
+     * anteriores de la misma instalación y del mismo usuario en la misma
+     * plataforma para evitar notificaciones duplicadas.
+     *
+     * @param usuario usuario autenticado dueño del dispositivo
+     * @param solicitud token, deviceId y plataforma del dispositivo
+     * @return respuesta con el estado del registro
+     * @throws IllegalStateException si el token ya está asociado a otro dispositivo
+     */
     @Transactional
     public RegistroPushResponse registrar(Usuario usuario, RegistroPushRequest solicitud) {
         String token = solicitud.getToken().trim();
@@ -129,6 +160,15 @@ public class PushService {
         return respuesta(dispositivo, "Dispositivo registrado para recibir alertas de tus ríos.");
     }
 
+    /**
+     * Desactiva la suscripción push de un dispositivo.
+     *
+     * @param usuario usuario autenticado
+     * @param token token FCM de la suscripción
+     * @param deviceId identificador de la instalación
+     * @throws IllegalArgumentException si no existe una suscripción con ese token
+     * @throws IllegalStateException si el token no pertenece al dispositivo o al usuario
+     */
     @Transactional
     public void desactivar(Usuario usuario, String token, String deviceId) {
         DispositivoPush dispositivo = dispositivoRepository.findByToken(token)
@@ -145,6 +185,19 @@ public class PushService {
         log.info("Suscripción push desactivada para el usuario {}.", usuario.getIdentificador());
     }
 
+    /**
+     * Envía una notificación de prueba a un dispositivo registrado, con un
+     * límite de una por minuto por token. Desactiva el dispositivo si el token
+     * resulta inválido.
+     *
+     * @param usuario usuario autenticado
+     * @param solicitud token y deviceId del dispositivo destino
+     * @return resultado del envío
+     * @throws IllegalArgumentException si no hay dispositivo registrado con ese token
+     * @throws LimitePruebaExcedidoException si se envió otra prueba hace menos de 60 segundos
+     * @throws IllegalStateException si el token no coincide, la suscripción está
+     *         inactiva o FCM no está configurado
+     */
     @Transactional
     public ResultadoEnvioPush enviarPrueba(Usuario usuario, PruebaPushRequest solicitud) {
         DispositivoPush dispositivo = dispositivoRepository.findByToken(solicitud.getToken().trim())
@@ -198,6 +251,9 @@ public class PushService {
     /**
      * Envía una alerta de simulacro a todos los dispositivos activos, sin
      * persistir un evento. Sirve para demostrar el canal push en clase.
+     *
+     * @return resumen con dispositivos objetivo, enviados y fallidos
+     * @throws IllegalStateException si FCM no está configurado
      */
     public ResultadoDemoPush enviarDemoATodos() {
         if (!pushSender.estaHabilitado()) {
@@ -220,6 +276,10 @@ public class PushService {
     /**
      * Envía el simulacro de crecida solo a los dispositivos activos de los
      * usuarios que siguen el río simulado. No persiste un evento.
+     *
+     * @param alerta resultado de la simulación del río
+     * @return resumen con dispositivos objetivo, enviados y fallidos
+     * @throws IllegalArgumentException si la simulación no tiene un reachId válido
      *
      * @throws IllegalStateException si FCM no está configurado.
      */
@@ -247,6 +307,7 @@ public class PushService {
         return resultado;
     }
 
+    // Envía la misma notificación a cada dispositivo, cuenta resultados y desactiva tokens inválidos.
     private ResultadoDemoPush enviarADispositivos(List<DispositivoPush> dispositivos,
                                                   NotificacionPush notificacion) {
         int enviados = 0;
@@ -270,6 +331,8 @@ public class PushService {
      * Envía la notificación de un evento solo a los dispositivos activos de los
      * usuarios que siguen el río afectado. Los errores se registran en el evento
      * y nunca se propagan al ciclo de monitoreo.
+     *
+     * @param evento evento de alerta a notificar; se actualiza con el estado del envío
      */
     public void enviarParaEvento(AlertaEvento evento) {
         List<DispositivoPush> dispositivos = dispositivosQueSiguen(evento.getReachId());
@@ -350,6 +413,7 @@ public class PushService {
         }
     }
 
+    // Dispositivos activos de los usuarios que siguen el río asociado al tramo (reachId).
     private List<DispositivoPush> dispositivosQueSiguen(Long reachId) {
         Optional<Rio> rio = rioRepository.findFirstByGeoglowsId(reachId);
         if (rio.isEmpty()) {
@@ -364,6 +428,7 @@ public class PushService {
         return dispositivoRepository.findByUsuarioIdInAndActivoTrue(usuarioIds);
     }
 
+    // Convierte un dispositivo y un mensaje en la respuesta pública del registro.
     private static RegistroPushResponse respuesta(DispositivoPush dispositivo, String mensaje) {
         return new RegistroPushResponse(
                 dispositivo.getId(),
@@ -373,6 +438,7 @@ public class PushService {
         );
     }
 
+    // Normaliza la plataforma: por defecto "web", en minúsculas y máximo 30 caracteres.
     private static String limpiarPlataforma(String plataforma) {
         if (plataforma == null || plataforma.isBlank()) {
             return "web";
@@ -381,6 +447,7 @@ public class PushService {
         return limpia.length() > 30 ? limpia.substring(0, 30) : limpia;
     }
 
+    // Recorta el texto a un máximo de caracteres (tolera null).
     private static String limitar(String texto, int max) {
         if (texto == null) {
             return null;

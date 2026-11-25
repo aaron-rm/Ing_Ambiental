@@ -35,6 +35,12 @@ public class FirebasePushSender implements PushSender {
     private final FirebaseMessaging messaging;
     private final String motivoDeshabilitado;
 
+    /**
+     * Crea el emisor e intenta inicializar Firebase con las credenciales configuradas.
+     * Si falla, no lanza excepción: el emisor queda deshabilitado con un motivo.
+     *
+     * @param propiedades propiedades de configuración de Firebase (credenciales y proyecto)
+     */
     public FirebasePushSender(PropiedadesFirebase propiedades) {
         this.messaging = inicializar(propiedades);
         this.motivoDeshabilitado = messaging == null ? motivoInicializacion(propiedades) : null;
@@ -45,16 +51,35 @@ public class FirebasePushSender implements PushSender {
         }
     }
 
+    /**
+     * Indica si el SDK de Firebase quedó inicializado y se pueden enviar notificaciones.
+     *
+     * @return {@code true} si FCM está disponible; {@code false} en caso contrario
+     */
     @Override
     public boolean estaHabilitado() {
         return messaging != null;
     }
 
+    /**
+     * Devuelve el motivo legible por el que FCM no está disponible.
+     *
+     * @return motivo de la deshabilitación, o {@code null} si FCM está habilitado
+     */
     @Override
     public String motivoDeshabilitado() {
         return motivoDeshabilitado;
     }
 
+    /**
+     * Envía una notificación data-only a un token FCM. Los errores de FCM no se
+     * propagan: se traducen a un {@link ResultadoEnvioPush}, marcando si el token
+     * es inválido para que el llamador pueda desactivar el dispositivo.
+     *
+     * @param notificacion contenido de la notificación a enviar
+     * @param token token de registro FCM del dispositivo destino
+     * @return resultado del envío (éxito, token inválido o fallo con mensaje)
+     */
     @Override
     public ResultadoEnvioPush enviar(NotificacionPush notificacion, String token) {
         if (messaging == null) {
@@ -94,6 +119,7 @@ public class FirebasePushSender implements PushSender {
         }
     }
 
+    // Inicializa FirebaseMessaging con las credenciales; devuelve null si no es posible.
     private static FirebaseMessaging inicializar(PropiedadesFirebase propiedades) {
         if (!propiedades.isEnabled()) {
             return null;
@@ -126,6 +152,7 @@ public class FirebasePushSender implements PushSender {
         }
     }
 
+    // Abre las credenciales desde archivo, JSON directo o JSON en Base64.
     private static InputStream abrirCredenciales(PropiedadesFirebase propiedades) throws Exception {
         if (!esVacio(propiedades.getCredentialsPath())) {
             return Files.newInputStream(Path.of(propiedades.getCredentialsPath()));
@@ -139,6 +166,7 @@ public class FirebasePushSender implements PushSender {
         return new ByteArrayInputStream(decodificado);
     }
 
+    // Arma el mensaje que explica por qué Firebase no quedó inicializado.
     private static String motivoInicializacion(PropiedadesFirebase propiedades) {
         if (!propiedades.isEnabled()) {
             return "FCM está deshabilitado por configuración (firebase.enabled=false).";
@@ -153,6 +181,7 @@ public class FirebasePushSender implements PushSender {
         return texto == null || texto.isBlank();
     }
 
+    // Oculta la mayor parte del token para no exponerlo completo en los logs.
     private static String enmascarar(String token) {
         if (token == null || token.length() < 12) {
             return "***";

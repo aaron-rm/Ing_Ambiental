@@ -28,12 +28,30 @@ public class ProveedorDatosRiesgoGeoglows implements ProveedorDatosRiesgo {
     private final ClienteApiGeoglows clienteGeoglows;
     private final ProveedorPrecipitacion proveedorPrecipitacion;
 
+    /**
+     * Crea el proveedor con sus fuentes de datos.
+     *
+     * @param clienteGeoglows        cliente de la API de GEOGloWS
+     * @param proveedorPrecipitacion fuente del pronóstico de precipitación
+     */
     public ProveedorDatosRiesgoGeoglows(ClienteApiGeoglows clienteGeoglows,
                                         ProveedorPrecipitacion proveedorPrecipitacion) {
         this.clienteGeoglows = clienteGeoglows;
         this.proveedorPrecipitacion = proveedorPrecipitacion;
     }
 
+    /**
+     * Obtiene el pronóstico y los umbrales de GEOGloWS y la precipitación de la
+     * zona. Si la precipitación falla, el caudal se devuelve igualmente con una advertencia.
+     *
+     * @param reachId   identificador del tramo en GEOGloWS
+     * @param nombreRio nombre del río; si es vacío se usa "Tramo" más el reachId
+     * @param latitud   latitud del río, o {@code null} si no está configurada
+     * @param longitud  longitud del río, o {@code null} si no está configurada
+     * @return instantánea de datos del tramo
+     * @throws IOException          si GEOGloWS no devuelve una serie de caudal ni umbrales utilizables
+     * @throws InterruptedException si la consulta a GEOGloWS es interrumpida
+     */
     @Override
     public DatosRiesgoTramo obtener(long reachId, String nombreRio, Double latitud, Double longitud)
             throws IOException, InterruptedException {

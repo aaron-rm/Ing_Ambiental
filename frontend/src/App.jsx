@@ -1,3 +1,10 @@
+/**
+ * @file App.jsx
+ * Componente principal de enrutamiento y estructura visual general de la aplicación.
+ * Define la barra de navegación superior, rutas públicas y rutas protegidas.
+ * Exporta el componente App por defecto.
+ */
+
 import { Link, NavLink, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { useAuth } from './auth.jsx'
 import Login from './pages/Login.jsx'
@@ -37,6 +44,11 @@ function Protegida({ children }) {
   return children
 }
 
+/**
+ * Componente raíz que define el enrutador de la aplicación y la estructura de navegación.
+ *
+ * @returns {JSX.Element} Árbol de rutas con React Router.
+ */
 export default function App() {
   return (
     <Routes>

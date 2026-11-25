@@ -15,21 +15,44 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
+/**
+ * Controlador REST para consultar el catálogo de ríos, obtener su capa GeoJSON
+ * para mapas y permitir la creación de nuevos ríos a partir de coordenadas.
+ */
 @RestController
 @RequestMapping("/api/rios")
 public class RioController {
 
     private final RioService rioService;
 
+    /**
+     * Crea el controlador de ríos.
+     *
+     * @param rioService servicio de negocio de ríos
+     */
     public RioController(RioService rioService) {
         this.rioService = rioService;
     }
 
+    /**
+     * Lista el resumen de todos los ríos disponibles en el catálogo.
+     * Endpoint: {@code GET /api/rios}. Acceso: público.
+     *
+     * @return lista de resúmenes de ríos
+     */
     @GetMapping
     public List<RioResumenDTO> obtenerRios() {
         return rioService.obtenerTodos();
     }
 
+    /**
+     * Crea un nuevo río buscando en GEOGloWS el tramo más cercano a las coordenadas indicadas.
+     * Endpoint: {@code POST /api/rios}. Acceso: usuario con cuenta.
+     *
+     * @param solicitud nombre y coordenadas del río a registrar
+     * @param usuario   usuario autenticado que realiza el alta
+     * @return respuesta 201 con el resumen del río creado o 401 si no hay sesión
+     */
     @PostMapping
     public ResponseEntity<RioResumenDTO> crearRio(@RequestBody(required = false) CrearRioRequest solicitud,
                                                   @AuthenticationPrincipal Usuario usuario) {
@@ -39,6 +62,12 @@ public class RioController {
         return ResponseEntity.status(HttpStatus.CREATED).body(rioService.crearRio(solicitud, usuario));
     }
 
+    /**
+     * Devuelve una colección GeoJSON ({@code FeatureCollection}) con las geometrías de los ríos del catálogo.
+     * Endpoint: {@code GET /api/rios/mapa}. Acceso: público.
+     *
+     * @return respuesta GeoJSON con las geometrías y propiedades de cada río
+     */
     @GetMapping(value = "/mapa", produces = "application/geo+json")
     public ResponseEntity<String> obtenerMapa() {
         return ResponseEntity.ok()
@@ -46,6 +75,12 @@ public class RioController {
                 .body(rioService.obtenerMapaGeoJson());
     }
 
+    /**
+     * Maneja excepciones de estado HTTP lanzadas por el servicio de ríos.
+     *
+     * @param e excepción con código de estado y motivo
+     * @return respuesta HTTP con el código y mensaje correspondientes
+     */
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<String> errorEstado(ResponseStatusException e) {
         return ResponseEntity.status(e.getStatusCode()).body(e.getReason());

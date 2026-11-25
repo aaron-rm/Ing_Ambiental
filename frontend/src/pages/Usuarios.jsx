@@ -1,8 +1,19 @@
+/**
+ * @file Usuarios.jsx
+ * Página administrativa para la gestión y asignación de roles de usuarios registrados en el sistema.
+ * Exporta el componente Usuarios por defecto.
+ */
+
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
 
+/**
+ * Vista de administración para consultar usuarios y actualizar sus roles (USER o INVESTIGADOR).
+ *
+ * @returns {JSX.Element} Tabla de gestión de usuarios o aviso de acceso restringido.
+ */
 export default function Usuarios() {
   const { token, usuario, cargando: authCargando } = useAuth()
   const [usuarios, setUsuarios] = useState([])

@@ -1,3 +1,10 @@
+/**
+ * @file MisRios.jsx
+ * Página que lista los ríos seguidos por el usuario autenticado.
+ * Permite ver el estado actual, abrir el detalle hidrológico, dejar de seguir ríos o simular crecidas (rol ADMIN).
+ * Exporta el componente MisRios por defecto.
+ */
+
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
@@ -7,6 +14,11 @@ import BotonSimular from '../components/BotonSimular.jsx'
 import PanelRio from '../components/PanelRio.jsx'
 import { fmt, visual } from '../estados.js'
 
+/**
+ * Vista con el listado de ríos a los que el usuario está suscrito para recibir notificaciones.
+ *
+ * @returns {JSX.Element} Lista de tarjetas con el estado y acciones de cada río seguido.
+ */
 export default function MisRios() {
   const { token, usuario } = useAuth()
   const [lista, setLista] = useState(null)
@@ -90,7 +102,7 @@ export default function MisRios() {
                 )}
               </div>
               {mensajesSim[r.rioId] && (
-                <p className={mensajesSim[r.rioId].tipo === 'error' ? 'error' : 'aviso'} role="status">
+                <p className={mensajesSim[r.rioId].tipo === 'error' ? 'error' : 'aviso'} role={mensajesSim[r.rioId].tipo === 'error' ? 'alert' : 'status'}>
                   {mensajesSim[r.rioId].texto}
                 </p>
               )}

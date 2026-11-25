@@ -1,3 +1,9 @@
+/**
+ * @file Muestras.jsx
+ * Componente para listar, registrar individualmente y cargar por archivo CSV muestras ambientales y mediciones de un río.
+ * Exporta el componente Muestras por defecto.
+ */
+
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
@@ -24,6 +30,13 @@ function fechaLocalCorta(iso) {
   }
 }
 
+/**
+ * Sección de visualización y captura de muestras de calidad de agua o mediciones de campo de un río.
+ *
+ * @param {Object} props - Propiedades del componente.
+ * @param {number|string} props.rioId - Identificador único del río en la base de datos.
+ * @returns {JSX.Element} Sección con tabla de muestras históricas y formularios de registro/subida.
+ */
 export default function Muestras({ rioId }) {
   const { usuario, token } = useAuth()
   const [muestras, setMuestras] = useState([])

@@ -20,21 +20,46 @@ public class AdminUsuarioController {
 
     private final AdminUsuarioService adminUsuarioService;
 
+    /**
+     * Crea el controlador administrativo de usuarios.
+     *
+     * @param adminUsuarioService servicio de administración de usuarios y roles
+     */
     public AdminUsuarioController(AdminUsuarioService adminUsuarioService) {
         this.adminUsuarioService = adminUsuarioService;
     }
 
+    /**
+     * Lista todos los usuarios registrados ordenados alfabéticamente por identificador.
+     * Endpoint: {@code GET /api/admin/usuarios}. Acceso: ADMIN.
+     *
+     * @return lista de usuarios en formato DTO
+     */
     @GetMapping
     public List<UsuarioDTO> listarUsuarios() {
         return adminUsuarioService.listarUsuarios();
     }
 
+    /**
+     * Actualiza el rol asignado a un usuario existente (entre USER e INVESTIGADOR).
+     * Endpoint: {@code PUT /api/admin/usuarios/{id}/rol}. Acceso: ADMIN.
+     *
+     * @param id        identificador del usuario a modificar
+     * @param solicitud nuevo rol solicitado
+     * @return usuario actualizado con su nuevo rol
+     */
     @PutMapping("/{id}/rol")
     public ResponseEntity<UsuarioDTO> cambiarRol(@PathVariable Long id,
                                                  @RequestBody(required = false) CambiarRolRequest solicitud) {
         return ResponseEntity.ok(adminUsuarioService.cambiarRol(id, solicitud));
     }
 
+    /**
+     * Transforma una {@link ResponseStatusException} en respuesta HTTP con su motivo en texto plano.
+     *
+     * @param e excepción con código de estado y motivo
+     * @return respuesta HTTP con el código y mensaje de error
+     */
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<String> errorEstado(ResponseStatusException e) {
         return ResponseEntity.status(e.getStatusCode()).body(e.getReason());

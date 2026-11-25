@@ -27,6 +27,13 @@ public class AlertaEventoService {
     private final AlertaEventoRepository eventoRepository;
     private final PropiedadesMonitoreo propiedadesMonitoreo;
 
+    /**
+     * Crea el servicio de registro de eventos de alerta.
+     *
+     * @param estadoRepository repositorio del estado actual de riesgo por tramo
+     * @param eventoRepository repositorio de eventos históricos de alerta
+     * @param propiedadesMonitoreo configuración del comportamiento del monitoreo
+     */
     public AlertaEventoService(EstadoRiesgoTramoRepository estadoRepository,
                                AlertaEventoRepository eventoRepository,
                                PropiedadesMonitoreo propiedadesMonitoreo) {
@@ -35,6 +42,15 @@ public class AlertaEventoService {
         this.propiedadesMonitoreo = propiedadesMonitoreo;
     }
 
+    /**
+     * Registra el resultado de una evaluación de riesgo y genera un nuevo
+     * {@link AlertaEvento} cuando cambia el nivel de forma confiable.
+     *
+     * @param datos instantánea de datos utilizada para la evaluación
+     * @param evaluacion resultado de la evaluación de riesgo del tramo
+     * @param origen procedencia de la evaluación (por ejemplo, PROGRAMADO o MANUAL)
+     * @return evento creado o recuperado por idempotencia, o vacío si no corresponde alertar
+     */
     @Transactional
     public Optional<AlertaEvento> registrarEvaluacion(DatosRiesgoTramo datos,
                                                       EvaluacionRiesgo evaluacion,
@@ -92,6 +108,13 @@ public class AlertaEventoService {
         return Optional.ofNullable(evento);
     }
 
+    /**
+     * Determina si un cambio de nivel debe disparar notificaciones push.
+     *
+     * @param nivel nuevo nivel de alerta calculado
+     * @param anterior nivel de alerta previo del tramo
+     * @return {@code true} si corresponde notificar a los dispositivos
+     */
     public boolean debeNotificar(NivelAlerta nivel, NivelAlerta anterior) {
         if (nivel == NivelAlerta.ALERTA || nivel == NivelAlerta.EMERGENCIA) {
             return true;
@@ -102,6 +125,7 @@ public class AlertaEventoService {
                 && propiedadesMonitoreo.isNotificarRecuperacion();
     }
 
+    // Inicializa un estado persistente en nivel NORMAL para un tramo sin historial previo.
     private EstadoRiesgoTramo nuevoEstado(Long reachId) {
         EstadoRiesgoTramo estado = new EstadoRiesgoTramo();
         estado.setReachId(reachId);
@@ -109,6 +133,7 @@ public class AlertaEventoService {
         return estado;
     }
 
+    // Construye la entidad AlertaEvento copiando métricas, factores y metadatos de la evaluación.
     private AlertaEvento construirEvento(DatosRiesgoTramo datos, EvaluacionRiesgo evaluacion,
                                          NivelAlerta anterior, String clave, String origen) {
         AlertaEvento evento = new AlertaEvento();

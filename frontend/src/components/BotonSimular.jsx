@@ -1,9 +1,27 @@
+/**
+ * @file BotonSimular.jsx
+ * Componente interactivo para administradores que permite simular una crecida en un río específico
+ * y despachar notificaciones push de prueba a los usuarios suscritos a dicho río.
+ * Exporta el componente BotonSimular por defecto.
+ */
+
 import { useState } from 'react'
 import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
 
 const NOTA = 'Administración: simular una crecida envía una notificación real a los dispositivos suscritos a este río.'
 
+/**
+ * Botón administrativo para ejecutar un simulacro de crecida en un tramo hidrológico.
+ *
+ * @param {Object} props - Propiedades del componente.
+ * @param {number|string} props.reachId - Identificador del tramo hidrológico de GEOGLOWS a simular.
+ * @param {string} props.nombre - Nombre del río donde se simulará la crecida.
+ * @param {boolean} [props.compacto=false] - Indica si el botón se renderiza en estilo compacto.
+ * @param {boolean} [props.nota=false] - Indica si se muestra una nota explicativa sobre la simulación.
+ * @param {function({tipo: string, texto: string}|null): void} [props.onMensaje] - Callback opcional para propagar mensajes de resultado o error al contenedor padre.
+ * @returns {JSX.Element} Elemento contenedor del botón de simulación con mensajes de estado.
+ */
 export default function BotonSimular({ reachId, nombre, compacto = false, nota = false, onMensaje }) {
   const { token } = useAuth()
   const [simulando, setSimulando] = useState(false)

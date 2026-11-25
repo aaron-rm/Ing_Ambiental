@@ -7,6 +7,11 @@ package com.alerta.sistema_alerta_inundaciones.push;
  */
 public class LimitePruebaExcedidoException extends RuntimeException {
 
+    /**
+     * Crea la excepción con el mensaje que se devolverá al cliente.
+     *
+     * @param mensaje descripción del límite excedido
+     */
     public LimitePruebaExcedidoException(String mensaje) {
         super(mensaje);
     }

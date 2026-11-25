@@ -90,14 +90,17 @@ public class LectorDatosIngresados {
         public LocalDate fechaCalibracion;
     }
 
+    /** Niveles de alerta de un tramo, de menor a mayor gravedad. */
     public enum NivelAlerta { NORMAL, VIGILANCIA, ALERTA, EMERGENCIA }
 
     // =================================================================================
     // 4) OBSERVACIONES EN TIEMPO REAL (estaciones, pluviómetros, sensores propios)
     // =================================================================================
 
+    /** Tipos de observación que puede reportar una estación o sensor. */
     public enum TipoObservacion { NIVEL, CAUDAL, PLUVIOMETRO, SENSOR_PROPIO }
 
+    /** Medición en tiempo real de una estación, pluviómetro o sensor propio. */
     public static class ObservacionTiempoReal {
         public String estacionId;
         public TipoObservacion tipo;
@@ -113,6 +116,7 @@ public class LectorDatosIngresados {
     // 5) LLUVIA OBSERVADA Y PRONOSTICADA
     // =================================================================================
 
+    /** Datos de lluvia observada y pronosticada para una ubicación. */
     public static class DatosLluvia {
         public String ubicacionId;
         public double acumuladoObservadoMm;
@@ -126,6 +130,7 @@ public class LectorDatosIngresados {
     // 6) TERRENO E INUNDABILIDAD
     // =================================================================================
 
+    /** Información de terreno e inundabilidad de una zona (DEM, pendientes, llanura de inundación). */
     public static class DatosTerreno {
         public String zonaId;
         public String demUrl;                  // modelo digital de elevación
@@ -139,11 +144,13 @@ public class LectorDatosIngresados {
     // 7) ELEMENTOS EXPUESTOS
     // =================================================================================
 
+    /** Tipos de elementos que pueden resultar afectados por una inundación. */
     public enum TipoElementoExpuesto {
         POBLACION, VIVIENDA, HOSPITAL, ESCUELA, VIA, PUENTE,
         REFUGIO, INFRAESTRUCTURA_CRITICA, ACTIVIDAD_ECONOMICA
     }
 
+    /** Elemento expuesto (población, vía, hospital, etc.) con su ubicación y criticidad. */
     public static class ElementoExpuesto {
         public String id;
         public TipoElementoExpuesto tipo;
@@ -158,6 +165,7 @@ public class LectorDatosIngresados {
     // 8) VULNERABILIDAD LOCAL
     // =================================================================================
 
+    /** Condiciones de vulnerabilidad de una zona (evacuación, accesibilidad, grupos vulnerables). */
     public static class VulnerabilidadLocal {
         public String zonaId;
         public boolean historicamenteAfectada;
@@ -172,6 +180,7 @@ public class LectorDatosIngresados {
     // 9) HISTORIAL DE EVENTOS
     // =================================================================================
 
+    /** Registro de un evento de inundación pasado, útil para ajustar umbrales. */
     public static class EventoHistorico {
         public LocalDate fecha;
         public double lluviaMm;
@@ -186,8 +195,10 @@ public class LectorDatosIngresados {
     // 10) DATOS ADMINISTRATIVOS Y DE COMUNICACIÓN
     // =================================================================================
 
+    /** Canales por los que se puede notificar una alerta. */
     public enum CanalNotificacion { APP, SMS, WHATSAPP, SIRENA, CORREO }
 
+    /** Datos administrativos de un municipio o barrio: idiomas y canales de notificación disponibles. */
     public static class DatosAdministrativos {
         public String limiteId;            // municipio/barrio
         public String nombre;
@@ -195,6 +206,7 @@ public class LectorDatosIngresados {
         public List<CanalNotificacion> canalesDisponibles = new ArrayList<>();
     }
 
+    /** Persona o entidad suscrita a las alertas de una zona, con sus canales y contacto. */
     public static class Suscriptor {
         public String id;
         public String zonaId;
@@ -208,10 +220,18 @@ public class LectorDatosIngresados {
 
     public final ClienteApiGeoglows geoglows;
 
+    /**
+     * Crea el repositorio con un cliente de GEOGloWS por defecto.
+     */
     public LectorDatosIngresados() {
         this(new ClienteApiGeoglows());
     }
 
+    /**
+     * Crea el repositorio usando un cliente de GEOGloWS dado.
+     *
+     * @param geoglows cliente de la API de GEOGloWS
+     */
     public LectorDatosIngresados(ClienteApiGeoglows geoglows) {
         this.geoglows = geoglows;
     }
@@ -231,7 +251,15 @@ public class LectorDatosIngresados {
     public final List<DatosAdministrativos> administrativos = new ArrayList<>();
     public final List<Suscriptor> suscriptores = new ArrayList<>();
 
-    /** Lee/sincroniza desde GEOGloWS todo lo disponible para un tramo: pronóstico, histórico y umbrales. */
+    /**
+     * Lee/sincroniza desde GEOGloWS todo lo disponible para un tramo: pronóstico, histórico y umbrales.
+     *
+     * @param reachId identificador del tramo (reach_id)
+     * @param cuencaId cuenca o subcuenca asociada
+     * @param direccionFlujo sentido de flujo del tramo
+     * @throws IOException si falla la comunicación con GEOGloWS
+     * @throws InterruptedException si el hilo es interrumpido durante la consulta
+     */
     public void sincronizarTramo(long reachId, String cuencaId, String direccionFlujo)
             throws IOException, InterruptedException {
         TramoRio t = tramos.computeIfAbsent(reachId, id -> new TramoRio());
@@ -250,12 +278,20 @@ public class LectorDatosIngresados {
         pronosticos.get(reachId).caudalHistoricoPromedio = 0.0;
     }
 
-    /** Registra una observación de campo/sensor propio (dato que GEOGloWS no provee). */
+    /**
+     * Registra una observación de campo/sensor propio (dato que GEOGloWS no provee).
+     *
+     * @param obs observación a guardar
+     */
     public void ingresarObservacion(ObservacionTiempoReal obs) {
         observaciones.add(obs);
     }
 
-    /** Registra un dato de lluvia proveniente de una fuente externa. */
+    /**
+     * Registra un dato de lluvia proveniente de una fuente externa.
+     *
+     * @param dato dato de lluvia a guardar
+     */
     public void ingresarLluvia(DatosLluvia dato) {
         lluvia.add(dato);
     }

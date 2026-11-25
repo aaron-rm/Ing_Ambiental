@@ -17,7 +17,13 @@ import java.time.Instant;
  */
 public class GeneradorAlertaFinal {
 
-    /** Compara el máximo previsto contra los umbrales para decidir el nivel de alerta del tramo. */
+    /**
+     * Compara el máximo previsto contra los umbrales para decidir el nivel de alerta del tramo.
+     *
+     * @param repo repositorio con los pronósticos y umbrales ya sincronizados
+     * @param reachId identificador del tramo (reach_id) a evaluar
+     * @return nivel de alerta; {@code NORMAL} si faltan datos del tramo
+     */
     public LectorDatosIngresados.NivelAlerta evaluarNivel(LectorDatosIngresados repo, long reachId) {
         LectorDatosIngresados.PronosticoCaudal p = repo.pronosticos.get(reachId);
         LectorDatosIngresados.UmbralAlerta u = repo.umbrales.get(reachId);
@@ -32,7 +38,12 @@ public class GeneradorAlertaFinal {
         return LectorDatosIngresados.NivelAlerta.NORMAL;
     }
 
-    /** Arma y muestra el reporte final para un tramo ya sincronizado. */
+    /**
+     * Arma y muestra por consola el reporte final para un tramo ya sincronizado.
+     *
+     * @param repo repositorio con los datos del tramo
+     * @param reachId identificador del tramo (reach_id) a reportar
+     */
     public void generarReporte(LectorDatosIngresados repo, long reachId) {
         LectorDatosIngresados.UmbralAlerta u = repo.umbrales.get(reachId);
         LectorDatosIngresados.NivelAlerta nivel = evaluarNivel(repo, reachId);
@@ -49,6 +60,12 @@ public class GeneradorAlertaFinal {
     // DEMO
     // =================================================================================
 
+    /**
+     * Demostración por consola: sincroniza un tramo con GEOGloWS, registra una
+     * observación de ejemplo y muestra el reporte final.
+     *
+     * @param args argumentos de línea de comandos (no se usan)
+     */
     public static void main(String[] args) {
         LectorDatosIngresados repo = new LectorDatosIngresados();
         GeneradorAlertaFinal generador = new GeneradorAlertaFinal();

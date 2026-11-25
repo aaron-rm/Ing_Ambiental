@@ -68,6 +68,14 @@ public class ClienteApiGeoglows {
     private final Map<String, Instant> fallosRecientes = new ConcurrentHashMap<>();
     private final Map<String, Object> bloqueos = new ConcurrentHashMap<>();
 
+    /**
+     * Crea el cliente configurado mediante propiedades de Spring.
+     *
+     * @param cacheMinutos tiempo de vida en minutos para la caché de pronósticos
+     * @param maxConcurrentes máximo de peticiones HTTP simultáneas hacia GEOGloWS
+     * @param intervaloMinimoMs intervalo mínimo en milisegundos entre peticiones
+     * @param cacheDir directorio de caché en disco (vacío para deshabilitar)
+     */
     @Autowired
     public ClienteApiGeoglows(
             @Value("${geoglows.cache-minutos:15}") long cacheMinutos,
@@ -84,6 +92,12 @@ public class ClienteApiGeoglows {
                 VENTANA_FALLO_DEFECTO);
     }
 
+    /**
+     * Crea el cliente con tiempo de caché y concurrencia personalizados, sin caché en disco.
+     *
+     * @param cacheMinutos tiempo de vida en minutos para la caché de pronósticos
+     * @param maxConcurrentes máximo de peticiones HTTP simultáneas hacia GEOGloWS
+     */
     public ClienteApiGeoglows(long cacheMinutos, int maxConcurrentes) {
         this(
                 BASE_URL,
@@ -95,6 +109,11 @@ public class ClienteApiGeoglows {
                 VENTANA_FALLO_DEFECTO);
     }
 
+    /**
+     * Crea el cliente con tiempo de caché personalizado y concurrencia unitaria.
+     *
+     * @param cacheMinutos tiempo de vida en minutos para la caché de pronósticos
+     */
     public ClienteApiGeoglows(long cacheMinutos) {
         this(cacheMinutos, 1);
     }
@@ -225,6 +244,7 @@ public class ClienteApiGeoglows {
         return clave.startsWith("returnperiods") ? TTL_RETURN_PERIODS : cacheTtl;
     }
 
+    // Lee y deserializa una respuesta JSON previamente guardada en disco.
     private EntradaCache cargarDesdeDisco(String clave) {
         if (cacheDir == null) {
             return null;
@@ -246,6 +266,7 @@ public class ClienteApiGeoglows {
         }
     }
 
+    // Persiste el cuerpo JSON crudo en disco usando escritura temporal y movimiento atómico.
     private void guardarEnDisco(String clave, String cuerpoCrudo) {
         if (cacheDir == null || cuerpoCrudo == null) {
             return;
@@ -278,6 +299,7 @@ public class ClienteApiGeoglows {
         return cacheDir.resolve(nombre);
     }
 
+    // Ejecuta la petición HTTP a GEOGloWS aplicando semáforo, ritmo y reintentos.
     private EntradaCache consultar(String path, String query)
             throws IOException, InterruptedException {
         String url = baseUrl + path + (query.isEmpty() ? "" : "?" + query);
@@ -326,6 +348,7 @@ public class ClienteApiGeoglows {
         return status == 429 || status == 502 || status == 503 || status == 504;
     }
 
+    // Determina el tiempo de espera con Retry-After o backoff exponencial.
     private Duration calcularEspera(HttpResponse<String> resp, int intento) {
         String retryAfter = resp.headers().firstValue("Retry-After").orElse(null);
         if (retryAfter != null && !retryAfter.isBlank()) {
@@ -354,6 +377,11 @@ public class ClienteApiGeoglows {
      *     pasos horarios que no corresponden al intervalo de 3h vienen como
      *     string vacío "" en vez de un número. Hay que descartarlos (no tratarlos
      *     como 0 ni dejarlos como NaN, porque NaN contamina cálculos de máximo).
+     *
+     * @param reachId identificador del tramo (river_id / reach_id) en GEOGloWS
+     * @return pronóstico de caudal con fecha de emisión, media y percentiles
+     * @throws IOException si falla la comunicación o la respuesta de GEOGloWS no es válida
+     * @throws InterruptedException si el hilo es interrumpido durante la consulta
      */
     @SuppressWarnings("unchecked")
     public LectorDatosIngresados.PronosticoCaudal obtenerPronostico(long reachId)
@@ -406,7 +434,14 @@ public class ClienteApiGeoglows {
         return pc;
     }
 
-    /** Periodos de retorno (años -> caudal en m3/s) calculados por GEOGloWS con su histórico. */
+    /**
+     * Periodos de retorno (años -> caudal en m3/s) calculados por GEOGloWS con su histórico.
+     *
+     * @param reachId identificador del tramo en GEOGloWS
+     * @return mapa ordenado de periodo de retorno en años a caudal en m3/s
+     * @throws IOException si falla la comunicación con GEOGloWS
+     * @throws InterruptedException si el hilo es interrumpido durante la consulta
+     */
     @SuppressWarnings("unchecked")
     public Map<Integer, Double> obtenerPeriodosRetorno(long reachId) throws IOException, InterruptedException {
         Map<String, Object> raw = get("returnperiods/" + reachId, "format=json");
@@ -430,6 +465,11 @@ public class ClienteApiGeoglows {
      * Deriva umbrales de vigilancia/alerta/emergencia a partir de los periodos de
      * retorno de GEOGloWS (convención habitual: 2/5/25 años). AJUSTAR con aforos
      * locales, registros de desbordamiento o curvas caudal-nivel cuando existan.
+     *
+     * @param reachId identificador del tramo en GEOGloWS
+     * @return umbrales de vigilancia, alerta y emergencia para el tramo
+     * @throws IOException si ocurre un error de entrada/salida no recuperable
+     * @throws InterruptedException si el hilo es interrumpido durante la consulta
      */
     public LectorDatosIngresados.UmbralAlerta obtenerUmbrales(long reachId)
             throws IOException, InterruptedException {
@@ -464,6 +504,11 @@ public class ClienteApiGeoglows {
      * En la API v1 esto se llamaba "historicsimulation". Ese endpoint ya no
      * existe en v2: se reemplazó por retrospectivedaily/-monthly/-hourly.
      * Usamos la variante diaria, que es la que corresponde 1:1 al uso anterior.
+     *
+     * @param reachId identificador del tramo en GEOGloWS
+     * @return serie temporal diaria de caudal histórico
+     * @throws IOException si falla la comunicación con GEOGloWS
+     * @throws InterruptedException si el hilo es interrumpido durante la consulta
      */
     @SuppressWarnings("unchecked")
     public List<LectorDatosIngresados.SerieTemporalPunto> obtenerHistorico(long reachId)
@@ -499,6 +544,12 @@ public class ClienteApiGeoglows {
      * Busca el reach_id/LINKNO más cercano a una coordenada (endpoint v2 "getriverid").
      * Útil para asociar automáticamente estaciones/observaciones/elementos expuestos
      * (que llegan con lat/lon) a un tramo de GEOGloWS.
+     *
+     * @param lat latitud en grados decimales
+     * @param lon longitud en grados decimales
+     * @return identificador del tramo más cercano, o {@code null} si no se encontró
+     * @throws IOException si falla la comunicación con GEOGloWS
+     * @throws InterruptedException si el hilo es interrumpido durante la consulta
      */
     @SuppressWarnings("unchecked")
     public Long buscarReachIdCercano(double lat, double lon) throws IOException, InterruptedException {
@@ -528,6 +579,11 @@ public class ClienteApiGeoglows {
      * este método empezará a fallar con IOException (respuesta != 200) y conviene
      * quitarlo o reemplazarlo (por ejemplo, iterando obtenerPronostico + obtenerUmbrales
      * por tramo, que es exactamente lo que ya hace GeneradorAlertaFinal).
+     *
+     * @param region nombre o código de la región a consultar
+     * @return lista de identificadores de tramos reportados en alerta
+     * @throws IOException si falla la comunicación o el endpoint no responde 200
+     * @throws InterruptedException si el hilo es interrumpido durante la consulta
      */
     @SuppressWarnings("unchecked")
     public List<Long> obtenerTramosEnAlerta(String region) throws IOException, InterruptedException {
@@ -566,6 +622,7 @@ public class ClienteApiGeoglows {
         }
     }
 
+    // Convierte fechas ISO o de texto de GEOGloWS a Instant en UTC.
     private static Instant parseFecha(String texto) {
         if (texto == null || texto.isBlank()) return Instant.now();
         try {
@@ -582,6 +639,7 @@ public class ClienteApiGeoglows {
         }
     }
 
+    // Parsea el JSON de respuesta y envuelve estructuras no-objeto bajo la clave "data".
     @SuppressWarnings("unchecked")
     private static Map<String, Object> parsearMapa(String cuerpo) {
         Object parsed = Json.parse(cuerpo);
@@ -642,6 +700,7 @@ public class ClienteApiGeoglows {
             while (i < s.length() && Character.isWhitespace(s.charAt(i))) i++;
         }
 
+        // Interpreta el siguiente valor JSON según el carácter actual.
         private Object parseValue() {
             skipWs();
             char c = s.charAt(i);
@@ -654,6 +713,7 @@ public class ClienteApiGeoglows {
             return parseNumber();
         }
 
+        // Parsea un objeto JSON como mapa ordenado.
         private Map<String, Object> parseObject() {
             Map<String, Object> m = new LinkedHashMap<>();
             i++; // '{'
@@ -674,6 +734,7 @@ public class ClienteApiGeoglows {
             return m;
         }
 
+        // Parsea un arreglo JSON como lista.
         private List<Object> parseArray() {
             List<Object> l = new ArrayList<>();
             i++; // '['
@@ -689,6 +750,7 @@ public class ClienteApiGeoglows {
             return l;
         }
 
+        // Parsea una cadena JSON decodificando secuencias de escape.
         private String parseString() {
             StringBuilder sb = new StringBuilder();
             i++; // '"'
@@ -720,6 +782,7 @@ public class ClienteApiGeoglows {
             return sb.toString();
         }
 
+        // Parsea un número JSON como Long o Double.
         private Object parseNumber() {
             int inicio = i;
             while (i < s.length()) {

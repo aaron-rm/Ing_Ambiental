@@ -9,17 +9,34 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * Servicio de negocio para listar, crear individualmente e importar por lote (CSV)
+ * las muestras asociadas a los ríos del catálogo.
+ */
 @Service
 public class MuestraService {
 
     private final MuestraRepository muestraRepository;
     private final RioRepository rioRepository;
 
+    /**
+     * Crea el servicio de muestras.
+     *
+     * @param muestraRepository repositorio de muestras
+     * @param rioRepository     repositorio de ríos
+     */
     public MuestraService(MuestraRepository muestraRepository, RioRepository rioRepository) {
         this.muestraRepository = muestraRepository;
         this.rioRepository = rioRepository;
     }
 
+    /**
+     * Lista hasta 500 muestras registradas para un río, ordenadas de más reciente a más antigua.
+     *
+     * @param rioId identificador del río
+     * @return lista de muestras en formato DTO
+     * @throws ResponseStatusException con estado 404 si el río no existe
+     */
     @Transactional(readOnly = true)
     public List<MuestraDTO> listarPorRio(Long rioId) {
         if (!rioRepository.existsById(rioId)) {
@@ -31,6 +48,15 @@ public class MuestraService {
                 .toList();
     }
 
+    /**
+     * Valida y persiste una nueva muestra individual asociada a un río.
+     *
+     * @param rioId     identificador del río
+     * @param solicitud datos de la muestra a crear
+     * @param usuario   usuario autenticado que registra la muestra
+     * @return DTO de la muestra creada
+     * @throws ResponseStatusException con estado 404 si el río no existe o 400 si los datos son inválidos
+     */
     @Transactional
     public MuestraDTO crearMuestra(Long rioId, CrearMuestraRequest solicitud, Usuario usuario) {
         Rio rio = rioRepository.findById(rioId)
@@ -65,6 +91,15 @@ public class MuestraService {
         }
     }
 
+    /**
+     * Parsea un archivo CSV y guarda todas sus muestras asociadas al río indicado.
+     *
+     * @param rioId     identificador del río
+     * @param contenido contenido textual del archivo CSV
+     * @param usuario   usuario autenticado que realiza la carga
+     * @return cantidad de muestras insertadas
+     * @throws ResponseStatusException con estado 404 si el río no existe o 400 si el CSV es inválido
+     */
     @Transactional
     public int cargarCsv(Long rioId, String contenido, Usuario usuario) {
         Rio rio = rioRepository.findById(rioId)

@@ -1,5 +1,9 @@
 package com.alerta.sistema_alerta_inundaciones.riesgo;
 
+/**
+ * Calidad de los datos usados en una evaluación de riesgo. Se usa para indicar
+ * si el nivel calculado es confiable y puede generar notificaciones.
+ */
 public enum EstadoDatos {
     /** Caudal y precipitación recientes. */
     COMPLETOS,

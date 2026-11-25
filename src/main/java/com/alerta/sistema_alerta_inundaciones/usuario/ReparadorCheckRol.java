@@ -19,10 +19,20 @@ public class ReparadorCheckRol implements ApplicationRunner {
 
     private final ObjectProvider<JdbcTemplate> jdbcTemplateProvider;
 
+    /**
+     * Crea el reparador de la restricción CHECK de la columna {@code rol}.
+     *
+     * @param jdbcTemplateProvider proveedor opcional de {@link JdbcTemplate}
+     */
     public ReparadorCheckRol(ObjectProvider<JdbcTemplate> jdbcTemplateProvider) {
         this.jdbcTemplateProvider = jdbcTemplateProvider;
     }
 
+    /**
+     * Ejecuta al arranque la sentencia SQL para eliminar la restricción {@code usuarios_rol_check} si existe.
+     *
+     * @param args argumentos de inicio de la aplicación
+     */
     @Override
     public void run(ApplicationArguments args) {
         JdbcTemplate jdbc = jdbcTemplateProvider.getIfAvailable();

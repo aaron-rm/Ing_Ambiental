@@ -1,7 +1,19 @@
+/**
+ * @file Login.jsx
+ * Página de inicio de sesión y registro de usuarios en el sistema.
+ * Permite conmutar entre los modos de login y creación de cuenta USER.
+ * Exporta el componente Login por defecto.
+ */
+
 import { useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth.jsx'
 
+/**
+ * Vista de autenticación para iniciar sesión o registrar una nueva cuenta de usuario.
+ *
+ * @returns {JSX.Element} Pantalla interactiva con formulario de acceso y registro.
+ */
 export default function Login() {
   const { entrar, token } = useAuth()
   const navigate = useNavigate()

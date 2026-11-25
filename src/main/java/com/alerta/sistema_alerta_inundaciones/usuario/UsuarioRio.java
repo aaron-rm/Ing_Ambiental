@@ -15,6 +15,10 @@ import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 
+/**
+ * Entidad JPA que representa la suscripción o selección de seguimiento
+ * de un {@link Usuario} sobre un {@link Rio} para recibir notificaciones de alerta.
+ */
 @Entity
 @Table(name = "usuario_rios",
         uniqueConstraints = @UniqueConstraint(name = "uk_usuario_rio",
@@ -36,9 +40,18 @@ public class UsuarioRio {
     @Column(name = "fecha_seleccion", nullable = false, updatable = false)
     private Instant fechaSeleccion;
 
+    /**
+     * Constructor vacío requerido por JPA.
+     */
     public UsuarioRio() {
     }
 
+    /**
+     * Crea una relación de seguimiento entre un usuario y un río.
+     *
+     * @param usuario usuario que sigue al río
+     * @param rio     río seguido
+     */
     public UsuarioRio(Usuario usuario, Rio rio) {
         this.usuario = usuario;
         this.rio = rio;
@@ -51,18 +64,38 @@ public class UsuarioRio {
         }
     }
 
+    /**
+     * Obtiene el identificador único de la relación usuario-río.
+     *
+     * @return identificador del registro
+     */
     public Long getId() {
         return id;
     }
 
+    /**
+     * Obtiene el usuario que sigue al río.
+     *
+     * @return entidad {@link Usuario}
+     */
     public Usuario getUsuario() {
         return usuario;
     }
 
+    /**
+     * Obtiene el río seleccionado por el usuario.
+     *
+     * @return entidad {@link Rio}
+     */
     public Rio getRio() {
         return rio;
     }
 
+    /**
+     * Obtiene la fecha y hora en que el usuario comenzó a seguir el río.
+     *
+     * @return instante de selección
+     */
     public Instant getFechaSeleccion() {
         return fechaSeleccion;
     }
