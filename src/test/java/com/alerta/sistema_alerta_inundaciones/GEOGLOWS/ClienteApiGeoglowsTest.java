@@ -216,6 +216,32 @@ class ClienteApiGeoglowsTest {
         assertEquals(1, solicitudes.get());
     }
 
+    @Test
+    void reintentaCuandoGeoglowsTardaDemasiado() throws Exception {
+        // Servidor propio con varios hilos: el primer pedido se queda colgado y el segundo responde al instante.
+        servidor.stop(0);
+        servidor = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        servidor.setExecutor(Executors.newCachedThreadPool());
+        servidor.createContext("/api/v2/forecaststats/770061343", intercambio -> {
+            if (solicitudes.incrementAndGet() == 1) {
+                try {
+                    Thread.sleep(1500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            responder(intercambio, 200, pronostico(7.0));
+        });
+        servidor.start();
+        ClienteApiGeoglows cliente = cliente(Duration.ofMinutes(15), Duration.ofMillis(10));
+        cliente.setTimeoutPeticion(Duration.ofMillis(300));
+
+        var resultado = cliente.obtenerPronostico(770061343L);
+
+        assertEquals(7.0, resultado.mediaSerie.get(0).valor);
+        assertEquals(2, solicitudes.get());
+    }
+
     private ClienteApiGeoglows cliente(Duration ttl) {
         return cliente(ttl, Duration.ofMillis(10));
     }
