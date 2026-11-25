@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -75,7 +76,8 @@ class RioServiceTest {
         ClienteApiGeoglows cliente = mock(ClienteApiGeoglows.class);
         when(cliente.buscarReachIdCercano(9.0, -79.5)).thenReturn(null);
 
-        RioService service = new RioService(repositorio, cliente);
+        GeometriaTramoClient geometriaClient = mock(GeometriaTramoClient.class);
+        RioService service = new RioService(repositorio, cliente, geometriaClient);
         Usuario usuario = new Usuario("ana", "hash", Rol.USER);
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
@@ -89,11 +91,12 @@ class RioServiceTest {
     void crearRioDuplicadoDevuelve409() throws Exception {
         RioRepository repositorio = mock(RioRepository.class);
         ClienteApiGeoglows cliente = mock(ClienteApiGeoglows.class);
+        GeometriaTramoClient geometriaClient = mock(GeometriaTramoClient.class);
         when(cliente.buscarReachIdCercano(9.0, -79.48)).thenReturn(710039498L);
         when(repositorio.findFirstByGeoglowsId(710039498L))
                 .thenReturn(Optional.of(new Rio("Río Abajo", 710039498L, 9.0, -79.48)));
 
-        RioService service = new RioService(repositorio, cliente);
+        RioService service = new RioService(repositorio, cliente, geometriaClient);
         Usuario usuario = new Usuario("ana", "hash", Rol.USER);
 
         ResponseStatusException error = assertThrows(ResponseStatusException.class,
@@ -108,11 +111,13 @@ class RioServiceTest {
     void crearRioGuardaConGeometriaNullYCreadoPor() throws Exception {
         RioRepository repositorio = mock(RioRepository.class);
         ClienteApiGeoglows cliente = mock(ClienteApiGeoglows.class);
+        GeometriaTramoClient geometriaClient = mock(GeometriaTramoClient.class);
         when(cliente.buscarReachIdCercano(8.95, -79.55)).thenReturn(990011223L);
         when(repositorio.findFirstByGeoglowsId(990011223L)).thenReturn(Optional.empty());
+        when(geometriaClient.buscar(990011223L)).thenReturn(Optional.empty());
         when(repositorio.save(any(Rio.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        RioService service = new RioService(repositorio, cliente);
+        RioService service = new RioService(repositorio, cliente, geometriaClient);
         Usuario usuario = new Usuario("Investigador1", "hash", Rol.USER);
 
         RioResumenDTO dto = service.crearRio(
@@ -129,5 +134,28 @@ class RioServiceTest {
         assertEquals("Río Chilibre", dto.nombre());
         assertEquals(990011223L, dto.reachId());
         assertFalse(dto.tieneGeometria());
+    }
+
+    @Test
+    void crearRioGuardaGeometriaCuandoElClienteLaDevuelve() throws Exception {
+        RioRepository repositorio = mock(RioRepository.class);
+        ClienteApiGeoglows cliente = mock(ClienteApiGeoglows.class);
+        GeometriaTramoClient geometriaClient = mock(GeometriaTramoClient.class);
+        String geometria = "{\"type\":\"LineString\",\"coordinates\":[[-79.55,8.95],[-79.54,8.96]]}";
+        when(cliente.buscarReachIdCercano(8.95, -79.55)).thenReturn(990011223L);
+        when(repositorio.findFirstByGeoglowsId(990011223L)).thenReturn(Optional.empty());
+        when(geometriaClient.buscar(990011223L)).thenReturn(Optional.of(geometria));
+        when(repositorio.save(any(Rio.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RioService service = new RioService(repositorio, cliente, geometriaClient);
+        Usuario usuario = new Usuario("ana", "hash", Rol.USER);
+
+        RioResumenDTO dto = service.crearRio(
+                new CrearRioRequest("Río Chilibre", 8.95, -79.55), usuario);
+
+        ArgumentCaptor<Rio> captor = ArgumentCaptor.forClass(Rio.class);
+        verify(repositorio).save(captor.capture());
+        assertEquals(geometria, captor.getValue().getGeometria());
+        assertTrue(dto.tieneGeometria());
     }
 }

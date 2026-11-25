@@ -19,16 +19,24 @@ public class RioService {
 
     private final RioRepository rioRepository;
     private final ClienteApiGeoglows clienteApiGeoglows;
+    private final GeometriaTramoClient geometriaTramoClient;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public RioService(RioRepository rioRepository) {
-        this(rioRepository, null);
+        this(rioRepository, null, null);
+    }
+
+    public RioService(RioRepository rioRepository, ClienteApiGeoglows clienteApiGeoglows) {
+        this(rioRepository, clienteApiGeoglows, null);
     }
 
     @Autowired
-    public RioService(RioRepository rioRepository, ClienteApiGeoglows clienteApiGeoglows) {
+    public RioService(RioRepository rioRepository,
+                      ClienteApiGeoglows clienteApiGeoglows,
+                      GeometriaTramoClient geometriaTramoClient) {
         this.rioRepository = rioRepository;
         this.clienteApiGeoglows = clienteApiGeoglows;
+        this.geometriaTramoClient = geometriaTramoClient;
     }
 
     public Rio guardarRio(Rio rio) {
@@ -92,8 +100,12 @@ public class RioService {
                     "Ya existe el río «" + existente.get().getNombre() + "» para ese tramo.");
         }
 
+        String geometria = geometriaTramoClient != null
+                ? geometriaTramoClient.buscar(reachId).orElse(null)
+                : null;
+
         Rio nuevo = new Rio(nombre, reachId, latitud, longitud);
-        nuevo.setGeometria(null);
+        nuevo.setGeometria(geometria);
         nuevo.setCreadoPor(usuario != null ? usuario.getIdentificador() : null);
         return RioResumenDTO.desde(rioRepository.save(nuevo));
     }
