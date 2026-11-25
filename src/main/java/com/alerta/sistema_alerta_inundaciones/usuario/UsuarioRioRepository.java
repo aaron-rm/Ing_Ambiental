@@ -21,4 +21,6 @@ public interface UsuarioRioRepository extends JpaRepository<UsuarioRio, Long> {
     List<Long> findUsuarioIdsByRioId(@Param("rioId") Long rioId);
 
     void deleteByUsuarioIdAndRioId(Long usuarioId, Long rioId);
+
+    void deleteByRioId(Long rioId);
 }

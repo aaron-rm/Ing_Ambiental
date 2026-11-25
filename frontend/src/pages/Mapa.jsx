@@ -62,7 +62,8 @@ function ClicMapa({ agregando, onClic }) {
 }
 
 export default function Mapa() {
-  const { token } = useAuth()
+  const { token, usuario } = useAuth()
+  const esAdmin = usuario?.rol === 'ADMIN'
   const navigate = useNavigate()
   const [geo, setGeo] = useState(null)
   const [rios, setRios] = useState([])
@@ -136,6 +137,30 @@ export default function Mapa() {
     try {
       await api(`/api/usuarios/me/rios/${id}`, { method: siguiendo ? 'DELETE' : 'POST', token })
       setEstados((e) => ({ ...e, [id]: { ...e[id], dto: { ...e[id].dto, siguiendo: !siguiendo } } }))
+    } catch (err) {
+      setAviso(err.message)
+    } finally {
+      setOcupado(false)
+    }
+  }
+
+  const eliminarRio = async () => {
+    if (!sel) return
+    if (!window.confirm(`¿Eliminar "${selRio?.nombre}"? Se borrarán también sus muestras y quienes lo siguen dejarán de verlo. No se puede deshacer.`)) {
+      return
+    }
+    setOcupado(true)
+    setAviso('')
+    try {
+      await api(`/api/admin/rios/${sel}`, { method: 'DELETE', token })
+      setRios((prev) => prev.filter((r) => r.rioId !== sel))
+      setGeo((prev) => (prev ? { ...prev, features: prev.features?.filter((f) => f.properties?.rioId !== sel) ?? [] } : prev))
+      setEstados((prev) => {
+        const next = { ...prev }
+        delete next[sel]
+        return next
+      })
+      setSel(null)
     } catch (err) {
       setAviso(err.message)
     } finally {
@@ -300,12 +325,23 @@ export default function Mapa() {
             <AgregarRio
               punto={punto}
               onPuntoChange={setPunto}
-              onCreado={(nuevo) => {
+              onCreado={async (nuevo) => {
                 setRios((prev) => [...prev, nuevo])
                 cargarEstado(nuevo.rioId)
                 elegir(nuevo.rioId)
                 if (nuevo?.latitud != null && nuevo?.longitud != null) {
                   setDestino({ centro: [nuevo.latitud, nuevo.longitud] })
+                }
+                try {
+                  const mapa = await api('/api/rios/mapa')
+                  setGeo(mapa)
+                  const f = mapa?.features?.find((x) => x.properties?.rioId === nuevo.rioId)
+                  if (f) {
+                    const b = L.geoJSON(f).getBounds()
+                    if (b.isValid()) setDestino({ bounds: b })
+                  }
+                } catch {
+                  // Si falla la petición, se queda como está
                 }
               }}
               onCancelar={() => {
@@ -329,6 +365,11 @@ export default function Mapa() {
               onAlternar={() => alternar(sel)}
               mostrarPush={Boolean(token)}
             />
+            {esAdmin && (
+              <button type="button" className="btn btn--peligro btn--chico" disabled={ocupado} onClick={eliminarRio}>
+                Eliminar río
+              </button>
+            )}
             {aviso && <p className="error panel__aviso" role="alert">{aviso}</p>}
           </>
         ) : (

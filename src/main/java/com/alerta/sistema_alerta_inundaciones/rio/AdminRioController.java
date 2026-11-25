@@ -1,6 +1,7 @@
 package com.alerta.sistema_alerta_inundaciones.rio;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -14,9 +15,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminRioController {
 
     private final RioService rioService;
+    private final EliminacionRioService eliminacionRioService;
 
-    public AdminRioController(RioService rioService) {
+    public AdminRioController(RioService rioService, EliminacionRioService eliminacionRioService) {
         this.rioService = rioService;
+        this.eliminacionRioService = eliminacionRioService;
     }
 
     @PostMapping
@@ -28,6 +31,16 @@ public class AdminRioController {
     public ResponseEntity<?> actualizarRio(@PathVariable Long id, @RequestBody Rio rio) {
         try {
             return ResponseEntity.ok(rioService.actualizarRio(id, rio));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> eliminarRio(@PathVariable Long id) {
+        try {
+            eliminacionRioService.eliminar(id);
+            return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(404).body(e.getMessage());
         }

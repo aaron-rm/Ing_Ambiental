@@ -7,4 +7,6 @@ import java.util.List;
 public interface MuestraRepository extends JpaRepository<Muestra, Long> {
 
     List<Muestra> findTop500ByRioIdOrderByFechaDescIdDesc(Long rioId);
+
+    void deleteByRioId(Long rioId);
 }
