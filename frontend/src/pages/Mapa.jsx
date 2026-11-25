@@ -366,7 +366,7 @@ export default function Mapa() {
               mostrarPush={Boolean(token)}
             />
             {esAdmin && (
-              <button type="button" className="btn btn--peligro btn--chico" disabled={ocupado} onClick={eliminarRio}>
+              <button type="button" className="btn btn--peligro btn--chico" style={{ display: 'block', margin: '12px auto 16px' }} disabled={ocupado} onClick={eliminarRio}>
                 Eliminar río
               </button>
             )}
