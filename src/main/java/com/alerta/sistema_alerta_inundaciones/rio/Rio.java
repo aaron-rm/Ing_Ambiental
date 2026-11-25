@@ -40,6 +40,14 @@ public class Rio {
     private String creadoPor;
 
     /**
+     * Indica que un administrador o investigador cambió el nombre a mano. El
+     * inicializador del catálogo no lo sobrescribe en los siguientes arranques.
+     * Es {@link Boolean} para que las filas anteriores (columna en NULL) cuenten como no editadas.
+     */
+    @Column(name = "nombre_editado")
+    private Boolean nombreEditado;
+
+    /**
      * Constructor vacío requerido por JPA.
      */
     public Rio() {
@@ -175,5 +183,23 @@ public class Rio {
      */
     public void setCreadoPor(String creadoPor) {
         this.creadoPor = creadoPor;
+    }
+
+    /**
+     * Indica si el nombre fue cambiado manualmente por un administrador o investigador.
+     *
+     * @return {@code true} si el nombre fue editado a mano
+     */
+    public boolean isNombreEditado() {
+        return Boolean.TRUE.equals(nombreEditado);
+    }
+
+    /**
+     * Marca si el nombre fue cambiado manualmente.
+     *
+     * @param nombreEditado {@code true} si el nombre fue editado a mano
+     */
+    public void setNombreEditado(boolean nombreEditado) {
+        this.nombreEditado = nombreEditado;
     }
 }

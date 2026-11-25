@@ -81,6 +81,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/rios/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/rios/*/muestras", "/api/rios/*/muestras/csv")
                                 .hasAnyRole("ADMIN", "INVESTIGADOR")
+                        .requestMatchers(HttpMethod.PATCH, "/api/rios/*").hasAnyRole("ADMIN", "INVESTIGADOR")
                         .requestMatchers(HttpMethod.POST, "/api/rios").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/alertas/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/alertas/suscribir").permitAll()
@@ -113,7 +114,7 @@ public class SecurityConfig {
                 .map(String::trim)
                 .filter(origen -> !origen.isBlank())
                 .toList());
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Admin-Token"));
         config.setMaxAge(3600L);
 

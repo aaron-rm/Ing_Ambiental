@@ -7,6 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -60,6 +62,20 @@ public class RioController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         return ResponseEntity.status(HttpStatus.CREATED).body(rioService.crearRio(solicitud, usuario));
+    }
+
+    /**
+     * Cambia el nombre visible de un río.
+     * Endpoint: {@code PATCH /api/rios/{id}}. Acceso: roles ADMIN e INVESTIGADOR.
+     *
+     * @param id        identificador del río
+     * @param solicitud cuerpo con el nuevo nombre
+     * @return resumen del río actualizado
+     */
+    @PatchMapping("/{id}")
+    public RioResumenDTO renombrarRio(@PathVariable Long id,
+                                      @RequestBody(required = false) RenombrarRioRequest solicitud) {
+        return rioService.renombrarRio(id, solicitud);
     }
 
     /**

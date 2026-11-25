@@ -72,4 +72,20 @@ class InicializadorCatalogoTest {
 
         verify(repositorio, never()).save(any(Rio.class));
     }
+
+    @Test
+    void respetaElNombreEditadoAManoAlRecargarElCatalogo() {
+        RioRepository repositorio = mock(RioRepository.class);
+        Rio editado = new Rio("Río Abajo (tramo urbano)", 710039498L, 9.08, -79.28);
+        editado.setNombreEditado(true);
+        when(repositorio.findFirstByGeoglowsId(anyLong())).thenReturn(Optional.empty());
+        when(repositorio.findFirstByGeoglowsId(710039498L)).thenReturn(Optional.of(editado));
+        when(repositorio.save(any(Rio.class))).thenAnswer(invocacion -> invocacion.getArgument(0));
+        when(repositorio.count()).thenReturn(4L);
+
+        new InicializadorCatalogo(repositorio, true).run();
+
+        assertEquals("Río Abajo (tramo urbano)", editado.getNombre());
+        assertTrue(editado.getGeometria().contains("coordinates"));
+    }
 }
