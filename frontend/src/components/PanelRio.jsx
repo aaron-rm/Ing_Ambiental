@@ -14,6 +14,7 @@ import Medidor from './Medidor.jsx'
 import Muestras from './Muestras.jsx'
 import Pronostico from './Pronostico.jsx'
 import PronosticoLluvia from './PronosticoLluvia.jsx'
+import TituloRio from './TituloRio.jsx'
 
 function Lista({ titulo, items, clase }) {
   if (!items?.length) return null
@@ -44,6 +45,7 @@ function Lista({ titulo, items, clase }) {
  * @param {function(): void} [props.onAlternar] - Función invocada para seguir o dejar de seguir el río.
  * @param {boolean} [props.mostrarPush=false] - Indica si se debe mostrar el botón para configurar notificaciones push.
  * @param {boolean} [props.mostrarSimulacion=true] - Indica si se permite mostrar el botón de simulación a administradores.
+ * @param {function(string): Promise<void>} [props.onRenombrar] - Guarda un nuevo nombre; solo se ofrece a ADMIN e INVESTIGADOR.
  * @returns {JSX.Element} Contenedor con la ficha técnica y controles del río.
  */
 export default function PanelRio({
@@ -58,6 +60,7 @@ export default function PanelRio({
   onAlternar,
   mostrarPush = false,
   mostrarSimulacion = true,
+  onRenombrar,
 }) {
   const { usuario, token } = useAuth()
   const v = visual(d)
@@ -69,12 +72,14 @@ export default function PanelRio({
   const peligro = Boolean(d && (d.nivelAlerta === 'ALERTA' || d.nivelAlerta === 'EMERGENCIA'))
   const caudalGrafico = diaPico?.caudalMaximo ?? d?.caudalMaximoPronosticado
   const esAdmin = usuario?.rol === 'ADMIN'
+  const puedeRenombrar = Boolean(onRenombrar) && (esAdmin || usuario?.rol === 'INVESTIGADOR')
+  const titulo = <TituloRio key={rioId} nombre={nombre || d?.nombreRio} onRenombrar={puedeRenombrar ? onRenombrar : undefined} />
 
   return (
     <div className="panel__cuerpo" style={d ? { '--est-color': v.color, '--est-fondo': v.fondo } : undefined}>
       {!d ? (
         <>
-          <h2 className="panel__titulo">{nombre}</h2>
+          {titulo}
           {cargando && (
             <>
               <p className="aviso">Consultando el pronóstico… puede tardar unos segundos.</p>
@@ -98,11 +103,11 @@ export default function PanelRio({
             <span className="insignia">{v.etiqueta.toUpperCase()}</span>
           )}
           {d.simulacion && <span className="insignia insignia--sim">SIMULACIÓN</span>}
-          <h2 className="panel__titulo">{d.nombreRio || nombre}</h2>
+          {titulo}
           <p className="k">El pronóstico corresponde a un punto de referencia del modelo GEOGLOWS (círculo en el mapa, ubicación aproximada), no a todo el cauce.</p>
 
           {esAdmin && mostrarSimulacion && (
-            <BotonSimular reachId={d.reachId} nombre={d.nombreRio || nombre} nota />
+            <BotonSimular reachId={d.reachId} nombre={nombre || d.nombreRio} nota />
           )}
 
           <div className="cifras">

@@ -158,4 +158,44 @@ class RioServiceTest {
         assertEquals(geometria, captor.getValue().getGeometria());
         assertTrue(dto.tieneGeometria());
     }
+
+    @Test
+    void renombrarRioRecortaElNombreYLoMarcaComoEditado() {
+        RioRepository repositorio = mock(RioRepository.class);
+        Rio rio = new Rio("Río Abajo", 710039498L, 9.0, -79.48);
+        when(repositorio.findById(7L)).thenReturn(Optional.of(rio));
+        when(repositorio.save(any(Rio.class))).thenAnswer(invocacion -> invocacion.getArgument(0));
+
+        RioResumenDTO dto = new RioService(repositorio).renombrarRio(7L, new RenombrarRioRequest("  Río Abajo (Panamá)  "));
+
+        assertEquals("Río Abajo (Panamá)", dto.nombre());
+        assertEquals("Río Abajo (Panamá)", rio.getNombre());
+        assertTrue(rio.isNombreEditado());
+    }
+
+    @Test
+    void renombrarRioRechazaNombreVacioOLargo() {
+        RioRepository repositorio = mock(RioRepository.class);
+        RioService servicio = new RioService(repositorio);
+
+        ResponseStatusException vacio = assertThrows(ResponseStatusException.class,
+                () -> servicio.renombrarRio(1L, new RenombrarRioRequest("   ")));
+        assertEquals(400, vacio.getStatusCode().value());
+        ResponseStatusException largo = assertThrows(ResponseStatusException.class,
+                () -> servicio.renombrarRio(1L, new RenombrarRioRequest("x".repeat(101))));
+        assertEquals(400, largo.getStatusCode().value());
+        assertThrows(ResponseStatusException.class, () -> servicio.renombrarRio(1L, null));
+        verify(repositorio, never()).save(any(Rio.class));
+    }
+
+    @Test
+    void renombrarRioInexistenteDevuelve404() {
+        RioRepository repositorio = mock(RioRepository.class);
+        when(repositorio.findById(99L)).thenReturn(Optional.empty());
+
+        ResponseStatusException e = assertThrows(ResponseStatusException.class,
+                () -> new RioService(repositorio).renombrarRio(99L, new RenombrarRioRequest("Nuevo")));
+
+        assertEquals(404, e.getStatusCode().value());
+    }
 }

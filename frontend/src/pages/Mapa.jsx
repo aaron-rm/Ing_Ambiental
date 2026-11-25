@@ -8,14 +8,16 @@
 
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { CircleMarker, GeoJSON, MapContainer, TileLayer, Tooltip, useMap, useMapEvents, ZoomControl } from 'react-leaflet'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
 import AgregarRio from '../components/AgregarRio.jsx'
+import AyudaMapa from '../components/AyudaMapa.jsx'
+import CarruselRios from '../components/CarruselRios.jsx'
 import PanelRio from '../components/PanelRio.jsx'
-import { visual } from '../estados.js'
+import { visualRio } from '../estados.js'
 
 const norm = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
@@ -91,8 +93,13 @@ export default function Mapa() {
   const [agregando, setAgregando] = useState(false)
   const [punto, setPunto] = useState(null)
 
+  // Copia del estado para decidir, desde efectos, si un río ya se pidió sin volver a pedirlo.
+  const estadosRef = useRef(estados)
+  estadosRef.current = estados
+
   const cargarEstado = useCallback(
     (rioId) => {
+      estadosRef.current = { ...estadosRef.current, [rioId]: { ...estadosRef.current[rioId], cargando: true } }
       setEstados((e) => ({ ...e, [rioId]: { ...e[rioId], cargando: true, error: '' } }))
       api(`/api/alertas/rio/${rioId}`, { token })
         .then((dto) => setEstados((e) => ({ ...e, [rioId]: { dto, cargando: false, error: '' } })))
@@ -112,13 +119,37 @@ export default function Mapa() {
         const f = mapa.features?.find((x) => x.properties.rioId === inicial)
         const b = L.geoJSON(f ?? mapa).getBounds()
         if (b.isValid()) setDestino({ bounds: b })
-        listaRios.forEach((r) => cargarEstado(r.rioId))
+        // No se consulta GEOGloWS para todos: solo los seguidos y el río que se seleccione.
       })
       .catch((e) => activo && setErrorCarga(e.message))
     return () => {
       activo = false
     }
   }, [cargarEstado])
+
+  // Con sesión, se cargan de entrada solo los ríos que el usuario sigue.
+  useEffect(() => {
+    if (!token) return
+    let activo = true
+    api('/api/usuarios/me/rios', { token })
+      .then((seguidos) => {
+        if (!activo) return
+        seguidos.forEach((r) => {
+          if (!estadosRef.current[r.rioId]) cargarEstado(r.rioId)
+        })
+      })
+      .catch(() => {
+        // Sin la lista de seguidos, los ríos se consultan al tocarlos
+      })
+    return () => {
+      activo = false
+    }
+  }, [token, cargarEstado])
+
+  // El resto se consulta al seleccionarlo (en el mapa, el carrusel, la lista o el buscador).
+  useEffect(() => {
+    if (sel != null && !estadosRef.current[sel]) cargarEstado(sel)
+  }, [sel, cargarEstado])
 
   const enfocarRio = (id) => {
     const f = geo?.features?.find((x) => x.properties.rioId === id)
@@ -155,6 +186,24 @@ export default function Mapa() {
     } finally {
       setOcupado(false)
     }
+  }
+
+  // Guarda el nuevo nombre y lo refleja en la lista, el mapa, el carrusel y el panel sin recargar.
+  const renombrarRio = async (id, nombre) => {
+    const actualizado = await api(`/api/rios/${id}`, { method: 'PATCH', body: { nombre }, token })
+    const nuevo = actualizado?.nombre ?? nombre
+    setRios((prev) => prev.map((r) => (r.rioId === id ? { ...r, nombre: nuevo } : r)))
+    setGeo((prev) =>
+      prev
+        ? {
+            ...prev,
+            features: prev.features?.map((f) =>
+              f.properties?.rioId === id ? { ...f, properties: { ...f.properties, nombre: nuevo } } : f,
+            ),
+          }
+        : prev,
+    )
+    setEstados((e) => (e[id]?.dto ? { ...e, [id]: { ...e[id], dto: { ...e[id].dto, nombreRio: nuevo } } } : e))
   }
 
   const eliminarRio = async () => {
@@ -239,11 +288,22 @@ export default function Mapa() {
         >
           ＋ Agregar río
         </button>
+        <CarruselRios rios={rios} estados={estados} sel={sel} onElegir={(id) => elegir(id, true)} />
+        <AyudaMapa />
         {errorCarga && <p className="error error--mapa" role="alert">{errorCarga}</p>}
 
         <MapContainer center={[9.0, -79.5]} zoom={10} className="mapa" zoomControl={false}>
           <ZoomControl position="bottomright" />
-          <TileLayer attribution="&copy; colaboradores de OpenStreetMap" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          {/* Cada mosaico de 256 px se pinta a 512 px pidiendo un nivel de zoom menos:
+              la geografía coincide y los nombres de calles y lugares se ven al doble de tamaño. */}
+          <TileLayer
+            attribution="&copy; colaboradores de OpenStreetMap"
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            tileSize={512}
+            zoomOffset={-1}
+            minZoom={1}
+            maxZoom={20}
+          />
           <LimpiarAnimacion />
           <RedimensionarMapa />
           <Enfocar destino={destino} />
@@ -259,7 +319,7 @@ export default function Mapa() {
           )}
           {geo?.features?.map((f) => {
             const id = f.properties.rioId
-            const v = visual(estados[id]?.dto)
+            const v = visualRio(estados[id])
             const elegido = sel === id
             return (
               <Fragment key={id}>
@@ -295,7 +355,7 @@ export default function Mapa() {
                 key={`p-${r.rioId}`}
                 center={[r.latitud, r.longitud]}
                 radius={9}
-                pathOptions={{ color: visual(estados[r.rioId]?.dto).trazo, weight: 4, fillColor: '#ffffff', fillOpacity: 1 }}
+                pathOptions={{ color: visualRio(estados[r.rioId]).trazo, weight: 4, fillColor: '#ffffff', fillOpacity: 1 }}
                 eventHandlers={{
                   click: (e) => {
                     if (agregando) {
@@ -377,6 +437,7 @@ export default function Mapa() {
               ocupado={ocupado}
               onAlternar={() => alternar(sel)}
               mostrarPush={Boolean(token)}
+              onRenombrar={(nombre) => renombrarRio(sel, nombre)}
             />
             {esAdmin && (
               <button type="button" className="btn btn--peligro btn--chico" style={{ display: 'block', margin: '12px auto 16px' }} disabled={ocupado} onClick={eliminarRio}>
@@ -385,9 +446,7 @@ export default function Mapa() {
             )}
             {aviso && <p className="error panel__aviso" role="alert">{aviso}</p>}
           </>
-        ) : (
-          <p className="panel__vacio">Toca un río resaltado en el mapa, o búscalo arriba, para ver su estado.</p>
-        )}
+        ) : null}
       </aside>
     </div>
   )

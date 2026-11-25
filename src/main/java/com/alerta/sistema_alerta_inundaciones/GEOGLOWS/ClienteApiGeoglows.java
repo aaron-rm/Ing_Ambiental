@@ -6,6 +6,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -52,7 +53,10 @@ public class ClienteApiGeoglows {
     private static final int MAX_INTENTOS = 3;
     private static final long MAX_RETRY_AFTER_SEGUNDOS = 10L;
     private static final Duration TTL_RETURN_PERIODS = Duration.ofDays(7);
-    private static final Duration VENTANA_FALLO_DEFECTO = Duration.ofMinutes(10);
+    // Tras un fallo sin respuesta previa en caché, se espera este tiempo antes de volver a consultar.
+    private static final Duration VENTANA_FALLO_DEFECTO = Duration.ofMinutes(2);
+    // GEOGloWS suele tardar 3 s o más por consulta (returnperiods, hasta 10 s); 4 s cortaba respuestas válidas.
+    private static final Duration TIMEOUT_PETICION = Duration.ofSeconds(20);
     private static final String MENSAJE_429 =
             "GEOGloWS está limitando las consultas (429). Intenta de nuevo en un minuto.";
 
@@ -64,6 +68,7 @@ public class ClienteApiGeoglows {
     private final RitmoPeticiones ritmo;
     private final Path cacheDir;
     private final Duration ventanaFallo;
+    private Duration timeoutPeticion = TIMEOUT_PETICION;
     private final Map<String, EntradaCache> cache = new ConcurrentHashMap<>();
     private final Map<String, Instant> fallosRecientes = new ConcurrentHashMap<>();
     private final Map<String, Object> bloqueos = new ConcurrentHashMap<>();
@@ -166,6 +171,11 @@ public class ClienteApiGeoglows {
         this.ritmo = new RitmoPeticiones(intervaloMinimoMs);
         this.cacheDir = cacheDir;
         this.ventanaFallo = ventanaFallo != null ? ventanaFallo : Duration.ZERO;
+    }
+
+    /** Permite a las pruebas usar un tiempo de espera corto por petición. */
+    void setTimeoutPeticion(Duration timeoutPeticion) {
+        this.timeoutPeticion = timeoutPeticion;
     }
 
     private static Path resolverCacheDir(String cacheDir) {
@@ -304,7 +314,7 @@ public class ClienteApiGeoglows {
             throws IOException, InterruptedException {
         String url = baseUrl + path + (query.isEmpty() ? "" : "?" + query);
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(4))
+                .timeout(timeoutPeticion)
                 .GET()
                 .build();
 
@@ -314,6 +324,14 @@ public class ClienteApiGeoglows {
             try {
                 ritmo.esperarTurno();
                 resp = http.send(req, HttpResponse.BodyHandlers.ofString());
+            } catch (HttpTimeoutException e) {
+                // Una respuesta lenta suele salir al reintentar; solo se rinde en el último intento.
+                if (intento == MAX_INTENTOS) {
+                    throw new IOException("GEOGloWS no respondió a tiempo para " + url, e);
+                }
+                log.warn("GEOGloWS tardó más de {} s para {} (intento {}/{}). Reintentando.",
+                        timeoutPeticion.toSeconds(), url, intento, MAX_INTENTOS);
+                continue;
             } finally {
                 semaforo.release();
             }

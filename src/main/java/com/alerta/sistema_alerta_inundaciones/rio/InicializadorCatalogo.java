@@ -72,7 +72,10 @@ public class InicializadorCatalogo implements CommandLineRunner {
                     .orElseGet(Rio::new);
             boolean nuevo = rio.getId() == null;
 
-            rio.setNombre(datos.nombre());
+            // Un nombre cambiado a mano por un administrador o investigador se respeta.
+            if (!rio.isNombreEditado()) {
+                rio.setNombre(datos.nombre());
+            }
             rio.setGeoglowsId(datos.reachId());
             rio.setLatitud(datos.latitud());
             rio.setLongitud(datos.longitud());

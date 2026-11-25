@@ -85,15 +85,7 @@ public class RioService {
             throw new ResponseStatusException(HttpStatusCode.valueOf(400),
                     "Los datos del río son obligatorios.");
         }
-        String nombre = solicitud.nombre() == null ? "" : solicitud.nombre().trim();
-        if (nombre.isEmpty()) {
-            throw new ResponseStatusException(HttpStatusCode.valueOf(400),
-                    "El nombre del río es obligatorio.");
-        }
-        if (nombre.length() > 100) {
-            throw new ResponseStatusException(HttpStatusCode.valueOf(400),
-                    "El nombre del río no puede superar 100 caracteres.");
-        }
+        String nombre = validarNombre(solicitud.nombre());
         Double latitud = solicitud.latitud();
         if (latitud == null || !Double.isFinite(latitud) || latitud < -90.0 || latitud > 90.0) {
             throw new ResponseStatusException(HttpStatusCode.valueOf(400),
@@ -142,6 +134,39 @@ public class RioService {
         nuevo.setGeometria(geometria);
         nuevo.setCreadoPor(usuario != null ? usuario.getIdentificador() : null);
         return RioResumenDTO.desde(rioRepository.save(nuevo));
+    }
+
+    /**
+     * Cambia el nombre visible de un río y lo marca como editado a mano, para que
+     * el inicializador del catálogo no lo restaure al reiniciar.
+     *
+     * @param id        identificador del río
+     * @param solicitud cuerpo con el nuevo nombre
+     * @return resumen del río con el nombre actualizado
+     * @throws ResponseStatusException si el nombre es inválido (400) o el río no existe (404)
+     */
+    public RioResumenDTO renombrarRio(Long id, RenombrarRioRequest solicitud) {
+        String nombre = validarNombre(solicitud == null ? null : solicitud.nombre());
+        Rio rio = rioRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatusCode.valueOf(404),
+                        "No existe un río con ID " + id + "."));
+        rio.setNombre(nombre);
+        rio.setNombreEditado(true);
+        return RioResumenDTO.desde(rioRepository.save(rio));
+    }
+
+    // Recorta el nombre y comprueba que no esté vacío ni supere 100 caracteres.
+    private static String validarNombre(String valor) {
+        String nombre = valor == null ? "" : valor.trim();
+        if (nombre.isEmpty()) {
+            throw new ResponseStatusException(HttpStatusCode.valueOf(400),
+                    "El nombre del río es obligatorio.");
+        }
+        if (nombre.length() > 100) {
+            throw new ResponseStatusException(HttpStatusCode.valueOf(400),
+                    "El nombre del río no puede superar 100 caracteres.");
+        }
+        return nombre;
     }
 
     /**
