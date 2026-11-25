@@ -36,6 +36,16 @@ public class AlertaMonitoreoService {
     private final PropiedadesMonitoreo propiedadesMonitoreo;
     private final ConcurrentHashMap<Long, ReentrantLock> bloqueos = new ConcurrentHashMap<>();
 
+    /**
+     * Crea el servicio de monitoreo periódico y evaluación manual de ríos.
+     *
+     * @param rioRepository repositorio de ríos configurados en el sistema
+     * @param proveedorDatos proveedor de datos hidrometeorológicos del tramo
+     * @param evaluador componente que calcula el nivel de riesgo
+     * @param alertaEventoService servicio que registra cambios de nivel y eventos
+     * @param pushService servicio de envío de notificaciones push
+     * @param propiedadesMonitoreo propiedades de activación e intervalos del monitoreo
+     */
     public AlertaMonitoreoService(RioRepository rioRepository,
                                   ProveedorDatosRiesgo proveedorDatos,
                                   EvaluadorRiesgo evaluador,
@@ -50,6 +60,10 @@ public class AlertaMonitoreoService {
         this.propiedadesMonitoreo = propiedadesMonitoreo;
     }
 
+    /**
+     * Ejecuta el ciclo programado de monitoreo sobre todos los ríos registrados
+     * que tengan un identificador de GEOGloWS configurado.
+     */
     @Scheduled(
             fixedDelayString = "${alerta.monitoreo.intervalo-ms:900000}",
             initialDelayString = "${alerta.monitoreo.retraso-inicial-ms:60000}"
@@ -77,6 +91,15 @@ public class AlertaMonitoreoService {
         }
     }
 
+    /**
+     * Busca un río por su identificador de GEOGloWS y ejecuta su evaluación completa.
+     *
+     * @param reachId identificador del tramo en GEOGloWS
+     * @param origen procedencia de la solicitud de evaluación
+     * @return resumen del resultado de la evaluación y envío de notificaciones
+     * @throws IllegalArgumentException si no existe un río configurado para el {@code reachId}
+     * @throws Exception si falla la obtención de datos o el procesamiento del tramo
+     */
     public ResultadoMonitoreo evaluarPorReachId(Long reachId, String origen) throws Exception {
         Rio rio = rioRepository.findFirstByGeoglowsId(reachId)
                 .orElseThrow(() -> new IllegalArgumentException(
@@ -84,6 +107,16 @@ public class AlertaMonitoreoService {
         return evaluarYProcesar(rio, origen);
     }
 
+    /**
+     * Evalúa un río obteniendo sus datos actuales, registrando posibles eventos
+     * y despachando notificaciones push si corresponde, evitando ejecuciones concurrentes
+     * sobre el mismo tramo.
+     *
+     * @param rio entidad del río a evaluar
+     * @param origen procedencia de la evaluación
+     * @return resumen del estado obtenido y de la notificación generada
+     * @throws Exception si ocurre un error al consultar las fuentes externas o persistir el resultado
+     */
     public ResultadoMonitoreo evaluarYProcesar(Rio rio, String origen) throws Exception {
         ReentrantLock bloqueo = bloqueos.computeIfAbsent(rio.getGeoglowsId(), id -> new ReentrantLock());
         if (!bloqueo.tryLock()) {
@@ -129,6 +162,16 @@ public class AlertaMonitoreoService {
         }
     }
 
+    /**
+     * Resumen devuelto tras evaluar un tramo en el ciclo de monitoreo.
+     *
+     * @param reachId identificador del tramo en GEOGloWS
+     * @param eventoId identificador del evento generado, o {@code null} si no hubo cambio
+     * @param nivel nivel de alerta resultante de la evaluación
+     * @param datosConfiables indica si los datos de entrada cumplen criterios de vigencia
+     * @param notificado indica si se enviaron notificaciones push asociadas al evento
+     * @param mensaje descripción breve del resultado obtenido
+     */
     public record ResultadoMonitoreo(
             Long reachId,
             Long eventoId,

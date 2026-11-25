@@ -9,6 +9,10 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Tarea de arranque en segundo plano que busca ríos con {@code geoglowsId} pero
+ * sin geometría GeoJSON guardada y la descarga desde el servicio de GEOGloWS.
+ */
 @Component
 public class RellenadorGeometrias implements ApplicationRunner {
 
@@ -18,11 +22,22 @@ public class RellenadorGeometrias implements ApplicationRunner {
     private final RioRepository rioRepository;
     private final GeometriaTramoClient geometriaTramoClient;
 
+    /**
+     * Crea el rellenador de geometrías.
+     *
+     * @param rioRepository        repositorio de ríos
+     * @param geometriaTramoClient cliente para consultar geometrías de tramos en GEOGloWS
+     */
     public RellenadorGeometrias(RioRepository rioRepository, GeometriaTramoClient geometriaTramoClient) {
         this.rioRepository = rioRepository;
         this.geometriaTramoClient = geometriaTramoClient;
     }
 
+    /**
+     * Inicia un hilo demonio al arrancar la aplicación para completar las geometrías faltantes.
+     *
+     * @param args argumentos de arranque de la aplicación
+     */
     @Override
     public void run(ApplicationArguments args) {
         try {
@@ -34,6 +49,7 @@ public class RellenadorGeometrias implements ApplicationRunner {
         }
     }
 
+    // Recorre los ríos sin geometría y consulta GEOGloWS aplicando una pausa entre peticiones.
     private void rellenar() {
         try {
             List<Rio> pendientes = rioRepository.findSinGeometriaConGeoglowsId();

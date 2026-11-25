@@ -51,6 +51,7 @@ public class DispositivoPush {
     @Column(name = "fecha_actualizacion", nullable = false)
     private Instant fechaActualizacion;
 
+    // Antes de insertar: fija la fecha de registro (si falta) y la de actualización.
     @PrePersist
     void prePersist() {
         Instant ahora = Instant.now();
@@ -60,79 +61,170 @@ public class DispositivoPush {
         fechaActualizacion = ahora;
     }
 
+    // Antes de actualizar: refresca la fecha de actualización.
     @PreUpdate
     void preUpdate() {
         fechaActualizacion = Instant.now();
     }
 
+    /**
+     * Obtiene el identificador del registro.
+     *
+     * @return identificador generado por la base de datos
+     */
     public Long getId() {
         return id;
     }
 
+    /**
+     * Establece el identificador del registro.
+     *
+     * @param id identificador del registro
+     */
     public void setId(Long id) {
         this.id = id;
     }
 
+    /**
+     * Obtiene el token de registro FCM.
+     *
+     * @return token FCM del dispositivo
+     */
     public String getToken() {
         return token;
     }
 
+    /**
+     * Establece el token de registro FCM.
+     *
+     * @param token token FCM del dispositivo
+     */
     public void setToken(String token) {
         this.token = token;
     }
 
+    /**
+     * Obtiene el identificador de la instalación.
+     *
+     * @return identificador del dispositivo
+     */
     public String getDeviceId() {
         return deviceId;
     }
 
+    /**
+     * Establece el identificador de la instalación.
+     *
+     * @param deviceId identificador del dispositivo
+     */
     public void setDeviceId(String deviceId) {
         this.deviceId = deviceId;
     }
 
+    /**
+     * Obtiene el usuario dueño del dispositivo.
+     *
+     * @return usuario asociado
+     */
     public Usuario getUsuario() {
         return usuario;
     }
 
+    /**
+     * Establece el usuario dueño del dispositivo.
+     *
+     * @param usuario usuario asociado
+     */
     public void setUsuario(Usuario usuario) {
         this.usuario = usuario;
     }
 
+    /**
+     * Obtiene el reachId heredado (siempre 0 en el modelo actual).
+     *
+     * @return valor de la columna heredada
+     */
     public Long getReachId() {
         return reachId;
     }
 
+    /**
+     * Establece el reachId heredado.
+     *
+     * @param reachId valor de la columna heredada
+     */
     public void setReachId(Long reachId) {
         this.reachId = reachId;
     }
 
+    /**
+     * Obtiene la plataforma del dispositivo.
+     *
+     * @return plataforma (por ejemplo "web")
+     */
     public String getPlataforma() {
         return plataforma;
     }
 
+    /**
+     * Establece la plataforma del dispositivo.
+     *
+     * @param plataforma plataforma (por ejemplo "web")
+     */
     public void setPlataforma(String plataforma) {
         this.plataforma = plataforma;
     }
 
+    /**
+     * Indica si la suscripción está activa.
+     *
+     * @return {@code true} si el dispositivo recibe notificaciones
+     */
     public boolean isActivo() {
         return activo;
     }
 
+    /**
+     * Activa o desactiva la suscripción.
+     *
+     * @param activo {@code true} para recibir notificaciones
+     */
     public void setActivo(boolean activo) {
         this.activo = activo;
     }
 
+    /**
+     * Obtiene la fecha de registro.
+     *
+     * @return instante en que se creó el registro
+     */
     public Instant getFechaRegistro() {
         return fechaRegistro;
     }
 
+    /**
+     * Establece la fecha de registro.
+     *
+     * @param fechaRegistro instante de creación del registro
+     */
     public void setFechaRegistro(Instant fechaRegistro) {
         this.fechaRegistro = fechaRegistro;
     }
 
+    /**
+     * Obtiene la fecha de la última actualización.
+     *
+     * @return instante de la última modificación
+     */
     public Instant getFechaActualizacion() {
         return fechaActualizacion;
     }
 
+    /**
+     * Establece la fecha de la última actualización.
+     *
+     * @param fechaActualizacion instante de la última modificación
+     */
     public void setFechaActualizacion(Instant fechaActualizacion) {
         this.fechaActualizacion = fechaActualizacion;
     }

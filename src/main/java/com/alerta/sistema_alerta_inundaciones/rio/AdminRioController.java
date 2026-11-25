@@ -17,16 +17,37 @@ public class AdminRioController {
     private final RioService rioService;
     private final EliminacionRioService eliminacionRioService;
 
+    /**
+     * Crea el controlador administrativo de ríos.
+     *
+     * @param rioService            servicio de gestión de ríos
+     * @param eliminacionRioService servicio de eliminación en cascada de ríos
+     */
     public AdminRioController(RioService rioService, EliminacionRioService eliminacionRioService) {
         this.rioService = rioService;
         this.eliminacionRioService = eliminacionRioService;
     }
 
+    /**
+     * Registra directamente un río en el catálogo administrativo.
+     * Endpoint: {@code POST /api/admin/rios}. Acceso: ADMIN.
+     *
+     * @param rio entidad del río a guardar
+     * @return respuesta con el río persistido
+     */
     @PostMapping
     public ResponseEntity<Rio> crearRio(@RequestBody Rio rio) {
         return ResponseEntity.ok(rioService.guardarRio(rio));
     }
 
+    /**
+     * Actualiza los datos de un río existente del catálogo.
+     * Endpoint: {@code PUT /api/admin/rios/{id}}. Acceso: ADMIN.
+     *
+     * @param id  identificador del río a actualizar
+     * @param rio datos actualizados del río
+     * @return respuesta con el río actualizado o estado 404 si no existe
+     */
     @PutMapping("/{id}")
     public ResponseEntity<?> actualizarRio(@PathVariable Long id, @RequestBody Rio rio) {
         try {
@@ -36,6 +57,13 @@ public class AdminRioController {
         }
     }
 
+    /**
+     * Elimina un río del catálogo junto con sus muestras y suscripciones asociadas.
+     * Endpoint: {@code DELETE /api/admin/rios/{id}}. Acceso: ADMIN.
+     *
+     * @param id identificador del río a eliminar
+     * @return respuesta 204 sin contenido o estado 404 si el río no existe
+     */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> eliminarRio(@PathVariable Long id) {
         try {

@@ -20,9 +20,17 @@ public final class NotificacionFactory {
     private static final String ICONO = "/icons/icon-192.png";
     private static final String BADGE = "/icons/badge-72.png";
 
+    // Constructor privado: clase utilitaria que no se instancia.
     private NotificacionFactory() {
     }
 
+    /**
+     * Construye la notificación de un evento de alerta real. Detecta si el evento
+     * es una recuperación (vuelta a NORMAL desde ALERTA o EMERGENCIA).
+     *
+     * @param evento evento de alerta persistido
+     * @return notificación lista para enviar
+     */
     public static NotificacionPush paraEvento(AlertaEvento evento) {
         NivelAlerta nivel = evento.getNivel() == null ? NivelAlerta.NORMAL : evento.getNivel();
         boolean recuperacion = nivel == NivelAlerta.NORMAL
@@ -48,6 +56,9 @@ public final class NotificacionFactory {
      * Notificación de una crecida simulada. Usa el mismo texto visible que una
      * alerta real para la demostración en clase; la URL y el tag permiten
      * distinguirla internamente.
+     *
+     * @param alerta resultado de la simulación del río
+     * @return notificación de simulacro lista para enviar
      */
     public static NotificacionPush paraSimulacion(AlertaRioDTO alerta) {
         NivelAlerta nivel = nivelDe(alerta.getNivelAlerta());
@@ -70,6 +81,8 @@ public final class NotificacionFactory {
     /**
      * Aviso genérico para la demostración global. No está asociado a un río;
      * usa el mismo lenguaje de una emergencia real.
+     *
+     * @return notificación de demostración de nivel EMERGENCIA
      */
     public static NotificacionPush paraDemoGlobal() {
         return new NotificacionPush(
@@ -91,6 +104,7 @@ public final class NotificacionFactory {
         );
     }
 
+    // Arma la notificación común (título, cuerpo y banderas de prioridad) según el nivel.
     private static NotificacionPush crear(NivelAlerta nivel, String nombreRio,
                                            double caudal, Double lluvia24hMm,
                                            boolean recuperacion, Long reachId, long eventoId,
@@ -115,6 +129,7 @@ public final class NotificacionFactory {
         );
     }
 
+    // Título con emojis según el nivel de alerta o la recuperación.
     private static String titulo(NivelAlerta nivel, String rio, boolean recuperacion) {
         if (recuperacion) {
             return "✅ Situación normalizada en " + rio;
@@ -127,6 +142,7 @@ public final class NotificacionFactory {
         };
     }
 
+    // Cuerpo del mensaje con caudal y lluvia previstos según el nivel.
     private static String cuerpo(NivelAlerta nivel, String rio, double caudal,
                                  Double lluvia24hMm, boolean recuperacion) {
         String caudalTexto = String.format(Locale.US, "%.1f", caudal);
@@ -163,6 +179,7 @@ public final class NotificacionFactory {
                 + caudalTexto + " m³/s.";
     }
 
+    // Convierte el texto del nivel a enum; si es vacío o inválido, asume EMERGENCIA.
     private static NivelAlerta nivelDe(String valor) {
         if (valor == null || valor.isBlank()) {
             return NivelAlerta.EMERGENCIA;

@@ -14,6 +14,10 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Servicio de negocio para la gestión del catálogo de ríos, alta por coordenadas
+ * mediante GEOGloWS y generación del mapa GeoJSON.
+ */
 @Service
 public class RioService {
 
@@ -22,14 +26,32 @@ public class RioService {
     private final GeometriaTramoClient geometriaTramoClient;
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /**
+     * Crea el servicio únicamente con el repositorio de ríos (útil en pruebas unitarias).
+     *
+     * @param rioRepository repositorio de ríos
+     */
     public RioService(RioRepository rioRepository) {
         this(rioRepository, null, null);
     }
 
+    /**
+     * Crea el servicio con el repositorio de ríos y el cliente de GEOGloWS.
+     *
+     * @param rioRepository      repositorio de ríos
+     * @param clienteApiGeoglows cliente para consultar tramos en GEOGloWS
+     */
     public RioService(RioRepository rioRepository, ClienteApiGeoglows clienteApiGeoglows) {
         this(rioRepository, clienteApiGeoglows, null);
     }
 
+    /**
+     * Crea el servicio con todas sus dependencias para persistencia y consulta a GEOGloWS.
+     *
+     * @param rioRepository        repositorio de ríos
+     * @param clienteApiGeoglows   cliente de la API de GEOGloWS
+     * @param geometriaTramoClient cliente para descargar la geometría GeoJSON del tramo
+     */
     @Autowired
     public RioService(RioRepository rioRepository,
                       ClienteApiGeoglows clienteApiGeoglows,
@@ -39,12 +61,24 @@ public class RioService {
         this.geometriaTramoClient = geometriaTramoClient;
     }
 
+    /**
+     * Persiste directamente una entidad {@link Rio}.
+     *
+     * @param rio entidad a guardar
+     * @return entidad guardada
+     */
     public Rio guardarRio(Rio rio) {
         return rioRepository.save(rio);
     }
 
     /**
      * Crea un río a partir de coordenadas consultando el tramo más cercano en GEOGloWS.
+     *
+     * @param solicitud datos con nombre, latitud y longitud
+     * @param usuario   usuario autenticado que registra el río (opcional)
+     * @return resumen del río creado
+     * @throws ResponseStatusException si los datos son inválidos (400), falla GEOGloWS (502),
+     *                                 no hay tramo cercano (422) o el tramo ya existe (409)
      */
     public RioResumenDTO crearRio(CrearRioRequest solicitud, Usuario usuario) {
         if (solicitud == null) {
@@ -110,18 +144,35 @@ public class RioService {
         return RioResumenDTO.desde(rioRepository.save(nuevo));
     }
 
+    /**
+     * Obtiene el listado resumido de todos los ríos registrados.
+     *
+     * @return lista de {@link RioResumenDTO}
+     */
     public List<RioResumenDTO> obtenerTodos() {
         return rioRepository.findAll().stream()
                 .map(RioResumenDTO::desde)
                 .toList();
     }
 
+    /**
+     * Busca un río por su identificador primario.
+     *
+     * @param id identificador del río
+     * @return entidad {@link Rio} encontrada
+     * @throws IllegalArgumentException si no existe un río con el ID indicado
+     */
     public Rio obtenerPorId(Long id) {
         return rioRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("No existe un río con ID " + id + "."));
     }
 
-    /** Construye un FeatureCollection GeoJSON con la geometría guardada de cada río. */
+    /**
+     * Construye un FeatureCollection GeoJSON con la geometría guardada de cada río.
+     *
+     * @return cadena JSON con el {@code FeatureCollection}
+     * @throws IllegalStateException si alguna geometría guardada no es un GeoJSON válido
+     */
     public String obtenerMapaGeoJson() {
         ObjectNode coleccion = mapper.createObjectNode();
         coleccion.put("type", "FeatureCollection");
@@ -149,6 +200,14 @@ public class RioService {
         return coleccion.toString();
     }
 
+    /**
+     * Actualiza los datos básicos y, si se incluye, la geometría de un río existente.
+     *
+     * @param id    identificador del río a modificar
+     * @param datos entidad con los nuevos valores
+     * @return entidad {@link Rio} actualizada
+     * @throws IllegalArgumentException si no existe un río con ese identificador
+     */
     public Rio actualizarRio(Long id, Rio datos) {
         Rio existente = obtenerPorId(id);
         existente.setNombre(datos.getNombre());

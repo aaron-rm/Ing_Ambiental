@@ -11,6 +11,11 @@ import org.springframework.web.bind.annotation.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
+/**
+ * Controlador REST del canal push para usuarios autenticados: entrega la
+ * configuración pública de Firebase, registra y desactiva dispositivos y
+ * permite enviar una notificación de prueba.
+ */
 @RestController
 @RequestMapping("/api/push")
 public class PushController {
@@ -18,18 +23,36 @@ public class PushController {
     private final PushService pushService;
     private final String adminToken;
 
+    /**
+     * Crea el controlador.
+     *
+     * @param pushService servicio de negocio del canal push
+     * @param adminToken token administrativo heredado (vacío si no se configuró)
+     */
     public PushController(PushService pushService,
                           @Value("${alerta.admin.token:}") String adminToken) {
         this.pushService = pushService;
         this.adminToken = adminToken;
     }
 
-    /** Datos públicos de Firebase; nunca incluye la credencial administrativa. */
+    /**
+     * Datos públicos de Firebase; nunca incluye la credencial administrativa.
+     *
+     * @return configuración pública para inicializar Firebase en la PWA
+     */
     @GetMapping("/config")
     public ConfigPushDTO configuracion() {
         return pushService.configuracion();
     }
 
+    /**
+     * Registra (o actualiza) el dispositivo del usuario autenticado para recibir push.
+     *
+     * @param usuario usuario autenticado
+     * @param solicitud datos del dispositivo (token, deviceId y plataforma)
+     * @return 200 con el registro, 401 sin sesión, 400 si los datos son inválidos
+     *         o 409 si el token pertenece a otro dispositivo
+     */
     @PostMapping("/registrar")
     public ResponseEntity<?> registrar(@AuthenticationPrincipal Usuario usuario,
                                        @Valid @RequestBody RegistroPushRequest solicitud) {
@@ -45,6 +68,14 @@ public class PushController {
         }
     }
 
+    /**
+     * Desactiva la suscripción push de un dispositivo del usuario autenticado.
+     *
+     * @param usuario usuario autenticado
+     * @param solicitud token y deviceId del dispositivo a desactivar
+     * @return 204 si se desactivó, 401 sin sesión, 400 si no existe la suscripción
+     *         o 409 si el token no pertenece al dispositivo o usuario
+     */
     @DeleteMapping("/registrar")
     public ResponseEntity<?> desactivar(@AuthenticationPrincipal Usuario usuario,
                                         @Valid @RequestBody PruebaPushRequest solicitud) {
@@ -61,6 +92,15 @@ public class PushController {
         }
     }
 
+    /**
+     * Envía una notificación de prueba al dispositivo del usuario autenticado.
+     *
+     * @param usuario usuario autenticado
+     * @param solicitud token y deviceId del dispositivo destino
+     * @return 200 si se envió; 410 si el token es inválido; 502 si FCM falló;
+     *         401 sin sesión; 400 si no hay dispositivo; 429 si se excede el límite
+     *         de frecuencia; 409 si la suscripción está inactiva o no coincide
+     */
     @PostMapping("/prueba")
     public ResponseEntity<?> enviarPrueba(@AuthenticationPrincipal Usuario usuario,
                                           @Valid @RequestBody PruebaPushRequest solicitud) {
@@ -89,6 +129,10 @@ public class PushController {
      * Compatibilidad temporal con la consola antigua. Se retirará cuando la
      * consola termine de migrar a JWT; el frontend debe usar
      * {@code POST /api/admin/push/demo}.
+     *
+     * @param token valor del encabezado {@code X-Admin-Token}
+     * @return 200 con el {@link ResultadoDemoPush}, 403 si el token no es válido
+     *         o 409 si FCM no está configurado
      */
     @PostMapping("/demo")
     public ResponseEntity<?> enviarDemo(@RequestHeader(value = "X-Admin-Token", required = false) String token) {
@@ -103,6 +147,7 @@ public class PushController {
         }
     }
 
+    // Compara en tiempo constante el token recibido con el configurado; sin token configurado, deniega.
     private boolean adminAutorizado(String tokenRecibido) {
         if (adminToken == null || adminToken.isBlank()) {
             return false;

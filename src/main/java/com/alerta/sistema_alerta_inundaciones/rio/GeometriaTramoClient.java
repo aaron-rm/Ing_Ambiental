@@ -20,6 +20,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Optional;
 
+/**
+ * Cliente HTTP que consulta el servicio ArcGIS MapServer de GEOGloWS para
+ * obtener y simplificar la geometría GeoJSON de un tramo fluvial ({@code reachId} / {@code comid}).
+ */
 @Component
 public class GeometriaTramoClient {
 
@@ -32,10 +36,18 @@ public class GeometriaTramoClient {
     private final String baseUrl;
     private final HttpClient http;
 
+    /**
+     * Crea el cliente usando la URL por defecto del servicio de geometrías de GEOGloWS.
+     */
     public GeometriaTramoClient() {
         this(URL_DEFECTO);
     }
 
+    /**
+     * Crea el cliente con una URL base configurable para consultar las geometrías.
+     *
+     * @param baseUrl URL del endpoint de consulta ArcGIS de GEOGloWS
+     */
     @Autowired
     public GeometriaTramoClient(@Value("${geoglows.geometria-url:" + URL_DEFECTO + "}") String baseUrl) {
         this.baseUrl = (baseUrl == null || baseUrl.isBlank()) ? URL_DEFECTO : baseUrl.trim();
@@ -44,6 +56,12 @@ public class GeometriaTramoClient {
                 .build();
     }
 
+    /**
+     * Consulta la geometría GeoJSON del tramo indicado en GEOGloWS.
+     *
+     * @param reachId identificador del tramo ({@code comid}) en GEOGloWS
+     * @return objeto GeoJSON de la geometría redondeada a 5 decimales, o vacío si falla la consulta
+     */
     public Optional<String> buscar(long reachId) {
         String url = baseUrl + "?where=comid%3D" + reachId
                 + "&outFields=comid&returnGeometry=true&outSR=4326&resultRecordCount=1&f=geojson";
@@ -113,6 +131,7 @@ public class GeometriaTramoClient {
         }
     }
 
+    // Redondea recursivamente las coordenadas numéricas del árbol JSON a 5 decimales.
     private static JsonNode redondearCoordenadas(JsonNode nodo) {
         if (nodo.isArray()) {
             ArrayNode salida = MAPPER.createArrayNode();

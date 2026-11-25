@@ -17,6 +17,10 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.UUID;
 
+/**
+ * Servicio encargado de generar, firmar y verificar tokens JWT para mantener
+ * la autenticación sin estado de los usuarios.
+ */
 @Service
 public class JwtService {
 
@@ -25,6 +29,13 @@ public class JwtService {
     private final SecretKey clave;
     private final Duration expiracion;
 
+    /**
+     * Inicializa el servicio con la clave secreta HMAC y el tiempo de expiración.
+     * Si el secreto no está configurado o tiene menos de 32 caracteres, genera uno efímero.
+     *
+     * @param secreto clave secreta configurada para firmar los tokens
+     * @param horas   duración de validez de cada token en horas (mínimo 1)
+     */
     public JwtService(@Value("${alerta.jwt.secret:}") String secreto,
                       @Value("${alerta.jwt.expiracion-horas:24}") long horas) {
         String valor = secreto == null ? "" : secreto.trim();
@@ -38,6 +49,12 @@ public class JwtService {
         this.expiracion = Duration.ofHours(horasValidas);
     }
 
+    /**
+     * Genera un token JWT firmado con el identificador, rol e ID del usuario.
+     *
+     * @param usuario usuario para el cual se emite el token
+     * @return cadena con el token JWT compacto
+     */
     public String generarToken(Usuario usuario) {
         Instant ahora = Instant.now();
         var constructor = Jwts.builder()

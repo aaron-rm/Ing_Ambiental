@@ -32,11 +32,23 @@ public class ConsolaDemoRunner implements CommandLineRunner {
     private final BackendApiClient backend;
     private final Environment environment;
 
+    /**
+     * Crea el ejecutor de la consola interactiva.
+     *
+     * @param backend cliente HTTP que consume la API REST del backend
+     * @param environment entorno de Spring para detectar perfiles activos (como {@code test})
+     */
     public ConsolaDemoRunner(BackendApiClient backend, Environment environment) {
         this.backend = backend;
         this.environment = environment;
     }
 
+    /**
+     * Inicia la consola interactiva en un hilo daemon si hay terminal disponible
+     * y no se encuentra deshabilitada por propiedades o perfil de pruebas.
+     *
+     * @param args argumentos de arranque de la aplicación
+     */
     @Override
     public void run(String... args) {
         if ("true".equalsIgnoreCase(System.getProperty("skip.demo.console"))
@@ -53,6 +65,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         demoThread.start();
     }
 
+    // Bucle principal de la consola que alterna entre menú sin sesión y menú autenticado.
     private void iniciarConsolaInteractiva() {
         try {
             Thread.sleep(1500);
@@ -104,6 +117,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         }
     }
 
+    // Solicita credenciales al usuario y autentica la sesión contra el backend.
     private void iniciarSesion(Scanner scanner) {
         System.out.println("\n--- INICIAR SESION ---");
         System.out.println("Puede usar un correo o un nombre de usuario.");
@@ -132,6 +146,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         }
     }
 
+    // Solicita datos de registro, valida confirmación de contraseña y crea la cuenta.
     private void registrarse(Scanner scanner) {
         System.out.println("\n--- CREAR CUENTA ---");
         System.out.println("El registro publico siempre crea un usuario normal (USER).");
@@ -249,6 +264,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         }
     }
 
+    // Lista los ríos del catálogo indicando cuáles sigue el usuario actual.
     private void mostrarCatalogo() {
         List<BackendApiClient.RioApi> rios = backend.listarRios();
         List<Long> seguidos = idsSeguidos();
@@ -270,6 +286,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         }
     }
 
+    // Consulta y muestra en consola el estado hidrológico, lluvia y pronóstico de un río.
     private void abrirPanel(Scanner scanner) {
         BackendApiClient.RioApi rio = elegirRio(scanner, "Consultar panel de que rio?");
         if (rio == null) {
@@ -335,6 +352,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
                 + " (la consulta funciona igual).");
     }
 
+    // Permite elegir un río del catálogo para suscribir al usuario actual.
     private void seguirRio(Scanner scanner) {
         BackendApiClient.RioApi rio = elegirRio(scanner, "Seguir que rio?");
         if (rio == null) {
@@ -344,6 +362,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         System.out.println("\n[OK] " + respuesta.mensaje());
     }
 
+    // Permite elegir uno de los ríos seguidos para cancelar la suscripción.
     private void dejarDeSeguirRio(Scanner scanner) {
         List<BackendApiClient.RioSeguidoApi> seguidos = backend.listarRiosSeguidos();
         if (seguidos.isEmpty()) {
@@ -360,6 +379,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
                 + ". Ya no recibiras notificaciones de ese rio.");
     }
 
+    // Muestra los ríos a los que está suscrito el usuario autenticado.
     private void mostrarRiosSeguidos() {
         List<BackendApiClient.RioSeguidoApi> seguidos = backend.listarRiosSeguidos();
         System.out.println("\n--- MIS RIOS SEGUIDOS (" + seguidos.size() + ") ---");
@@ -373,6 +393,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         }
     }
 
+    // Ejecuta una simulación de crecida como ADMIN y reporta el resultado del envío push.
     private void simularCrecida(Scanner scanner) {
         BackendApiClient.RioApi rio = elegirRio(scanner, "Simular crecida en que rio?");
         if (rio == null) {
@@ -414,6 +435,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         System.out.println("El texto visible de la notificacion usa el formato de una alerta real.");
     }
 
+    // Envía una notificación push de demostración global como ADMIN.
     private void enviarPushDemo() {
         System.out.println("\n--- NOTIFICACION PUSH DE DEMOSTRACION ---");
         System.out.println("Se enviara a todos los dispositivos activos, sin crear un evento real.");
@@ -430,6 +452,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         }
     }
 
+    // Presenta el catálogo numerado y lee una selección válida del usuario.
     private BackendApiClient.RioApi elegirRio(Scanner scanner, String pregunta) {
         List<BackendApiClient.RioApi> rios = backend.listarRios();
         if (rios.isEmpty()) {
@@ -461,6 +484,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         }
     }
 
+    // Presenta la lista de ríos seguidos numerada y lee una selección válida.
     private BackendApiClient.RioSeguidoApi elegirRioSeguido(
             Scanner scanner, List<BackendApiClient.RioSeguidoApi> rios, String pregunta) {
         System.out.println("\n" + pregunta);
@@ -513,6 +537,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         return scanner.nextLine().trim();
     }
 
+    // Lee una contraseña ocultando la entrada si hay consola del sistema disponible.
     private static String leerPassword(Scanner scanner, String etiqueta) {
         Console consola = System.console();
         if (consola != null) {
@@ -523,6 +548,7 @@ public class ConsolaDemoRunner implements CommandLineRunner {
         return leerLinea(scanner);
     }
 
+    // Normaliza la representación textual del nivel de alerta.
     private static String formatearNivel(String nivel) {
         if (nivel == null) {
             return "DESCONOCIDO";

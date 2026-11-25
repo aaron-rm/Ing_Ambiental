@@ -6,6 +6,20 @@ import java.util.Map;
 /**
  * Contenido de una notificación web. Los valores viajan como data-only para
  * que el Service Worker controle la presentación y el clic.
+ *
+ * @param titulo título visible de la notificación
+ * @param cuerpo texto visible de la notificación
+ * @param nivel nivel de alerta asociado (NORMAL, VIGILANCIA, ALERTA, EMERGENCIA o PRUEBA)
+ * @param reachId identificador del tramo de río (0 si no aplica)
+ * @param eventoId identificador del evento de alerta (0 si no aplica)
+ * @param url ruta que se abre al pulsar la notificación
+ * @param tag etiqueta para agrupar/reemplazar notificaciones
+ * @param icono ruta del icono
+ * @param badge ruta del badge
+ * @param critico {@code true} si es de alta prioridad (emergencia)
+ * @param requiereInteraccion {@code true} si debe permanecer hasta que el usuario actúe
+ * @param vibrar {@code true} si debe hacer vibrar el dispositivo
+ * @param timestamp marca de tiempo en milisegundos desde epoch
  */
 public record NotificacionPush(
         String titulo,
@@ -23,6 +37,11 @@ public record NotificacionPush(
         long timestamp
 ) {
 
+    /**
+     * Convierte la notificación en el mapa de datos (todo como texto) que se envía por FCM.
+     *
+     * @return mapa clave-valor con los campos de la notificación
+     */
     public Map<String, String> datos() {
         Map<String, String> datos = new LinkedHashMap<>();
         datos.put("title", titulo);

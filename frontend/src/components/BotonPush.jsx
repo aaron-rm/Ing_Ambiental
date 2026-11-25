@@ -1,3 +1,9 @@
+/**
+ * @file BotonPush.jsx
+ * Componente que muestra el estado de las notificaciones Web Push y un botón para activarlas o reintentar.
+ * Exporta el componente BotonPush por defecto.
+ */
+
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../auth.jsx'
 import {
@@ -12,6 +18,11 @@ const MENSAJE_ACTIVO = 'Activadas. Recibirás avisos de los ríos que sigues.'
 const MENSAJE_NO_DISPONIBLE =
   'Este servidor no tiene Firebase configurado, así que las notificaciones push están apagadas. Puedes ver y seguir los ríos igual.'
 
+/**
+ * Sección y botón para gestionar la activación de notificaciones push en el dispositivo actual.
+ *
+ * @returns {JSX.Element} Sección visual con estado y botón de suscripción a notificaciones push.
+ */
 export default function BotonPush() {
   const { token } = useAuth()
   const [config, setConfig] = useState(null)

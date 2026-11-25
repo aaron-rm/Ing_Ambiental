@@ -10,6 +10,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.regex.Pattern;
 
+/**
+ * Servicio de negocio encargado del registro de usuarios, validación de
+ * credenciales en el inicio de sesión y emisión de respuestas con JWT.
+ */
 @Service
 public class AuthService {
 
@@ -21,6 +25,13 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
+    /**
+     * Crea el servicio de autenticación.
+     *
+     * @param usuarioRepository repositorio de usuarios
+     * @param passwordEncoder   codificador de contraseñas
+     * @param jwtService        servicio para firmar y validar tokens JWT
+     */
     public AuthService(UsuarioRepository usuarioRepository,
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService) {
@@ -29,6 +40,15 @@ public class AuthService {
         this.jwtService = jwtService;
     }
 
+    /**
+     * Valida el identificador, registra un nuevo usuario con rol {@link Rol#USER}
+     * y genera su token JWT inicial.
+     *
+     * @param solicitud credenciales de registro
+     * @return respuesta con el token JWT y el usuario creado
+     * @throws IllegalArgumentException        si el identificador no tiene un formato válido
+     * @throws IdentificadorDuplicadoException si el identificador ya está registrado
+     */
     @Transactional
     public AuthResponse registrar(CredencialesRequest solicitud) {
         String identificador = normalizarYValidar(solicitud.identificador());
@@ -49,6 +69,13 @@ public class AuthService {
         return respuesta(usuario);
     }
 
+    /**
+     * Verifica las credenciales del usuario y emite un token JWT si son válidas.
+     *
+     * @param solicitud credenciales de inicio de sesión
+     * @return respuesta con el token JWT y los datos del usuario
+     * @throws CredencialesInvalidasException si el usuario no existe o la contraseña no coincide
+     */
     @Transactional(readOnly = true)
     public AuthResponse login(CredencialesRequest solicitud) {
         String identificador = Usuario.normalizar(solicitud.identificador());
@@ -61,16 +88,25 @@ public class AuthService {
         return respuesta(usuario);
     }
 
+    /**
+     * Busca un usuario por su identificador normalizado.
+     *
+     * @param identificador correo o nombre de usuario
+     * @return entidad del usuario encontrado
+     * @throws CredencialesInvalidasException si no existe una cuenta con ese identificador
+     */
     @Transactional(readOnly = true)
     public Usuario obtenerPorIdentificador(String identificador) {
         return usuarioRepository.findByIdentificador(Usuario.normalizar(identificador))
                 .orElseThrow(() -> new CredencialesInvalidasException("La sesión ya no es válida."));
     }
 
+    // Construye la respuesta de autenticación con un nuevo token JWT y el DTO del usuario.
     private AuthResponse respuesta(Usuario usuario) {
         return new AuthResponse(jwtService.generarToken(usuario), UsuarioDTO.desde(usuario));
     }
 
+    // Normaliza el identificador a minúsculas y verifica que cumpla el formato de correo o usuario.
     private String normalizarYValidar(String identificador) {
         String limpio = Usuario.normalizar(identificador);
         if (limpio == null || limpio.isBlank()) {

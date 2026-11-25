@@ -21,21 +21,44 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Configuración de seguridad HTTP de Spring Security: define la política sin estado (JWT),
+ * las reglas de autorización por ruta y rol, el codificador de contraseñas y CORS.
+ */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
 
+    /**
+     * Crea la configuración de seguridad preparando el filtro de autenticación JWT.
+     *
+     * @param jwtService        servicio de tokens JWT
+     * @param usuarioRepository repositorio de usuarios
+     */
     public SecurityConfig(JwtService jwtService, UsuarioRepository usuarioRepository) {
         this.jwtFilter = new JwtAuthenticationFilter(jwtService, usuarioRepository);
     }
 
+    /**
+     * Expone el codificador de contraseñas basado en BCrypt.
+     *
+     * @return instancia de {@link BCryptPasswordEncoder}
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
+    /**
+     * Configura la cadena de filtros de seguridad, rutas públicas, rutas autenticadas,
+     * permisos por rol y manejo de errores 401/403 en JSON.
+     *
+     * @param http configurador de seguridad HTTP de Spring
+     * @return cadena de filtros de seguridad construida
+     * @throws Exception si falla la configuración de seguridad
+     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -74,6 +97,12 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Define la configuración CORS permitiendo los orígenes configurados en propiedades.
+     *
+     * @param origenes lista de orígenes o patrones separados por comas
+     * @return fuente de configuración CORS para todas las rutas
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
             @Value("${alerta.cors.origenes:http://localhost:3000,http://localhost:5173,http://localhost:8081,http://127.0.0.1:8081}") String origenes) {
@@ -93,6 +122,7 @@ public class SecurityConfig {
         return source;
     }
 
+    // Escribe una respuesta JSON simple con código de estado HTTP y clave "error".
     private static void escribirError(jakarta.servlet.http.HttpServletResponse response,
                                       int estado, String mensaje) throws java.io.IOException {
         response.setStatus(estado);

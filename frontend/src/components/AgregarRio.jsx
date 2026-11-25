@@ -1,7 +1,24 @@
+/**
+ * @file AgregarRio.jsx
+ * Componente de formulario para registrar un nuevo río especificando coordenadas geográficas.
+ * Permite seleccionar el punto mediante entrada manual, geolocalización del navegador o clic en el mapa.
+ * Exporta el componente AgregarRio por defecto.
+ */
+
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
 
+/**
+ * Formulario para agregar un nuevo río al catálogo del sistema.
+ *
+ * @param {Object} props - Propiedades del componente.
+ * @param {{lat: number, lng: number}|null} [props.punto] - Coordenadas actuales seleccionadas en el mapa.
+ * @param {function({lat: number, lng: number}): void} [props.onPuntoChange] - Función invocada al cambiar las coordenadas en el formulario.
+ * @param {function(Object): void} [props.onCreado] - Función invocada cuando el río se crea exitosamente en el backend.
+ * @param {function(): void} [props.onCancelar] - Función invocada al cancelar la creación del río.
+ * @returns {JSX.Element} Formulario de registro de río.
+ */
 export default function AgregarRio({ punto, onPuntoChange, onCreado, onCancelar }) {
   const { token } = useAuth()
   const [nombre, setNombre] = useState('')

@@ -30,6 +30,15 @@ public final class MuestraCsvParser {
     private MuestraCsvParser() {
     }
 
+    /**
+     * Fila validada extraída de un archivo CSV de muestras.
+     *
+     * @param fecha     instante de la toma de muestra
+     * @param parametro nombre del parámetro medido
+     * @param valor     valor numérico medido
+     * @param unidad    unidad de medida
+     * @param nota      nota u observación opcional
+     */
     public record FilaMuestra(
             Instant fecha,
             String parametro,
@@ -42,6 +51,13 @@ public final class MuestraCsvParser {
     private record LineaCruda(int numeroLinea, String texto) {
     }
 
+    /**
+     * Parsea y valida el contenido completo de un archivo CSV de muestras.
+     *
+     * @param contenido texto completo del archivo CSV
+     * @return lista de filas de muestra validadas
+     * @throws IllegalArgumentException si el CSV está vacío, supera límites o contiene filas inválidas
+     */
     public static List<FilaMuestra> parsear(String contenido) {
         return parsear(contenido, Instant.now());
     }
@@ -117,6 +133,13 @@ public final class MuestraCsvParser {
         return instante;
     }
 
+    /**
+     * Valida y recorta el nombre del parámetro medido (obligatorio, máximo 60 caracteres).
+     *
+     * @param texto nombre del parámetro recibido
+     * @return parámetro limpio sin espacios extremos
+     * @throws IllegalArgumentException si está vacío o supera 60 caracteres
+     */
     public static String validarParametro(String texto) {
         String limpio = texto == null ? "" : texto.trim();
         if (limpio.isEmpty()) {
@@ -128,6 +151,13 @@ public final class MuestraCsvParser {
         return limpio;
     }
 
+    /**
+     * Valida y recorta la unidad de medida (opcional, máximo 20 caracteres).
+     *
+     * @param texto unidad recibida
+     * @return unidad limpia (cadena vacía si era {@code null})
+     * @throws IllegalArgumentException si supera 20 caracteres
+     */
     public static String validarUnidad(String texto) {
         String limpio = texto == null ? "" : texto.trim();
         if (limpio.length() > 20) {
@@ -136,6 +166,13 @@ public final class MuestraCsvParser {
         return limpio;
     }
 
+    /**
+     * Valida y recorta la nota opcional de una muestra (máximo 500 caracteres).
+     *
+     * @param texto nota recibida
+     * @return nota limpia, o {@code null} si estaba vacía o era {@code null}
+     * @throws IllegalArgumentException si supera 500 caracteres
+     */
     public static String validarNota(String texto) {
         if (texto == null) {
             return null;
@@ -150,6 +187,7 @@ public final class MuestraCsvParser {
         return limpio;
     }
 
+    // Intenta convertir el texto de fecha probando Instant, OffsetDateTime, ZonedDateTime, LocalDateTime y LocalDate.
     private static Instant intentarParsearInstant(String limpio) {
         try {
             return Instant.parse(limpio);
@@ -178,6 +216,7 @@ public final class MuestraCsvParser {
         return null;
     }
 
+    // Divide el texto en líneas conservando el número de línea original y descartando las líneas en blanco.
     private static List<LineaCruda> dividirLineasNoVacias(String texto) {
         String[] crudas = texto.split("\r\n|\n|\r", -1);
         List<LineaCruda> resultado = new ArrayList<>();
@@ -189,6 +228,7 @@ public final class MuestraCsvParser {
         return resultado;
     }
 
+    // Detecta si la cabecera usa punto y coma o coma como delimitador de columnas.
     private static char detectarSeparador(String lineaCabecera) {
         if (lineaCabecera.indexOf(';') >= 0 && lineaCabecera.indexOf(',') < 0) {
             return ';';
@@ -196,6 +236,7 @@ public final class MuestraCsvParser {
         return ',';
     }
 
+    // Separa una línea CSV en campos respetando comillas dobles y comillas escapadas.
     private static List<String> parsearLineaCsv(String linea, char separador) {
         List<String> campos = new ArrayList<>();
         StringBuilder actual = new StringBuilder();
@@ -234,6 +275,7 @@ public final class MuestraCsvParser {
         return campos;
     }
 
+    // Valida las 5 columnas de una fila de datos y construye el registro FilaMuestra.
     private static FilaMuestra parsearFila(String linea, char separador, Instant ahora) {
         List<String> campos = parsearLineaCsv(linea, separador);
         if (campos.size() != 5) {
@@ -249,6 +291,7 @@ public final class MuestraCsvParser {
         return new FilaMuestra(fecha, parametro, valor, unidad, nota);
     }
 
+    // Convierte el campo de valor a double finito, admitiendo coma decimal si el separador CSV es ';'.
     private static double parsearValor(String texto, char separador) {
         String limpio = texto == null ? "" : texto.trim();
         if (limpio.isEmpty()) {
@@ -268,6 +311,7 @@ public final class MuestraCsvParser {
         }
     }
 
+    // Une hasta MAX_ERRORES_EN_MENSAJE errores por línea e indica cuántos adicionales se omitieron.
     private static String formatearErrores(List<String> errores) {
         StringBuilder sb = new StringBuilder();
         int limite = Math.min(MAX_ERRORES_EN_MENSAJE, errores.size());

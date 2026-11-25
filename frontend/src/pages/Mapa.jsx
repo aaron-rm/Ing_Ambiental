@@ -1,3 +1,11 @@
+/**
+ * @file Mapa.jsx
+ * Página principal interactiva con mapa geográfico de Leaflet.
+ * Presenta el catálogo de ríos con geometría GeoJSON, buscador predictivo,
+ * puntos de referencia, selección de ríos, panel hidrológico lateral y registro de nuevos ríos.
+ * Exporta el componente Mapa por defecto.
+ */
+
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { Fragment, useCallback, useEffect, useState } from 'react'
@@ -61,6 +69,11 @@ function ClicMapa({ agregando, onClic }) {
   return null
 }
 
+/**
+ * Vista principal con mapa de ríos interactivo y panel lateral de monitoreo.
+ *
+ * @returns {JSX.Element} Estructura completa del mapa y sus paneles asociados.
+ */
 export default function Mapa() {
   const { token, usuario } = useAuth()
   const esAdmin = usuario?.rol === 'ADMIN'

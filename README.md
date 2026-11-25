@@ -1,232 +1,200 @@
-# Sistema de alerta temprana de inundaciones
+# Sistema de Alerta Temprana de Inundaciones
 
-Backend Spring Boot para consultar riesgo de inundación con GEOGloWS y
-Open-Meteo, persistir eventos y enviar notificaciones push por Firebase Cloud
-Messaging (FCM).
+## 1. Qué es
+Sistema de alerta temprana que combina el pronóstico hidrológico de caudal (GEOGloWS) y la precipitación prevista (Open-Meteo) para estimar niveles de riesgo ribereño, registrar eventos históricos y despachar notificaciones Web Push dirigidas a los usuarios suscritos a cada río.
 
-### Componentes del sistema y separación de roles
+> [!IMPORTANT]
+> **Aviso:** Este es un proyecto académico y orientativo. **NO** emite declaraciones oficiales de emergencia ni sustituye la autoridad técnica ni los avisos del **SINAPROC** (Sistema Nacional de Protección Civil) ni del **IMHPA** (Instituto de Meteorología e Hidrología de Panamá).
 
-1. **Backend (Spring Boot):** Motor central independiente. Ejecuta la lógica de negocio, ingesta y caché de GEOGloWS y Open-Meteo, persistencia en PostgreSQL, seguridad JWT y despacho de notificaciones push vía Firebase Cloud Messaging (FCM). Expone una API REST pública.
-2. **Consola interactiva (`ConsolaDemoRunner`):** Cliente HTTP de consola por terminal interactiva. Permite autenticación JWT, consultar el panel y ejecutar simulaciones administrativas desde el servidor. No recibe notificaciones push directamente ya que una terminal no puede registrar Service Workers.
-3. **PWA de pruebas (`src/main/resources/static/`):** Herramienta web mínima servida por Spring Boot. Existe separadamente de la consola por la **necesidad técnica de validar el ciclo de vida de Web Push** (registro de Service Worker, suscripción FCM en navegador, permisos del sistema operativo y recepción en primer/segundo plano). **No es la interfaz de la presentación**; la aplicación React está en `frontend/`.
-4. **Frontend React (`frontend/`):** Aplicación Vite de la presentación que consume la API REST (login, mapa/catálogo, seguimiento, panel y push). Se sirve en `http://localhost:5173` con `bash iniciar.sh`.
+---
 
-> Proyecto académico y orientativo. No emite declaraciones oficiales de
-> emergencia ni sustituye a SINAPROC, IMHPA u otra autoridad competente.
+## 2. Requisitos
 
-> **Estado (Entrega 75 %):** La parte correspondiente al **backend está completamente lista y verificada para la entrega del 75 %**, con **82 pruebas automatizadas en verde** (0 fallos). Cuenta con autenticación JWT, roles `USER`/`ADMIN`, catálogo cerrado de cuatro ríos con geometría real (GeoJSON), selección usuario–ríos, enrutamiento push a seguidores, caché de GEOGloWS con tolerancia a fallos y campo `siguiendo` en el panel. La rama `frontend-final` incluye además la aplicación React/Vite con login, mapa/catálogo, seguimiento, panel de riesgo y activación de notificaciones. La presentación se ejecuta con `bash iniciar.sh` en Fedora y la interfaz se abre en `http://localhost:5173`.
->
-> Para retomar el proyecto o consultar la historia de sesiones, ver [docs/CONTINUIDAD_SESION.md](docs/CONTINUIDAD_SESION.md).
-> Para una explicación funcional sin tecnicismos, ver [docs/RESUMEN_PROYECTO.md](docs/RESUMEN_PROYECTO.md).
+- **Java Development Kit (JDK):** Versión 21 o superior.
+- **Node.js y npm:** Node.js 20.19+ (probado con Node 24) y npm.
+- **Docker Desktop:** Contenedor de base de datos PostgreSQL 16 con el nombre `alerta-postgres`, expuesto exclusivamente en `127.0.0.1:5432`.
+  ```bash
+  docker run -d --name alerta-postgres \
+    -e POSTGRES_DB=alerta_inundaciones \
+    -e POSTGRES_USER=postgres \
+    -e POSTGRES_PASSWORD=su_contrasena_local \
+    -p 127.0.0.1:5432:5432 \
+    -v alerta-pgdata:/var/lib/postgresql/data \
+    postgres:16-alpine
+  ```
+- **Git:** Para control de versiones y clonación del repositorio.
 
-## Arranque rápido
+---
 
-Requisitos: Java 21+, Node.js 20.19+ (probado con Node 24), npm, PostgreSQL y,
-para push, un proyecto Firebase y `cloudflared`.
+## 3. Configuración
 
-### Fedora / Linux (recomendado para la presentación)
+Copia el archivo de plantilla a `.env.demo` (ignorado en Git):
 
+En Windows:
+```cmd
+copy .env.demo.example .env.demo
+```
+
+En Linux:
 ```bash
 cp .env.demo.example .env.demo
-# editar .env.demo: DB_PASSWORD de esta máquina, Firebase y credenciales locales
-chmod +x iniciar.sh
+```
+
+Edita `.env.demo` completando las variables según tu entorno local:
+
+| Variable | Descripción | Valor de ejemplo / Placeholder |
+|---|---|---|
+| `DB_URL` | URL JDBC de conexión a PostgreSQL | `jdbc:postgresql://localhost:5432/alerta_inundaciones` |
+| `DB_USERNAME` | Usuario de PostgreSQL | `postgres` |
+| `DB_PASSWORD` | Contraseña de PostgreSQL (debe coincidir con la del contenedor) | `su_contrasena_local` |
+| `ALERTA_JWT_SECRET` | Clave secreta para firma de tokens JWT (mínimo 32 caracteres) | `un-secreto-seguro-de-al-menos-32-caracteres` |
+| `ALERTA_JWT_EXPIRACION_HORAS` | Duración del token JWT en horas | `24` |
+| `ALERTA_ADMIN_IDENTIFICADOR` | Identificador de la cuenta administradora inicial | `admin` |
+| `ALERTA_ADMIN_PASSWORD` | Contraseña del administrador local | `admin-local-clave` |
+| `ALERTA_CORS_ORIGENES` | Orígenes HTTP/HTTPS autorizados para CORS | `http://localhost:3000,http://localhost:5173,http://localhost:8081` |
+| `ALERTA_API_BASE_URL` | URL base consumida por la consola cliente | `http://localhost:8081` |
+| `ALERTA_DEMO_CONSOLA_HABILITADA` | Habilita la consola interactiva CLI en el backend | `false` |
+| `GEOGLOWS_CACHE_MINUTOS` | Tiempo de vida de la caché en memoria de GEOGloWS | `15` |
+| `ALERTA_ADMIN_TOKEN` | Token para rutas administrativas heredadas en transición | `token-administrativo-opcional` |
+
+---
+
+## 4. Firebase (opcional, para notificaciones)
+
+Para habilitar el envío de notificaciones Web Push, configura `FIREBASE_ENABLED=true` en `.env.demo`.
+
+1. **Credenciales de cuenta de servicio:** Descarga la clave privada en formato JSON desde la consola de Firebase (**Configuración del proyecto → Cuentas de servicio**).
+   - Guarda el archivo **FUERA del repositorio** (por ejemplo en `%USERPROFILE%\.secrets\ing-ambiental\service-account.json` en Windows o `~/.secrets/ing-ambiental/service-account.json` en Linux).
+   - Define su ruta absoluta en `FIREBASE_CREDENTIALS_PATH`.
+
+> [!WARNING]
+> **Seguridad:** NUNCA subas el archivo JSON de la cuenta de servicio a Git ni lo sirvas al frontend web.
+
+2. **Variables públicas de la aplicación web:** Copia los datos públicos de tu app web en Firebase Console:
+   - `FIREBASE_API_KEY`: API Key web de Firebase.
+   - `FIREBASE_AUTH_DOMAIN`: Dominio de autenticación (`proyecto.firebaseapp.com`).
+   - `FIREBASE_PROJECT_ID`: ID del proyecto de Firebase.
+   - `FIREBASE_MESSAGING_SENDER_ID`: ID del remitente de mensajería (Sender ID).
+   - `FIREBASE_APP_ID`: ID de la aplicación web.
+   - `FIREBASE_VAPID_KEY`: Clave pública Web Push (VAPID) generada en **Cloud Messaging**.
+
+---
+
+## 5. Iniciar
+
+### Windows (Lanzador automatizado)
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\iniciar-demo.ps1
+```
+
+### Linux (Lanzador automatizado)
+```bash
 bash iniciar.sh
 ```
 
-Abrir `http://localhost:5173`. El lanzador instala las dependencias de
-`frontend/` si faltan o si vienen de Windows, inicia el backend en `8081`, Vite
-en `5173`, espera el catálogo y abre un túnel HTTPS **hacia 5173**. La URL del
-túnel aparece al final; esa es la que se abre en el celular.
+**Qué levanta cada lanzador:**
+- Backend Spring Boot en el puerto `8081`.
+- Frontend React (Vite) en el puerto `5173`.
+- Túnel HTTPS con Cloudflare hacia el puerto `5173` (si `cloudflared` está instalado), permitiendo abrir la aplicación en teléfonos móviles con contexto seguro para Web Push.
 
-Opciones: `bash iniciar.sh --sin-tunel` (solo PC) y
-`bash iniciar.sh --sin-navegador`.
+**Cómo detener:** Presiona `Ctrl + C` en la terminal para terminar limpiamente los procesos iniciados.
 
-Si el backend falla por PostgreSQL, ejecuta
-`bash scripts/diagnosticar-postgres.sh`; muestra la causa sin imprimir la
-contraseña.
+### Arranque manual alternativo
+Si prefieres iniciar cada servicio por separado:
 
-La guía paso a paso para la presentación en Fedora está en
-[`docs/GUIA_PRESENTACION_FEDORA.md`](docs/GUIA_PRESENTACION_FEDORA.md).
+1. **Backend:**
+   ```powershell
+   .\mvnw.cmd spring-boot:run
+   ```
+   *(En Linux: `bash mvnw spring-boot:run`)*
 
-### Windows (apoyo)
+2. **Frontend:**
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
 
-```powershell
-Copy-Item .env.demo.example .env.demo
-# completar .env.demo con las credenciales locales
-.\scripts\iniciar-demo.ps1
-```
+---
 
-Abrir `http://localhost:5173`. El lanzador de Windows inicia backend, Vite y el
-túnel hacia `5173`.
+## 6. URLs y accesos
 
-Arranque manual del backend en Windows (PowerShell):
+- **Aplicación Web (Frontend):** [http://localhost:5173](http://localhost:5173)
+- **API REST (Backend):** [http://localhost:8081](http://localhost:8081)
 
-```powershell
-$env:DB_PASSWORD = "su-contraseña-local"
-$env:ALERTA_JWT_SECRET = "un-secreto-de-al-menos-32-caracteres"
-# Credenciales de desarrollo local:
-$env:ALERTA_ADMIN_IDENTIFICADOR = "admin"
-$env:ALERTA_ADMIN_PASSWORD = "admin-local-clave"
-.\mvnw.cmd spring-boot:run
-```
+### Credenciales de prueba local
+- **Usuario:** `admin`
+- **Contraseña:** `admin-local-clave`  
+*(Uso exclusivo en desarrollo local; en producción debe cambiarse mediante `ALERTA_ADMIN_PASSWORD`).*
 
-> **Credenciales de desarrollo:** Para pruebas locales se utiliza por convención el identificador `admin` y la contraseña `admin-local-clave`. **Esta credencial es de uso exclusivo para desarrollo y demostración local; para despliegues en producción DEBE cambiarse o suministrarse mediante secretos seguros de entorno.**
+### Roles del sistema
+- **USER:** Usuario general. Puede registrarse libremente desde la pantalla de login, explorar el mapa de ríos, suscribirse a ríos y recibir notificaciones push.
+- **INVESTIGADOR:** Asignado por un `ADMIN` desde la vista Usuarios. Permite registrar mediciones ambientales y cargar muestras masivas mediante archivos CSV.
+- **ADMIN:** Administrador del sistema. Puede eliminar ríos del catálogo, gestionar roles de usuarios en el sistema y ejecutar simulaciones de crecida.
 
-Al arrancar, el backend carga el catálogo de cuatro ríos desde
-`src/main/resources/catalogo/rios.json` (upsert por `reachId`). Las respuestas de
-GEOGloWS se cachean en memoria durante `GEOGLOWS_CACHE_MINUTOS` (15 por defecto)
-y se reutiliza la última copia si la API falla.
+---
 
-Arranque en Linux (con PostgreSQL en un contenedor Podman):
+## 7. Qué se puede hacer
 
-```bash
-podman run -d --name alerta-postgres \
-  -e POSTGRES_DB=alerta_inundaciones -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=contrasena-local-de-ejemplo \
-  -p 127.0.0.1:5432:5432 -v alerta-pgdata:/var/lib/postgresql/data \
-  docker.io/library/postgres:16-alpine
+- **Ver ríos sin cuenta:** Consultar el catálogo de ríos en el mapa interactivo, revisar los niveles de alerta actuales y los pronósticos de caudal y lluvia sin iniciar sesión.
+- **Seguir ríos y recibir notificaciones:** Con una cuenta iniciada, suscribirse a uno o varios ríos y activar las notificaciones push en el navegador o teléfono móvil.
+- **Agregar ríos por coordenadas:** Registrar nuevos ríos especificando nombre, latitud y longitud (manualmente, mediante la ubicación del dispositivo o haciendo clic directo en el mapa), asociando automáticamente el tramo hidrológico de GEOGloWS.
+- **Registrar muestras y mediciones:** Usuarios con rol `ADMIN` o `INVESTIGADOR` pueden ingresar mediciones de calidad de agua o hidrológicas de forma individual o importar lotes masivos en formato CSV con la cabecera:
+  ```csv
+  fecha,parametro,valor,unidad,nota
+  ```
+- **Administración de catálogo y usuarios:** Los usuarios con rol `ADMIN` pueden eliminar ríos y modificar los roles de los usuarios registrados (`USER` o `INVESTIGADOR`).
+- **Simular crecida:** El administrador puede disparar un simulacro de crecida sobre cualquier río para validar el despacho inmediato de notificaciones push a todos los dispositivos que sigan ese río.
 
-cp .env.demo.example .env.demo
-# completar .env.demo; DB_PASSWORD debe coincidir con POSTGRES_PASSWORD
+---
 
-bash iniciar.sh                 # backend + React/Vite + tunel si hay cloudflared
-bash iniciar.sh --sin-tunel     # solo PC, sin URL publica
-```
+## 8. Pruebas
 
-Con doble clic, `iniciar.sh` detecta que no hay terminal y se relanza en Konsole,
-GNOME Terminal o xterm; además abre el navegador en `http://localhost:5173`
-cuando el frontend responde. Si el backend o Vite ya están corriendo en `8081` y
-`5173`, reutiliza esos procesos en lugar de lanzar una segunda instancia.
-
-El lanzador antiguo `scripts/iniciar-demo.sh` servía la PWA de prueba en `8081`;
-para la interfaz React de la presentación use `iniciar.sh`.
-
-En Linux `./mvnw` puede fallar con «Permiso denegado»: usar `bash mvnw`. Si
-OneDrive sincroniza la carpeta `target/` desde Windows y Maven falla con
-«Unable to find a single main class», ejecutar `bash mvnw clean` y reintentar.
-
-La consola se puede desactivar sin afectar al backend:
-
-```powershell
-$env:ALERTA_DEMO_CONSOLA_HABILITADA = "false"
-.\mvnw.cmd spring-boot:run
-```
-
-## Demo y prueba de notificaciones
-
-1. Cada usuario abre la URL de la aplicación (en PC: `http://localhost:5173`; en celular: la URL HTTPS del túnel que apunta a `5173`).
-2. En el celular, registra una cuenta `USER` distinta de la del administrador, selecciona al menos un río para seguir y pulsa **Activar notificaciones**. Usar cuentas separadas evita que el backend desactive el token anterior del mismo usuario.
-3. Para enviar pruebas como administrador:
-   - **Desde la PWA:** Inicie sesión con la cuenta `ADMIN` (`admin` / `admin-local-clave` en local). Al seguir un río, aparecerá el botón **Simular crecida**, el cual envía una notificación con el mismo texto visible de una alerta real (con emojis) a los seguidores de ese río.
-   - **Desde la consola (`ConsolaDemoRunner`):** Inicie sesión con `ADMIN`:
-     - Opción **6: Simular crecida de un rio:** Envía la notificación únicamente a los dispositivos de los usuarios que siguen ese río.
-     - Opción **7: Enviar notificacion push de demostracion:** Envía el simulacro global a todos los dispositivos activos registrados.
-
-> La simulación de crecida no persiste un evento de riesgo en el historial; solo prueba la clasificación y el enrutamiento del canal push. La notificación visible usa el formato de alerta real por requisito de la demostración en clase; la PWA y la consola siguen identificando la operación como simulacro.
-
-## Si ves la PWA antigua en 8081 o “Sin conexión”
-
-La interfaz de la presentación es la aplicación React de `frontend/`, servida en
-`http://localhost:5173`. El backend sigue sirviendo la PWA de prueba antigua en
-`http://localhost:8081`; si abres esa dirección verás la PWA mínima, no el
-frontend nuevo.
-
-En la PWA de prueba, el navegador pudo conservar el Service Worker de una versión
-anterior. Cuando el backend está detenido, ese Service Worker puede servir el
-HTML viejo desde su caché y mostrar “Sin conexión”, aunque el código actual ya
-sea la página nueva.
-
-En Chrome de escritorio:
-
-1. Abrir `http://localhost:8081`.
-2. `F12` → **Application** → **Service Workers** → **Unregister**.
-3. **Application** → **Storage** → **Clear site data**.
-4. Cerrar la pestaña y volver a abrir la página con `Ctrl + F5`.
-
-En el celular: borrar los datos del sitio desde la configuración del navegador o
-desinstalar la PWA de la pantalla de inicio y volver a abrir la URL. La versión
-nueva del Service Worker elimina las cachés `alerta-shell-*` al activarse.
-
-## Documentación
-
-| Documento | Contenido |
-|---|---|
-| [docs/GUIA_PRESENTACION_FEDORA.md](docs/GUIA_PRESENTACION_FEDORA.md) | Arranque y guion de la demo en Fedora con el frontend React en `5173` |
-| [docs/CONTINUIDAD_SESION.md](docs/CONTINUIDAD_SESION.md) | Estado actual y cómo retomar el proyecto desde otra computadora o sesión |
-| [docs/RESUMEN_PROYECTO.md](docs/RESUMEN_PROYECTO.md) | Explicación de alto nivel, flujo, alcance y guía para la presentación |
-| [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | Directrices permanentes y separación backend/clientes |
-| [docs/GUIA_PRUEBA_NOTIFICACIONES.md](docs/GUIA_PRUEBA_NOTIFICACIONES.md) | Guía paso a paso para compañeros y agentes de IA |
-| [INFORME_ALERTAS_INUNDACION.md](INFORME_ALERTAS_INUNDACION.md) | Informe histórico del 21–22/10; estado vigente en `CONTINUIDAD_SESION.md` |
-| [docs/CONFIGURACION_PUSH.md](docs/CONFIGURACION_PUSH.md) | Variables de entorno, PostgreSQL y Firebase/FCM |
-| [docs/INTEGRACION_FRONTEND.md](docs/INTEGRACION_FRONTEND.md) | Contrato de API y guía para el equipo de frontend |
-| [docs/GUIA_FRONTEND.md](docs/GUIA_FRONTEND.md) | Diseño del frontend definitivo y flujo mínimo de la PWA |
-| [IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md) | Historia de implementación y decisiones previas |
-
-## Pruebas
-
+### Pruebas del Backend
+Ejecuta la suite de pruebas unitarias e integración en Spring Boot (82 pruebas automatizadas):
 ```powershell
 .\mvnw.cmd test
 ```
+*(En Linux: `bash mvnw test`)*
 
-Estado actual: **82 pruebas, 0 fallos**. En Linux, usar `bash mvnw test` si
-`./mvnw` falla con “Permiso denegado”.
-
-Frontend React (Vite):
-
+### Compilación del Frontend
+Verifica que la aplicación React empaquete correctamente sin errores:
 ```bash
 cd frontend
-npm install
 npm run build
-npm run lint
 ```
 
-Validación de sintaxis de la PWA antigua:
+---
 
-```powershell
-node --check src/main/resources/static/app.js
-node --check src/main/resources/static/firebase-messaging-sw.js
-```
+## 9. Problemas comunes
 
-## Estructura
+- **GEOGloWS responde 429 (Too Many Requests):** La API pública de GEOGloWS aplica límites de peticiones concurrentes. El backend mitiga esto mediante una caché en memoria configurable (`GEOGLOWS_CACHE_MINUTOS`) y reutiliza la última respuesta válida en caso de fallo.
+- **Puerto ocupado (`5173`, `8081` o `5432`):** Si un proceso anterior retiene el puerto, finalízalo antes de volver a arrancar.
+- **Docker apagado:** Si el contenedor `alerta-postgres` no responde, asegúrate de que Docker Desktop esté encendido y ejecuta `docker start alerta-postgres`.
+- **`mvnw` no se encuentra en PowerShell:** Si PowerShell no ejecuta el wrapper de Maven por restricciones de ruta relativa, ejecuta en la sesión:
+  ```powershell
+  $env:NoDefaultCurrentDirectoryInExePath = "1"
+  ```
+  o invoca explícitamente `.\mvnw.cmd`.
+
+---
+
+## 10. Estructura del repositorio
 
 ```text
-src/main/java/.../auth/     Usuarios, JWT, roles y seguridad
-src/main/java/.../usuario/  Selección usuario–ríos
-src/main/java/.../alerta/   Eventos, monitoreo y API de alertas
-src/main/java/.../riesgo/   Reglas de caudal y lluvia
-src/main/java/.../clima/    Open-Meteo y caché
-src/main/java/.../GEOGLOWS/ GEOGloWS, lectura de datos y caché por tramo
-src/main/java/.../push/     FCM, registro y envío por seguidores
-src/main/java/.../rio/      Catálogo, geometría y mapa
-src/main/java/.../demo/     Consola HTTP de demostración
-src/main/resources/catalogo/  Catálogo con geometría real (GeoJSON)
-tools/                      Script reproducible del catálogo
-src/main/resources/static/  PWA de pruebas (8081, no es el frontend nuevo)
-frontend/                   Aplicación React/Vite de la presentación (5173)
-iniciar.sh                  Lanzador Fedora/Linux: backend + frontend + túnel
-src/test/java/...           82 pruebas automatizadas
-docs/                       Arquitectura y guías operativas
-scripts/                    Lanzadores de apoyo (Windows) y legado Linux
+├── src/          # Código fuente del Backend (Spring Boot), servicios, seguridad y recursos
+├── frontend/     # Aplicación cliente React + Vite, componentes y páginas
+├── scripts/      # Scripts de apoyo y lanzadores para Windows y Linux
+├── docs/         # Documentación técnica, directrices de arquitectura y contratos
+└── tools/        # Scripts auxiliares (generador reproducible de catálogo GeoJSON)
 ```
 
-## Estado de la entrega y alcance
-
-### Parte del Backend (Listo y verificado para la entrega del 75 %)
-- **Backend modular y desacoplado:** Spring Boot con API REST independiente y arquitectura por capas (Controller → Service → Repository / Client).
-- **Autenticación y roles:** Registro público (`USER`), login con emisión de JWT HS256 (24 horas) y sembrado de administrador (`ADMIN`).
-- **Catálogo cerrado de cuatro ríos:** Upsert automático de Río Abajo, Curundú, Juan Díaz y Tocumen con geometría GeoJSON simplificada real (TDX-Hydro).
-- **Selección usuario–ríos:** Seguimiento persistido en base de datos e indicador `siguiendo` en el panel de río.
-- **Evaluación y monitoreo de riesgo:** Clasificación combinada de caudal (GEOGloWS v2) y lluvia acumulada en 24h (Open-Meteo) bajo 4 niveles (`NORMAL`, `VIGILANCIA`, `ALERTA`, `EMERGENCIA`). Monitoreo programado cada 15 min e historial con idempotencia.
-- **Tolerancia a fallos:** Caché en memoria para GEOGloWS con reutilización de la última respuesta válida en caso de caídas del servicio externo.
-- **Notificaciones Push por seguidores:** Registro de token FCM vinculado al usuario y despacho de avisos críticos y simulacros solo a los seguidores del río.
-- **Herramientas de prueba:** Consola interactiva CLI con menú por rol y PWA mínima de prueba web para validación técnica de Service Workers y Push.
-- **Calidad de software:** 82 pruebas automatizadas pasando al 100% (`BUILD SUCCESS`). Base completa lista para ser consumida.
-
-### Frontend de la presentación (rama `frontend-final`)
-- **Pantallas iniciales entregadas:** Aplicación React/Vite con autenticación, catálogo/mapa de ríos, seguimiento y visualización del panel de riesgo, consumiendo los endpoints del backend. Se sirve en `http://localhost:5173` y se arranca con `bash iniciar.sh` en Fedora.
-
-### Pendiente para la entrega final (100 %)
-- **Frontend definitivo completo:** Aplicación frontend finalizada con todos los flujos de usuario, diseño pulido e integración total de deep links y gráficos.
-- **Calibración estacional:** Calibración fina de umbrales hidrológicos y de precipitación con entidades oficiales (SINAPROC/IMHPA).
-- **Configuración de producción:** Dominio HTTPS fijo, origen CORS definitivo para el frontend y rotación segura de credenciales de base de datos y Firebase.
-- **Limpieza de endpoints heredados:** Retiro de rutas transitorias (`POST /api/push/demo` heredado y `GET /api/alertas/suscripciones/{reachId}`).
+### Documentación técnica detallada
+- [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) — Directrices permanentes de arquitectura y separación de componentes.
+- [docs/CONFIGURACION_PUSH.md](docs/CONFIGURACION_PUSH.md) — Guía de configuración para Firebase Cloud Messaging (FCM) y base de datos.
+- [docs/CONTINUIDAD_SESION.md](docs/CONTINUIDAD_SESION.md) — Historial de implementación, decisiones técnicas y estado actual.
+- [docs/GUIA_FRONTEND.md](docs/GUIA_FRONTEND.md) — Especificaciones de interfaz y flujo de usuario.
+- [docs/GUIA_PRESENTACION_FEDORA.md](docs/GUIA_PRESENTACION_FEDORA.md) — Guía paso a paso para la demostración en entornos Linux/Fedora.
+- [docs/GUIA_PRUEBA_NOTIFICACIONES.md](docs/GUIA_PRUEBA_NOTIFICACIONES.md) — Protocolo de validación del canal push en dispositivos reales.
+- [docs/INTEGRACION_FRONTEND.md](docs/INTEGRACION_FRONTEND.md) — Contrato completo de la API REST para el cliente frontend.
+- [docs/RESUMEN_PROYECTO.md](docs/RESUMEN_PROYECTO.md) — Explicación de alto nivel del sistema y guía para exposición.

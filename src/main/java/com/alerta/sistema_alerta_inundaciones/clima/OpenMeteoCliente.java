@@ -35,6 +35,12 @@ public class OpenMeteoCliente implements ProveedorPrecipitacion {
     private final Duration cacheTtl;
     private final Map<String, EntradaCache> cache = new ConcurrentHashMap<>();
 
+    /**
+     * Crea el cliente de producción apuntando a la API de Open-Meteo.
+     *
+     * @param url          URL base del endpoint de pronóstico de Open-Meteo
+     * @param cacheMinutos minutos de vigencia de la caché por coordenada; mínimo 1
+     */
     @Autowired
     public OpenMeteoCliente(
             @Value("${clima.open-meteo.url:https://api.open-meteo.com/v1/forecast}") String url,
@@ -48,6 +54,14 @@ public class OpenMeteoCliente implements ProveedorPrecipitacion {
         this.cacheTtl = cacheTtl;
     }
 
+    /**
+     * Obtiene el pronóstico de precipitación de Open-Meteo, usando la caché vigente
+     * y, si la consulta falla, los últimos datos en caché con una advertencia.
+     *
+     * @param latitud  latitud en grados
+     * @param longitud longitud en grados
+     * @return datos de precipitación, o un resultado no disponible si no hay consulta ni caché
+     */
     @Override
     public DatosPrecipitacion obtener(double latitud, double longitud) {
         String clave = String.format(java.util.Locale.US, "%.3f,%.3f", latitud, longitud);
@@ -94,6 +108,7 @@ public class OpenMeteoCliente implements ProveedorPrecipitacion {
         }
     }
 
+    // Consulta Open-Meteo y calcula la lluvia acumulada a 24 h y 72 h y la máxima horaria.
     @SuppressWarnings("unchecked")
     private DatosPrecipitacion consultar(double latitud, double longitud) {
         Map<String, Object> respuesta = restClient.get()
@@ -172,6 +187,7 @@ public class OpenMeteoCliente implements ProveedorPrecipitacion {
         );
     }
 
+    // Convierte una marca de tiempo de Open-Meteo a Instant; devuelve null si no se puede interpretar.
     private static Instant parsearFecha(String texto) {
         try {
             // Se solicita timezone=UTC, por lo que las marcas vienen sin offset.
@@ -185,10 +201,12 @@ public class OpenMeteoCliente implements ProveedorPrecipitacion {
         }
     }
 
+    // Redondea a dos decimales.
     private static double redondear(double valor) {
         return Math.round(valor * 100.0) / 100.0;
     }
 
+    // Entrada de la caché: datos obtenidos y el instante de la consulta.
     private record EntradaCache(Instant fechaConsulta, DatosPrecipitacion datos) {
     }
 }

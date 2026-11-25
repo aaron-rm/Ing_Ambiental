@@ -9,15 +9,29 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * Servicio de negocio para que los administradores consulten la lista de cuentas
+ * y modifiquen el rol de usuarios entre {@link Rol#USER} e {@link Rol#INVESTIGADOR}.
+ */
 @Service
 public class AdminUsuarioService {
 
     private final UsuarioRepository usuarioRepository;
 
+    /**
+     * Crea el servicio administrativo de usuarios.
+     *
+     * @param usuarioRepository repositorio de usuarios
+     */
     public AdminUsuarioService(UsuarioRepository usuarioRepository) {
         this.usuarioRepository = usuarioRepository;
     }
 
+    /**
+     * Devuelve todos los usuarios registrados ordenados por identificador ascendente.
+     *
+     * @return lista de {@link UsuarioDTO}
+     */
     @Transactional(readOnly = true)
     public List<UsuarioDTO> listarUsuarios() {
         return usuarioRepository.findAllByOrderByIdentificadorAsc().stream()
@@ -25,6 +39,15 @@ public class AdminUsuarioService {
                 .toList();
     }
 
+    /**
+     * Cambia el rol de un usuario no administrador a {@link Rol#USER} o {@link Rol#INVESTIGADOR}.
+     *
+     * @param id        identificador del usuario a actualizar
+     * @param solicitud cuerpo con el nombre del nuevo rol
+     * @return DTO del usuario con el rol actualizado
+     * @throws ResponseStatusException con estado 400 si el rol es inválido o el objetivo es ADMIN,
+     *                                 o 404 si el usuario no existe
+     */
     @Transactional
     public UsuarioDTO cambiarRol(Long id, CambiarRolRequest solicitud) {
         String rolTexto = solicitud == null || solicitud.rol() == null

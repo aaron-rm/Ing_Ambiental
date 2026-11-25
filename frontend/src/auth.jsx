@@ -1,9 +1,23 @@
+/**
+ * @file auth.jsx
+ * Contexto y proveedor de autenticación de la aplicación.
+ * Maneja el estado de sesión del usuario, verificación del token JWT, login, registro y logout.
+ * Exporta el componente AuthProvider y el hook useAuth.
+ */
+
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { api, TOKEN_KEY } from './api.js'
 import { desactivarPush } from './push.js'
 
 const Ctx = createContext(null)
 
+/**
+ * Proveedor de contexto de autenticación que gestiona el estado global de la sesión.
+ *
+ * @param {Object} props - Propiedades del componente.
+ * @param {import('react').ReactNode} props.children - Componentes hijos envueltos por el proveedor.
+ * @returns {JSX.Element} Proveedor del contexto de autenticación.
+ */
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY))
   const [usuario, setUsuario] = useState(null)
@@ -47,4 +61,9 @@ export function AuthProvider({ children }) {
   return <Ctx.Provider value={{ token, usuario, cargando, entrar, salir }}>{children}</Ctx.Provider>
 }
 
+/**
+ * Hook para acceder al contexto de autenticación de la aplicación.
+ *
+ * @returns {{token: string|null, usuario: Object|null, cargando: boolean, entrar: Function, salir: Function}} Datos y acciones de autenticación.
+ */
 export const useAuth = () => useContext(Ctx)

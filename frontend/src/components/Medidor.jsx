@@ -1,3 +1,9 @@
+/**
+ * @file Medidor.jsx
+ * Componente gráfico SVG que visualiza el nivel relativo de caudal de un río frente a sus umbrales de alerta.
+ * Exporta la función utilitaria nivelY y el componente Medidor por defecto.
+ */
+
 // Esquema del cauce: gris = orillas, azul = nivel relativo, rosado = umbrales.
 // No es una altura en metros: GEOGLOWS entrega caudal (m³/s).
 const BASE = 118
@@ -7,6 +13,15 @@ const Y3 = 24
 const TOPE = 10
 const lerp = (a, b, t) => a + (b - a) * t
 
+/**
+ * Calcula la coordenada vertical Y (en píxeles dentro del SVG) correspondiente a un caudal frente a tres umbrales.
+ *
+ * @param {number} caudal - Caudal actual o pronosticado en m³/s.
+ * @param {number} t1 - Umbral de vigilancia en m³/s.
+ * @param {number} t2 - Umbral de alerta en m³/s.
+ * @param {number} t3 - Umbral de emergencia en m³/s.
+ * @returns {number} Coordenada Y interpolada dentro del sistema de coordenadas del SVG.
+ */
 export function nivelY(caudal, t1, t2, t3) {
   if (!(caudal > 0)) return BASE
   if (caudal <= t1) return lerp(BASE, Y1, caudal / t1)
@@ -15,6 +30,17 @@ export function nivelY(caudal, t1, t2, t3) {
   return lerp(Y3, TOPE, Math.min((caudal - t3) / (t3 * 0.5), 1))
 }
 
+/**
+ * Esquema gráfico del corte transversal de un cauce para ilustrar el nivel relativo del río.
+ *
+ * @param {Object} props - Propiedades del componente.
+ * @param {number} props.caudal - Caudal evaluado en m³/s.
+ * @param {number} props.t1 - Umbral de vigilancia en m³/s.
+ * @param {number} props.t2 - Umbral de alerta en m³/s.
+ * @param {number} props.t3 - Umbral de emergencia en m³/s.
+ * @param {string} props.color - Color de relleno para la superficie de agua representada.
+ * @returns {JSX.Element} Gráfico vectorial SVG del medidor de cauce.
+ */
 export default function Medidor({ caudal, t1, t2, t3, color }) {
   const y = nivelY(caudal, t1, t2, t3)
   const izq = 60 + ((y - 10) * 30) / 108

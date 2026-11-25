@@ -1,3 +1,11 @@
+/**
+ * @file push.js
+ * Módulo de integración con Firebase Cloud Messaging (Web Push).
+ * Maneja la detección de soporte en el navegador, registro del Service Worker,
+ * obtención del token FCM y registro/desactivación del dispositivo en el backend.
+ * Exporta funciones de comprobación de soporte, permisos, deviceId y activación/desactivación de push.
+ */
+
 import { api } from './api.js'
 
 // Firebase se carga desde su CDN para no sumar el SDK al bundle principal.
@@ -14,7 +22,11 @@ let messaging = null
 let oyenteFcm = false
 let activacionEnCurso = null
 
-/** Comprueba si este navegador y contexto pueden usar Web Push. */
+/**
+ * Comprueba si este navegador y contexto pueden usar Web Push.
+ *
+ * @returns {{ok: boolean, motivo?: string}} Objeto que indica si hay soporte y el motivo en caso negativo.
+ */
 export function comprobarSoportePush() {
   const esLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
   if (!window.isSecureContext && !esLocal) {
@@ -48,15 +60,35 @@ export function comprobarSoportePush() {
   return { ok: true }
 }
 
+/**
+ * Obtiene el estado actual del permiso de notificaciones en el navegador.
+ *
+ * @returns {NotificationPermission|'denied'} Estado del permiso ('default', 'granted' o 'denied').
+ */
 export const permisoNotificaciones = () =>
   typeof Notification === 'undefined' ? 'denied' : Notification.permission
 
+/**
+ * Obtiene el token FCM almacenado localmente en el navegador.
+ *
+ * @returns {string|null} Token FCM guardado o null si no existe.
+ */
 export const tokenPushGuardado = () => localStorage.getItem(CLAVE_TOKEN)
 
+/**
+ * Consulta al backend la configuración pública de Firebase Cloud Messaging.
+ *
+ * @returns {Promise<Object>} Datos de configuración pública de Firebase y estado de habilitación.
+ */
 export async function cargarConfigPush() {
   return api('/api/push/config')
 }
 
+/**
+ * Obtiene o genera un identificador persistente único para este dispositivo/navegador.
+ *
+ * @returns {string} Identificador único del dispositivo (UUID o generado aleatoriamente).
+ */
 export function obtenerDeviceId() {
   let deviceId = localStorage.getItem(CLAVE_DISPOSITIVO)
   if (deviceId) return deviceId
@@ -172,7 +204,13 @@ async function activarPushInterno(config, jwt) {
   return token
 }
 
-/** Activa el push en este dispositivo. Dos llamadas simultáneas comparten la misma promesa. */
+/**
+ * Activa el push en este dispositivo. Dos llamadas simultáneas comparten la misma promesa.
+ *
+ * @param {Object} config - Configuración pública de Firebase obtenida del backend.
+ * @param {string} jwt - Token JWT de autenticación del usuario actual.
+ * @returns {Promise<string>} Token FCM obtenido y registrado en el servidor.
+ */
 export function activarPush(config, jwt) {
   if (activacionEnCurso) return activacionEnCurso
   activacionEnCurso = activarPushInterno(config, jwt).finally(() => {
@@ -181,7 +219,12 @@ export function activarPush(config, jwt) {
   return activacionEnCurso
 }
 
-/** Desactiva el dispositivo en el backend antes de cerrar sesión. No rompe el logout si falla. */
+/**
+ * Desactiva el dispositivo en el backend antes de cerrar sesión. No rompe el logout si falla.
+ *
+ * @param {string} jwt - Token JWT de autenticación del usuario.
+ * @returns {Promise<void>} Promesa que se resuelve al completar la petición (o ignorar error de red).
+ */
 export async function desactivarPush(jwt) {
   const token = tokenPushGuardado()
   if (!token || !jwt) {

@@ -29,10 +29,22 @@ public class EvaluadorRiesgo {
 
     private final PropiedadesRiesgo propiedades;
 
+    /**
+     * Crea el evaluador con la configuración de umbrales de lluvia y vigencia de datos.
+     *
+     * @param propiedades umbrales de lluvia y antigüedad máxima permitida de los datos
+     */
     public EvaluadorRiesgo(PropiedadesRiesgo propiedades) {
         this.propiedades = propiedades;
     }
 
+    /**
+     * Evalúa el riesgo de un tramo combinando el nivel por caudal y el nivel por
+     * lluvia, y determina si la evaluación es confiable según la vigencia de los datos.
+     *
+     * @param datos instantánea de datos del tramo
+     * @return evaluación con nivel final, niveles parciales, estado de los datos y advertencias
+     */
     public EvaluacionRiesgo evaluar(DatosRiesgoTramo datos) {
         Instant ahora = Instant.now();
         List<String> factores = new ArrayList<>();
@@ -145,6 +157,13 @@ public class EvaluadorRiesgo {
         );
     }
 
+    /**
+     * Clasifica un caudal contra los umbrales de caudal del tramo.
+     *
+     * @param caudalMaximo caudal a clasificar, en m³/s
+     * @param datos        datos del tramo con los umbrales de vigilancia, alerta y emergencia
+     * @return nivel de alerta correspondiente al caudal
+     */
     public NivelAlerta nivelPorCaudal(double caudalMaximo, DatosRiesgoTramo datos) {
         if (caudalMaximo >= datos.umbralEmergencia()) {
             return NivelAlerta.EMERGENCIA;
@@ -158,6 +177,12 @@ public class EvaluadorRiesgo {
         return NivelAlerta.NORMAL;
     }
 
+    /**
+     * Clasifica la lluvia acumulada en 24 h contra los umbrales experimentales configurados.
+     *
+     * @param lluvia24hMm lluvia acumulada prevista en 24 h, en mm
+     * @return nivel de alerta correspondiente a la lluvia
+     */
     public NivelAlerta nivelPorLluvia(double lluvia24hMm) {
         if (lluvia24hMm >= propiedades.getLluviaUmbralEmergenciaMm()) {
             return NivelAlerta.EMERGENCIA;
@@ -171,10 +196,18 @@ public class EvaluadorRiesgo {
         return NivelAlerta.NORMAL;
     }
 
+    /**
+     * Devuelve el nivel de mayor gravedad entre dos niveles.
+     *
+     * @param a primer nivel
+     * @param b segundo nivel
+     * @return el nivel más grave; {@code a} si son iguales
+     */
     public static NivelAlerta mayor(NivelAlerta a, NivelAlerta b) {
         return a.ordinal() >= b.ordinal() ? a : b;
     }
 
+    // Arma el mensaje visible según el nivel; si los datos no son confiables, indica que no se notificará.
     private String construirMensaje(NivelAlerta nivel, DatosRiesgoTramo datos,
                                     NivelAlerta nivelCaudal, NivelAlerta nivelLluvia,
                                     boolean confiable, EstadoDatos estadoDatos) {
@@ -204,6 +237,7 @@ public class EvaluadorRiesgo {
         };
     }
 
+    // Texto legible de cada nivel de alerta.
     private static String textoNivel(NivelAlerta nivel) {
         return switch (nivel) {
             case EMERGENCIA -> "PELIGRO DE INUNDACION";
@@ -213,6 +247,7 @@ public class EvaluadorRiesgo {
         };
     }
 
+    // Redondea a dos decimales.
     private static double redondear(double valor) {
         return Math.round(valor * 100.0) / 100.0;
     }

@@ -30,6 +30,12 @@ public class InicializadorCatalogo implements CommandLineRunner {
     private final boolean cargarCatalogo;
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /**
+     * Crea el inicializador del catálogo de ríos.
+     *
+     * @param rioRepository  repositorio de ríos
+     * @param cargarCatalogo indica si debe ejecutarse la carga automática al iniciar
+     */
     public InicializadorCatalogo(
             RioRepository rioRepository,
             @Value("${alerta.demo.cargar-catalogo:true}") boolean cargarCatalogo) {
@@ -37,6 +43,11 @@ public class InicializadorCatalogo implements CommandLineRunner {
         this.cargarCatalogo = cargarCatalogo;
     }
 
+    /**
+     * Lee {@code catalogo/rios.json} al arrancar la aplicación y crea o actualiza los ríos del catálogo.
+     *
+     * @param args argumentos de línea de comandos
+     */
     @Override
     @Transactional
     public void run(String... args) {
@@ -84,6 +95,7 @@ public class InicializadorCatalogo implements CommandLineRunner {
         }
     }
 
+    // Verifica que un registro del JSON de catálogo tenga nombre, reachId, coordenadas y geometría.
     private static void validar(RioCatalogo datos) {
         if (datos.nombre() == null || datos.nombre().isBlank()) {
             throw new IllegalStateException("El catálogo contiene un río sin nombre.");

@@ -25,6 +25,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Servicio principal de alertas encargado de consultar el riesgo actual de ríos
+ * y tramos, construir respuestas consolidadas para la API, gestionar historial,
+ * suscripciones heredadas y simular escenarios de crecida.
+ */
 @Service
 public class AlertaService {
 
@@ -36,6 +41,17 @@ public class AlertaService {
     private final AlertaEventoRepository eventoRepository;
     private final UsuarioRioRepository usuarioRioRepository;
 
+    /**
+     * Crea el servicio de alertas con sus repositorios y proveedores de datos.
+     *
+     * @param suscripcionRepository repositorio de suscripciones heredadas por contacto
+     * @param rioRepository repositorio de ríos registrados en el sistema
+     * @param proveedorDatos proveedor consolidado de caudal y precipitación por tramo
+     * @param evaluador evaluador de reglas de riesgo por caudal y lluvia
+     * @param clienteGeoglows cliente directo de GEOGloWS usado para obtener umbrales en simulaciones
+     * @param eventoRepository repositorio de eventos de alerta persistidos
+     * @param usuarioRioRepository repositorio de seguimiento de ríos por usuario
+     */
     public AlertaService(SuscripcionAlertaRepository suscripcionRepository,
                          RioRepository rioRepository,
                          ProveedorDatosRiesgo proveedorDatos,
@@ -56,6 +72,12 @@ public class AlertaService {
      * Consulta el pronóstico en GEOGloWS y la precipitación, evalúa el nivel de
      * riesgo y genera la respuesta consolidada. No crea eventos ni envía push:
      * eso corresponde al monitoreo programado o a una evaluación administrativa.
+     *
+     * @param reachId identificador del tramo en GEOGloWS
+     * @param nombreRio nombre descriptivo opcional del tramo
+     * @return estado consolidado de alerta y pronóstico del tramo
+     * @throws IOException si ocurre un error de comunicación con GEOGloWS o respuesta inválida
+     * @throws InterruptedException si el hilo es interrumpido durante la consulta externa
      */
     public AlertaRioDTO consultarAlertaTramo(long reachId, String nombreRio)
             throws IOException, InterruptedException {
@@ -65,6 +87,13 @@ public class AlertaService {
     /**
      * Igual que {@link #consultarAlertaTramo(long, String)}, pero calcula
      * {@code siguiendo} si la petición trae un usuario autenticado.
+     *
+     * @param reachId identificador del tramo en GEOGloWS
+     * @param nombreRio nombre descriptivo opcional del tramo
+     * @param usuario usuario autenticado opcional para resolver si sigue el río
+     * @return estado consolidado de alerta y pronóstico del tramo
+     * @throws IOException si ocurre un error de comunicación con GEOGloWS o respuesta inválida
+     * @throws InterruptedException si el hilo es interrumpido durante la consulta externa
      */
     public AlertaRioDTO consultarAlertaTramo(long reachId, String nombreRio, Usuario usuario)
             throws IOException, InterruptedException {
@@ -82,7 +111,15 @@ public class AlertaService {
         return dto;
     }
 
-    /** Consulta la alerta utilizando el id de un Río guardado en PostgreSQL. */
+    /**
+     * Consulta la alerta utilizando el id de un Río guardado en PostgreSQL.
+     *
+     * @param rioId identificador del río en base de datos
+     * @return estado consolidado de alerta y pronóstico del río
+     * @throws IllegalArgumentException si el río no existe o no tiene {@code geoglowsId}
+     * @throws IOException si ocurre un error de comunicación con GEOGloWS o respuesta inválida
+     * @throws InterruptedException si el hilo es interrumpido durante la consulta externa
+     */
     public AlertaRioDTO consultarAlertaPorRioId(Long rioId) throws IOException, InterruptedException {
         return consultarAlertaPorRioId(rioId, null);
     }
@@ -90,6 +127,13 @@ public class AlertaService {
     /**
      * Consulta la alerta de un Río y marca si el usuario autenticado lo sigue.
      * Sin sesión, {@code siguiendo} queda en null.
+     *
+     * @param rioId identificador del río en base de datos
+     * @param usuario usuario autenticado opcional
+     * @return estado consolidado de alerta y pronóstico del río
+     * @throws IllegalArgumentException si el río no existe o no tiene {@code geoglowsId}
+     * @throws IOException si ocurre un error de comunicación con GEOGloWS o respuesta inválida
+     * @throws InterruptedException si el hilo es interrumpido durante la consulta externa
      */
     public AlertaRioDTO consultarAlertaPorRioId(Long rioId, Usuario usuario)
             throws IOException, InterruptedException {
@@ -104,6 +148,7 @@ public class AlertaService {
         return dto;
     }
 
+    // Determina si el usuario autenticado sigue el río; devuelve null si no hay sesión.
     private Boolean calcularSiguiendo(Usuario usuario, Long rioId) {
         if (usuario == null || usuario.getId() == null || rioId == null) {
             return null;
@@ -111,6 +156,7 @@ public class AlertaService {
         return usuarioRioRepository.existsByUsuarioIdAndRioId(usuario.getId(), rioId);
     }
 
+    // Obtiene datos reales, evalúa el riesgo y adjunta el último evento persistido del tramo.
     private AlertaRioDTO consultarInterno(long reachId, String nombreRio, Double latitud, Double longitud)
             throws IOException, InterruptedException {
         DatosRiesgoTramo datos = proveedorDatos.obtener(reachId, nombreRio, latitud, longitud);
@@ -121,6 +167,7 @@ public class AlertaService {
         return dto;
     }
 
+    // Transforma los datos brutos y la evaluación de riesgo en el contrato AlertaRioDTO.
     private AlertaRioDTO mapear(DatosRiesgoTramo datos, EvaluacionRiesgo evaluacion) {
         AlertaRioDTO dto = new AlertaRioDTO();
         dto.setReachId(evaluacion.reachId());
@@ -188,6 +235,7 @@ public class AlertaService {
         return dto;
     }
 
+    // Genera la lista de recomendaciones ajustada por lluvia dominante y confiabilidad.
     private List<String> recomendaciones(EvaluacionRiesgo evaluacion) {
         List<String> recomendaciones = new ArrayList<>(recomendacionesPorNivel(evaluacion.nivel()));
         if (evaluacion.nivelLluvia().ordinal() > evaluacion.nivelCaudal().ordinal()) {
@@ -201,6 +249,7 @@ public class AlertaService {
         return List.copyOf(recomendaciones);
     }
 
+    // Devuelve las recomendaciones base correspondientes a cada nivel de alerta.
     private List<String> recomendacionesPorNivel(LectorDatosIngresados.NivelAlerta nivel) {
         return switch (nivel) {
             case EMERGENCIA -> List.of(
@@ -228,6 +277,13 @@ public class AlertaService {
      * <p>Si {@code caudalSolicitado} es {@code null}, se usa un caudal
      * inmediatamente superior al umbral de emergencia del tramo. Así el botón
      * de la PWA no necesita conocer los umbrales.</p>
+     *
+     * @param reachId identificador del tramo en GEOGloWS
+     * @param caudalSolicitado caudal en m³/s a simular, o {@code null} para superar el umbral de emergencia
+     * @return DTO de alerta marcado como simulación
+     * @throws IllegalArgumentException si {@code caudalSolicitado} es negativo o no finito
+     * @throws IOException si ocurre un fallo inesperado distinto de la obtención de umbrales
+     * @throws InterruptedException si el hilo es interrumpido durante la consulta de umbrales
      */
     public AlertaRioDTO simularInundacion(long reachId, Double caudalSolicitado)
             throws IOException, InterruptedException {
@@ -294,6 +350,15 @@ public class AlertaService {
         return sim;
     }
 
+    /**
+     * Registra una suscripción heredada por correo electrónico o teléfono para un tramo.
+     *
+     * @param reachId identificador del tramo en GEOGloWS
+     * @param nombreContacto nombre del suscriptor
+     * @param contacto correo electrónico o número celular panameño válido
+     * @return suscripción persistida en base de datos
+     * @throws IllegalArgumentException si el nombre o el contacto no cumplen el formato válido
+     */
     public SuscripcionAlerta suscribirUsuario(Long reachId, String nombreContacto, String contacto) {
         String nombreFinal = (nombreContacto == null || nombreContacto.isBlank()) ? "Usuario Demo" : nombreContacto.trim();
         String contactoFinal = (contacto == null || contacto.isBlank()) ? "usuario@demo.com" : contacto.trim();
@@ -309,10 +374,23 @@ public class AlertaService {
         return suscripcionRepository.save(suscripcion);
     }
 
+    /**
+     * Obtiene las suscripciones heredadas asociadas a un tramo.
+     *
+     * @param reachId identificador del tramo en GEOGloWS
+     * @return lista de suscripciones registradas para el tramo
+     */
     public List<SuscripcionAlerta> obtenerSuscripcionesPorTramo(Long reachId) {
         return suscripcionRepository.findByReachId(reachId);
     }
 
+    /**
+     * Obtiene el historial reciente de eventos de alerta de un tramo, acotado entre 1 y 100 elementos.
+     *
+     * @param reachId identificador del tramo en GEOGloWS
+     * @param limite cantidad solicitada de eventos
+     * @return lista de eventos ordenados del más reciente al más antiguo
+     */
     public List<AlertaEventoDTO> obtenerHistorial(Long reachId, int limite) {
         int maximo = Math.min(Math.max(limite, 1), 100);
         return eventoRepository.findByReachIdOrderByFechaCreacionDesc(reachId, PageRequest.of(0, maximo))
@@ -321,12 +399,20 @@ public class AlertaService {
                 .toList();
     }
 
+    /**
+     * Recupera el detalle de un evento de alerta por su identificador.
+     *
+     * @param eventoId identificador del evento en base de datos
+     * @return detalle del evento convertido a DTO
+     * @throws IllegalArgumentException si no existe un evento con el identificador indicado
+     */
     public AlertaEventoDTO obtenerEvento(Long eventoId) {
         AlertaEvento evento = eventoRepository.findById(eventoId)
                 .orElseThrow(() -> new IllegalArgumentException("No se encontró la alerta con ID: " + eventoId));
         return AlertaEventoDTO.desde(evento);
     }
 
+    // Construye el texto base de alerta para el escenario de caudal simulado.
     private String generarMensajeAlerta(LectorDatosIngresados.NivelAlerta nivel, double caudalMax) {
         return switch (nivel) {
             case EMERGENCIA -> "PELIGRO DE INUNDACION: Caudal simulado (" + String.format(Locale.US, "%.2f", caudalMax)

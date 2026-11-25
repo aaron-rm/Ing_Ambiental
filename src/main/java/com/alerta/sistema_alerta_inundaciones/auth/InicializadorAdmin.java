@@ -25,6 +25,14 @@ public class InicializadorAdmin implements CommandLineRunner {
     private final String identificador;
     private final String password;
 
+    /**
+     * Crea el inicializador de la cuenta administradora.
+     *
+     * @param usuarioRepository repositorio de usuarios
+     * @param passwordEncoder   codificador de contraseñas
+     * @param identificador     identificador del administrador configurado por propiedad o entorno
+     * @param password          contraseña del administrador configurada por propiedad o entorno
+     */
     public InicializadorAdmin(UsuarioRepository usuarioRepository,
                               PasswordEncoder passwordEncoder,
                               @Value("${alerta.admin.identificador:admin}") String identificador,
@@ -35,6 +43,11 @@ public class InicializadorAdmin implements CommandLineRunner {
         this.password = password;
     }
 
+    /**
+     * Ejecuta al arranque la creación o promoción a {@link Rol#ADMIN} de la cuenta configurada.
+     *
+     * @param args argumentos de línea de comandos
+     */
     @Override
     @Transactional
     public void run(String... args) {
