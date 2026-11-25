@@ -200,6 +200,22 @@ class ClienteApiGeoglowsTest {
         assertEquals(21.5, segunda.mediaSerie.get(0).valor);
     }
 
+    @Test
+    void noReconsultaDentroDeLaVentanaDeFalloReciente() {
+        servidor.createContext("/api/v2/returnperiods/710039498", intercambio -> {
+            solicitudes.incrementAndGet();
+            responder(intercambio, 500, "{\"error\":\"error interno\"}");
+        });
+        ClienteApiGeoglows cliente = clienteConVentanaFallo(
+                Duration.ofMinutes(15),
+                Duration.ofMillis(10),
+                Duration.ofMinutes(1));
+
+        assertThrows(IOException.class, () -> cliente.obtenerPeriodosRetorno(710039498L));
+        assertThrows(IOException.class, () -> cliente.obtenerPeriodosRetorno(710039498L));
+        assertEquals(1, solicitudes.get());
+    }
+
     private ClienteApiGeoglows cliente(Duration ttl) {
         return cliente(ttl, Duration.ofMillis(10));
     }
@@ -217,6 +233,15 @@ class ClienteApiGeoglowsTest {
                 ttl,
                 esperaBase,
                 cacheDir);
+    }
+
+    private ClienteApiGeoglows clienteConVentanaFallo(Duration ttl, Duration esperaBase, Duration ventanaFallo) {
+        return new ClienteApiGeoglows(
+                "http://localhost:" + servidor.getAddress().getPort() + "/api/v2/",
+                ttl,
+                esperaBase,
+                null,
+                ventanaFallo);
     }
 
     private String pronostico(double caudal) {

@@ -51,6 +51,7 @@ public class ClienteApiGeoglows {
     private static final int MAX_INTENTOS = 3;
     private static final long MAX_RETRY_AFTER_SEGUNDOS = 10L;
     private static final Duration TTL_RETURN_PERIODS = Duration.ofDays(7);
+    private static final Duration VENTANA_FALLO_DEFECTO = Duration.ofMinutes(10);
     private static final String MENSAJE_429 =
             "GEOGloWS está limitando las consultas (429). Intenta de nuevo en un minuto.";
 
@@ -61,7 +62,9 @@ public class ClienteApiGeoglows {
     private final Semaphore semaforo;
     private final RitmoPeticiones ritmo;
     private final Path cacheDir;
+    private final Duration ventanaFallo;
     private final Map<String, EntradaCache> cache = new ConcurrentHashMap<>();
+    private final Map<String, Instant> fallosRecientes = new ConcurrentHashMap<>();
     private final Map<String, Object> bloqueos = new ConcurrentHashMap<>();
 
     @Autowired
@@ -76,7 +79,8 @@ public class ClienteApiGeoglows {
                 Duration.ofSeconds(5),
                 maxConcurrentes,
                 intervaloMinimoMs,
-                resolverCacheDir(cacheDir));
+                resolverCacheDir(cacheDir),
+                VENTANA_FALLO_DEFECTO);
     }
 
     public ClienteApiGeoglows(long cacheMinutos, int maxConcurrentes) {
@@ -86,7 +90,8 @@ public class ClienteApiGeoglows {
                 Duration.ofSeconds(5),
                 maxConcurrentes,
                 1500L,
-                null);
+                null,
+                VENTANA_FALLO_DEFECTO);
     }
 
     public ClienteApiGeoglows(long cacheMinutos) {
@@ -110,7 +115,17 @@ public class ClienteApiGeoglows {
 
     /** Constructor para pruebas con caché en disco explícita. */
     ClienteApiGeoglows(String baseUrl, Duration cacheTtl, Duration esperaBase, Path cacheDir) {
-        this(baseUrl, cacheTtl, esperaBase, 1, 0L, cacheDir);
+        this(baseUrl, cacheTtl, esperaBase, 1, 0L, cacheDir, Duration.ZERO);
+    }
+
+    /** Constructor para pruebas con caché en disco y ventana de fallo negativo explícitas. */
+    ClienteApiGeoglows(
+            String baseUrl,
+            Duration cacheTtl,
+            Duration esperaBase,
+            Path cacheDir,
+            Duration ventanaFallo) {
+        this(baseUrl, cacheTtl, esperaBase, 1, 0L, cacheDir, ventanaFallo);
     }
 
     private ClienteApiGeoglows(
@@ -119,7 +134,8 @@ public class ClienteApiGeoglows {
             Duration esperaBase,
             int maxConcurrentes,
             long intervaloMinimoMs,
-            Path cacheDir) {
+            Path cacheDir,
+            Duration ventanaFallo) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
         this.http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(4))
@@ -129,6 +145,7 @@ public class ClienteApiGeoglows {
         this.semaforo = new Semaphore(Math.max(1, maxConcurrentes));
         this.ritmo = new RitmoPeticiones(intervaloMinimoMs);
         this.cacheDir = cacheDir;
+        this.ventanaFallo = ventanaFallo != null ? ventanaFallo : Duration.ZERO;
     }
 
     private static Path resolverCacheDir(String cacheDir) {
@@ -172,12 +189,27 @@ public class ClienteApiGeoglows {
                 return entrada.respuesta;
             }
 
+            Instant falloReciente = fallosRecientes.get(clave);
+            if (falloReciente != null
+                    && !ventanaFallo.isZero()
+                    && !ventanaFallo.isNegative()
+                    && falloReciente.isAfter(ahora.minus(ventanaFallo))) {
+                if (entrada != null) {
+                    log.debug("GEOGloWS falló hace poco para {}. Se reutiliza la respuesta cacheada de {}.",
+                            clave, entrada.fechaConsulta);
+                    return entrada.respuesta;
+                }
+                throw new IOException("GEOGloWS no respondió hace poco para " + clave + "; se reintentará más tarde.");
+            }
+
             try {
                 EntradaCache nueva = consultar(path, query);
+                fallosRecientes.remove(clave);
                 guardarEnDisco(clave, nueva.cuerpoCrudo);
                 cache.put(clave, new EntradaCache(nueva.fechaConsulta, nueva.respuesta, null));
                 return nueva.respuesta;
             } catch (IOException e) {
+                fallosRecientes.put(clave, Instant.now());
                 if (entrada != null) {
                     log.warn("GEOGloWS falló para {} ({}). Se reutiliza la respuesta cacheada de {}.",
                             clave, e.getMessage(), entrada.fechaConsulta);
