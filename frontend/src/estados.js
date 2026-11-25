@@ -19,6 +19,23 @@ export const ESTADOS = {
 const CONSULTANDO = { nivel: 'CARGANDO', etiqueta: 'Consultando…', color: '#3F4B4A', fondo: '#E7ECEB', trazo: '#7A8887' }
 const SIN_DATOS = { nivel: 'SIN_DATOS', etiqueta: 'Datos no disponibles', color: '#3F4B4A', fondo: '#E7ECEB', trazo: '#7A8887' }
 
+/** Río cuyo pronóstico todavía no se pidió (no se sigue y no se ha tocado). */
+export const SIN_CONSULTAR = { nivel: 'SIN_CONSULTAR', etiqueta: 'Sin consultar', color: '#51605F', fondo: '#F1F4F3', trazo: '#94A3B8' }
+
+/**
+ * Configuración visual a partir de la entrada guardada de un río ({dto, cargando, error}),
+ * distinguiendo «sin consultar», «consultando» y «sin datos» antes de tener el DTO.
+ *
+ * @param {{dto?: Object, cargando?: boolean, error?: string}|undefined} entrada - Estado cargado del río.
+ * @returns {{nivel: string, etiqueta: string, color: string, fondo: string, trazo: string}}
+ */
+export function visualRio(entrada) {
+  if (!entrada) return SIN_CONSULTAR
+  if (entrada.dto) return visual(entrada.dto)
+  if (entrada.cargando) return CONSULTANDO
+  return entrada.error ? SIN_DATOS : SIN_CONSULTAR
+}
+
 /**
  * Determina la configuración visual adecuada según el estado y confiabilidad del pronóstico del río.
  *
